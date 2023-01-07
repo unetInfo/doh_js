@@ -392,7 +392,6 @@ window.LoadDohFrom = window.LoadDohFrom || '';
     JQUERYUI:{
       "https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css":false,
       "https://code.jquery.com/ui/1.12.1/jquery-ui.min.js":false,
-      "/doh_js/stylesheet.js":false,
     },
     CORE:{
       "/doh_js/patterns":false,

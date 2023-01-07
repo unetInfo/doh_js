@@ -49,7 +49,7 @@ OnLoad('/doh_js/core', function($){
     'IsLiteral':(value) => `typeof ${value} !== 'object'`,
     'IsObjectObject':(value) => `(typeof ${value} === 'object' && toString.call(${value}) == '[object Object]')`,
     // to-be-replaced:
-    'IsEmptyObject':(value) => `return ${value}`,
+    'IsEmptyObject':(value) => `${value}`,
     'IsDohObject':(value) => `InstanceOf(${value})`,
     'IsKeySafe':(value) => `(typeof ${value} === 'string' || (typeof ${value} === 'number' && !isNaN(${value})))`,
     'IsEmptyString':(value) => `${value} === ''`,
