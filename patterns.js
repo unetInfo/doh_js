@@ -5,6 +5,7 @@
  * @version 0.3.7
  * @licensed MIT license
  */
+ 
 (function (factory) {
 	if (typeof module === "object" && typeof module.exports === "object") {
 		// Node/CommonJS
@@ -423,8 +424,6 @@
 		}
 	};
 }));
-
-
 // this is for loading into a nodejs system
 if(typeof global != 'undefined'){
   top = global;
@@ -438,7 +437,6 @@ glob = glob || {};
 if(typeof exports != 'undefined') {
   exports = top.Doh;
 }
-
 
 /* **** Prepare Doh **** */
 // the most important function in Doh:
@@ -529,8 +527,9 @@ OnLoad('/doh_js/core', function($){
     },
     IsSet: Doh.IsDefined,
     
-    ModuleCurrentlyRunning: '/core/patterns',
+    ModuleCurrentlyRunning: '/doh_js/core',
     PatternsByModule: {},
+    PatternsPerModule: {},
 
     grep: function( elems, callback, inv ) {
       var ret = [];
@@ -954,6 +953,8 @@ OnLoad('/doh_js/core', function($){
       Patterns[name] = idea;
       // note the new pattern's load module, if present
       Doh.PatternsByModule[name] = Doh.ModuleCurrentlyRunning;
+      Doh.PatternsPerModule[Doh.ModuleCurrentlyRunning] = Doh.PatternsPerModule[Doh.ModuleCurrentlyRunning] || [];
+      Doh.PatternsPerModule[Doh.ModuleCurrentlyRunning].push(name);
       // return the new pattern
       return idea;
     },
@@ -1488,17 +1489,10 @@ OnLoad('/doh_js/core', function($){
   });
 });
 
-OnLoad('/doh_js/element/html', function($){
-  
-  // pre init resizer(s) (resize listeners)
-  Doh.settings.window_resizer = {};
-  // pre init mover(s) (move listeners)
-  //mover: {}
-  
-  
-
+OnLoad('/doh_js/html', function($){
   var jWin = $(window);
   Doh.meld_objects(Doh, {
+    OnWindowResize:{},
     /**
      *  @brief Turns a string or jquery object into a doh object
      *
@@ -1562,32 +1556,6 @@ OnLoad('/doh_js/element/html', function($){
 
   // refresh the window sizes as soon as possible
   Doh.refresh_win();
-  
-  // extend Ensure with the ability to get a dobj
-  // value can be: jQuery String Selector, jQuery Selector Object, or Doh Object
-  Doh.Forgeable.Methods.ToFirstElement = function(value, scope){
-    var obj = value;
-    if( typeof value == 'string' ) {
-      // if it's a string, then it's a jquery selector
-      obj = Doh.jQuery(value);
-    }
-    if( obj instanceof Doh.jQuery ) {
-      // if it's a jquery object, find the dobj that built it
-      if( obj[0] ){
-        if( obj[0].dobj ) obj = obj[0].dobj;
-      }
-      // the jQuery selector object is empty, we didn't find an actual element
-      else obj = false;
-    }
-    if(!InstanceOf(obj)){
-      return false;
-    }
-    // assign the DohObject we found to currentValue
-    scope.currentValue = obj;
-      
-      
-    return true;
-  }
 
   Doh.find_controller = function(object){
     // if the object is not of doh, then return false
@@ -2489,8 +2457,8 @@ OnLoad('/doh_js/element/html', function($){
 
     Doh.jQuery(window).resize(function(e){
       Doh.refresh_win();
-      for(var id in Doh.settings.window_resizer) {
-        Doh.settings.window_resizer[id].window_resize.call(Doh.settings.window_resizer[id], e);
+      for(var id in Doh.OnWindowResize) {
+        Doh.OnWindowResize[id].window_resize.call(Doh.OnWindowResize[id], e);
       }
     });
 
@@ -2503,5 +2471,8 @@ OnLoad('/doh_js/element', function($){
   Pattern('element', 'html');
 
 });
+OnLoad('/doh_js/patterns', function($){
 
-OnLoad('/doh_js/patterns',function(){});
+
+
+});

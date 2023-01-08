@@ -1,14 +1,7 @@
-OnLoad('/doh_js/element/html', function($){
-  
-  // pre init resizer(s) (resize listeners)
-  Doh.settings.window_resizer = {};
-  // pre init mover(s) (move listeners)
-  //mover: {}
-  
-  
-
+OnLoad('/doh_js/html', function($){
   var jWin = $(window);
   Doh.meld_objects(Doh, {
+    OnWindowResize:{},
     /**
      *  @brief Turns a string or jquery object into a doh object
      *
@@ -72,32 +65,6 @@ OnLoad('/doh_js/element/html', function($){
 
   // refresh the window sizes as soon as possible
   Doh.refresh_win();
-  
-  // extend Ensure with the ability to get a dobj
-  // value can be: jQuery String Selector, jQuery Selector Object, or Doh Object
-  Doh.Forgeable.Methods.ToFirstElement = function(value, scope){
-    var obj = value;
-    if( typeof value == 'string' ) {
-      // if it's a string, then it's a jquery selector
-      obj = Doh.jQuery(value);
-    }
-    if( obj instanceof Doh.jQuery ) {
-      // if it's a jquery object, find the dobj that built it
-      if( obj[0] ){
-        if( obj[0].dobj ) obj = obj[0].dobj;
-      }
-      // the jQuery selector object is empty, we didn't find an actual element
-      else obj = false;
-    }
-    if(!InstanceOf(obj)){
-      return false;
-    }
-    // assign the DohObject we found to currentValue
-    scope.currentValue = obj;
-      
-      
-    return true;
-  }
 
   Doh.find_controller = function(object){
     // if the object is not of doh, then return false
@@ -999,11 +966,12 @@ OnLoad('/doh_js/element/html', function($){
 
     Doh.jQuery(window).resize(function(e){
       Doh.refresh_win();
-      for(var id in Doh.settings.window_resizer) {
-        Doh.settings.window_resizer[id].window_resize.call(Doh.settings.window_resizer[id], e);
+      for(var id in Doh.OnWindowResize) {
+        Doh.OnWindowResize[id].window_resize.call(Doh.OnWindowResize[id], e);
       }
     });
 
     var jBody = Doh.jQuery('body');
     Doh.body = New('html',{tag:'body',e:jBody,parent:jBody.parent()}, 'parenting_phase');                 
 });
+

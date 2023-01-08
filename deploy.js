@@ -795,9 +795,9 @@ window.OnLoad = window.OnLoad || function(module_name, requires, callback){
     Doh.ModuleRequires[module_name] = [];
   }
   // OnLoad only for loading after Doh
-  // core modules MUST live in /core/
+  // core modules MUST live in /doh_js/
   // core modules MUST NOT have requirements
-  if(Doh.IsLoaded || module_name.indexOf('/core/') === 0){
+  if(Doh.IsLoaded || module_name.indexOf('/doh_js/') === 0){
     setTimeout(module_callback,1);
   } else {
     // stash our function for later
