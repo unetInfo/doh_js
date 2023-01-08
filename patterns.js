@@ -439,6 +439,7 @@ if(typeof exports != 'undefined') {
   exports = top.Doh;
 }
 
+
 /* **** Prepare Doh **** */
 // the most important function in Doh:
 Doh.meld_objects = function(destination){
@@ -455,7 +456,6 @@ Doh.meld_objects = function(destination){
   return destination;
 };
 
-// This means that Doh is now OnLoad dependent.
 OnLoad('/doh_js/core', function($){
   // enshrine the definitions of variable states
   var DohTypeOfTemplates = {
@@ -1487,6 +1487,7 @@ OnLoad('/doh_js/core', function($){
     },
   });
 });
+
 OnLoad('/doh_js/element/html', function($){
   
   // pre init resizer(s) (resize listeners)
@@ -2496,8 +2497,11 @@ OnLoad('/doh_js/element/html', function($){
     var jBody = Doh.jQuery('body');
     Doh.body = New('html',{tag:'body',e:jBody,parent:jBody.parent()}, 'parenting_phase');                 
 });
+
 OnLoad('/doh_js/element', function($){
 
   Pattern('element', 'html');
 
 });
+
+OnLoad('/doh_js/patterns',function(){});

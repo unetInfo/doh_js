@@ -28,7 +28,6 @@ Doh.meld_objects = function(destination){
   return destination;
 };
 
-// This means that Doh is now OnLoad dependent.
 OnLoad('/doh_js/core', function($){
   // enshrine the definitions of variable states
   var DohTypeOfTemplates = {
