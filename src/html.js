@@ -42,24 +42,24 @@ OnLoad('/doh_js/html', function($){
       // cache the window size on doh
       // window h/w is happily consistent
 
-      Doh.win = {w:jWin.width(), h: jWin.height()};
+      Doh.WindowSizes = DWS = {w:jWin.width(), h: jWin.height()};
       // floor to err on the size of fitting
       // we stash this to keep from dividing by 2 as much as possible
-      Doh.win.w2 = Math.floor(Doh.win.w*0.5);
-      Doh.win.h2 = Math.floor(Doh.win.h*0.5);
+      DWS.w2 = Math.floor(DWS.w*0.5);
+      DWS.h2 = Math.floor(DWS.h*0.5);
 
       // In HTML land, the x,y coords 0,0 are in the top,left of the screen
-      Doh.win.box = {
+      DWS.box = {
         t:0,
         l:0,
-        r:Doh.win.w,
-        b:Doh.win.h
+        r:DWS.w,
+        b:DWS.h
       }
 
       // stash 'full' and 'half' css objects for jQuery and target_offset
-      Doh.win.css = {top:Doh.win.h, left:Doh.win.w};
-      Doh.win.center = {top:Doh.win.h2, left:Doh.win.w2};
-      return Doh.win;
+      DWS.css = {top:DWS.h, left:DWS.w};
+      DWS.center = {top:DWS.h2, left:DWS.w2};
+      return DWS;
     },
   });
 
@@ -115,7 +115,7 @@ OnLoad('/doh_js/html', function($){
   Pattern = Doh.pattern = function(name, inherits, idea) {
   //let off = function(name, inherits, idea) {
     var newPattern = originalPatternize(name, inherits, idea);
-    if(!Doh.IsEmptyObject(newPattern.css) || Doh.HasValue(newPattern.style)){
+    if(!SeeIf.IsEmptyObject(newPattern.css) || SeeIf.HasValue(newPattern.style)){
       // build a class from .css and .style here
       // create a class name
       var className = 'doh-' + newPattern.pattern;
@@ -128,7 +128,7 @@ OnLoad('/doh_js/html', function($){
         newPattern.style.split(';').forEach((a) => {
           var oldPatterrn = newPattern;
           var b = a.split(':');
-          if(Doh.HasValue(b[0]) && Doh.HasValue(b[1])){
+          if(SeeIf.HasValue(b[0]) && SeeIf.HasValue(b[1])){
             newCSS[(b[0]).trim()] = b[1].trim();
           }else{
             //Doh.Warn('Patterns failed parsing: '+ a);
@@ -139,7 +139,7 @@ OnLoad('/doh_js/html', function($){
       for(var i in newPattern.css){
         if(i === 'z-index') continue;
         if(i === 'opacity') continue;
-        if(Doh.IsNumber(newPattern.css[i])){
+        if(SeeIf.IsNumber(newPattern.css[i])){
           Doh.Warn('Pattern (' + newPattern.pattern + ')found css number for: ' + i + ' of: ' + newPattern.css[i], newPattern);
         }
       }
@@ -152,7 +152,9 @@ OnLoad('/doh_js/html', function($){
       // add our class to the pattern's classes
       newPattern.classes = Doh.meld_arrays(newPattern.classes || [], [className]);
       // clear the properties so they aren't added to the final object
+      newPattern.initial_css = newPattern.css;
       newPattern.css = {};
+      newPattern.initial_style = newPattern.style;
       newPattern.style = '';
       
     }
@@ -228,7 +230,7 @@ OnLoad('/doh_js/html', function($){
           .attr(this.attrs)
           
         // only try and set html if it's actually set to something
-        if(Doh.NotEmptyString(this.html)){
+        if(SeeIf.NotEmptyString(this.html)){
           // ... and there aren't already children
           if(this.e.children().length < 1) {
             // set inner text
@@ -364,8 +366,8 @@ OnLoad('/doh_js/html', function($){
     }
   });
 
-  Doh.animation_queues = {doh:[]};
-  Doh._animation_queues = {};
+  Doh.AnimationQueues = {doh:[]};
+  Doh._AnimationQueues = {};
   Doh.animation_functionalizer = function(oThat, oAnim){
     var that = oThat, anim = oAnim;
 
@@ -390,19 +392,19 @@ OnLoad('/doh_js/html', function($){
       Doh.warn('Tried to start a "false" animation queue.');
       return;
     }
-    queue = Doh.animation_queues[queue_name];
-    if(Doh._animation_queues[queue_name]){
+    queue = Doh.AnimationQueues[queue_name];
+    if(Doh._AnimationQueues[queue_name]){
 
-      if(!Doh._animation_queues[queue_name][0]){
-        Doh._animation_queues[queue_name] = false;
+      if(!Doh._AnimationQueues[queue_name][0]){
+        Doh._AnimationQueues[queue_name] = false;
         return;
       }
-      var next = Doh._animation_queues[queue_name][0];
-      Doh._animation_queues[queue_name] = Doh._animation_queues[queue_name].slice(1);
+      var next = Doh._AnimationQueues[queue_name][0];
+      Doh._AnimationQueues[queue_name] = Doh._AnimationQueues[queue_name].slice(1);
       next(Doh.run_animation_queue.bind(this, queue_name));
 
     } else {
-      Doh._animation_queues[queue_name] = [];
+      Doh._AnimationQueues[queue_name] = [];
       var q = false, j = 0;
       if(queue)
         for(var i = 0; i < queue.length; i++){
@@ -415,7 +417,7 @@ OnLoad('/doh_js/html', function($){
             // its an array of animations
             j = 0;
             for(j; j < q.length; j++){
-              Doh._animation_queues[queue_name].push(Doh.animation_functionalizer(queue[i],q[j]));
+              Doh._AnimationQueues[queue_name].push(Doh.animation_functionalizer(queue[i],q[j]));
             }
           }
         }
@@ -430,8 +432,8 @@ OnLoad('/doh_js/html', function($){
     phases:['animation_phase'],
     animation_phase: function() {
       this.queue = this.queue || 'doh';
-      if(!Doh.animation_queues[this.queue])Doh.animation_queues[this.queue]=[];
-      Doh.animation_queues[this.queue].push(this);
+      if(!Doh.AnimationQueues[this.queue])Doh.AnimationQueues[this.queue]=[];
+      Doh.AnimationQueues[this.queue].push(this);
     }
   });
 

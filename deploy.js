@@ -725,6 +725,8 @@ Doh.load_css = Doh.load_script;
 // 'glob' is meant to be a global namespace for Doh modules to use instead of top or window
 glob = window.glob || {};
 
+SeeIf = window.SeeIf || {};
+
 // We always add Doh and glob to DohWatch. It was created to expose global namespace pollution.      
 DohWatch.Doh = Doh;
 DohWatch.glob = glob;
