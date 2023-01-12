@@ -3,6 +3,7 @@ if(typeof global != 'undefined'){
   top = global;
   var Doh = top.Doh = {};
   var glob = top.glob = {};
+  var SeeIf = top.SeeIf = {};
 }
 
 Doh = Doh || {};
@@ -132,7 +133,8 @@ OnLoad('/doh_js/core', function($){
     
     Version:'2.0a',
     
-    PatternsByModule: {},
+    ModulePatterns: {},
+    PatternModule: {},
 
     grep: function( elems, callback, inv ) {
       var ret = [];
@@ -253,7 +255,7 @@ OnLoad('/doh_js/core', function($){
           destination.inherited[pattern] = Patterns[pattern];
         }
       } else {
-        Doh.Warn('Doh.mixin_pattern(',destination,',',pattern,') did not find the pattern');
+        Doh.error('Doh.mixin_pattern(',destination,',',pattern,') did not find the pattern');
       }
     },
     
@@ -553,7 +555,7 @@ OnLoad('/doh_js/core', function($){
       idea.pattern = name;
       
       if(Patterns[name]){
-        Doh.Warn('(',name,') pattern is being overwritten.\nOriginal Module:',Doh.PatternsByModule[name],'\nNew Module:',Doh.ModuleCurrentlyRunning);
+        Doh.Warn('(',name,') pattern is being overwritten.\nOriginal Module:',Doh.PatternModule[name],'\nNew Module:',Doh.ModuleCurrentlyRunning);
       }
 
       // normalize passed in inherits
@@ -572,7 +574,9 @@ OnLoad('/doh_js/core', function($){
       // store the new pattern for the builder
       Patterns[name] = idea;
       // note the new pattern's load module, if present
-      Doh.PatternsByModule[name] = Doh.ModuleCurrentlyRunning;
+      Doh.PatternModule[name] = Doh.ModuleCurrentlyRunning;
+      Doh.ModulePatterns[Doh.ModuleCurrentlyRunning] = Doh.ModulePatterns[Doh.ModuleCurrentlyRunning] || [];
+      Doh.ModulePatterns[Doh.ModuleCurrentlyRunning].push(name);
       // return the new pattern
       return idea;
     },

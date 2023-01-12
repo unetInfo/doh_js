@@ -20,6 +20,7 @@ OnLoad('/doh_js/html', function($){
           if( obj[0].dobj ) obj = obj[0].dobj;
           // or make a new one for it
           // TO ANDY: I don't think we use this and I don't really like it.
+          // test raising warning
           else obj = New({pattern:'element', e:obj, parent:obj.parent()}, 'parenting_phase');
         }
         // the jQuery selector object is empty, we didn't find an actual element
