@@ -451,6 +451,8 @@ Doh = {
   // otherwise set to false
   ModuleCurrentlyRunning: false,
   
+  Globals:{},
+  
   // turn an array of script source paths into a loadable bundle of bundles
   create_load_bundle_from_array: function(arr, name){
     name = name || 'Array';
@@ -721,23 +723,14 @@ Doh = {
 // load_script handles CSS, but we don't know that this will always be the case
 Doh.load_css = Doh.load_script;
 
-// Create the glob Global Object. This should be a plain object in the global scope
-// do NOT put this directly on top, let it bubble up.
-// allow this to be overloaded, we don't police who can store in glob
-// 'glob' is meant to be a global namespace for Doh modules to use instead of top or window
-glob = window.glob || {};
-
-SeeIf = window.SeeIf || {};
-
 // We always add Doh and glob to DohWatch. It was created to expose global namespace pollution.      
 DohWatch.Doh = Doh;
-DohWatch.glob = glob;
 
 
 // a method for running a named module, with requirements
 // always process requires, wait for Doh to load, then run callback
 // can be overloaded to allow skipping the load process
-window.OnLoad = window.OnLoad || function(module_name, requires, callback){
+window.OnLoad = window.OnLoad || function(module_name, requires, callback, globals){
   // mark the module as loading with explicit false
   if(Doh.ModuleIsLoaded[module_name]) {
     throw console.error('FATAL: two OnLoad functions for the same module:', module_name);
@@ -747,10 +740,35 @@ window.OnLoad = window.OnLoad || function(module_name, requires, callback){
   // localize the callback we will use
   if(!Array.isArray(requires)){
     // if we didn't send an array, then the second argument should be the callback to run onLoad
+    globals = callback;
     callback = requires;
-    
   }
-
+  // allow Doh to manage new globals so they get automatically watched:
+  // allow globals to be a string
+  if (typeof globals === 'string') {
+    Doh.Globals[globals] = Doh.Globals[globals] || {};
+    window[globals] = DohWatch[globals] = Doh.Globals[globals];
+  }
+  // or an array-like object
+  else if (typeof globals !== 'undefined'){
+    for(var i in globals){
+      if (i !== 'length'){
+        // allow the array structure to have the pattern name in key
+        if(isNaN(i)){
+          Doh.Globals[i] = true;
+          Doh.Globals[i] = Doh.Globals[i] || {};
+          window[i] = DohWatch[i] = Doh.Globals[i];
+        }
+        // or in the value
+        else {
+          Doh.Globals[globals[i]] = true;
+          Doh.Globals[globals[i]] = Doh.Globals[globals[i]] || {};
+          window[globals[i]] = DohWatch[globals[i]] = Doh.Globals[globals[i]];
+        }
+      }
+    }
+  }
+      
   // bind our callback
   // and second, the actual module updating one for later
   var module_callback = function(){
@@ -770,6 +788,7 @@ window.OnLoad = window.OnLoad || function(module_name, requires, callback){
       } catch (err) {
         Doh.ModuleCurrentlyRunning = false;
         console.error('OnLoad: running original callback for', module_name, 'failed with error', err);
+        DohWatchUpdate(module_name);
         // don't carry on with callbacks for dependents because we failed to be dependable.
         return;
       }

@@ -7,8 +7,6 @@ if(typeof global != 'undefined'){
 }
 
 Doh = Doh || {};
-glob = glob || {};
-SeeIf = SeeIf || {};
 
 if(typeof exports != 'undefined') {
   exports = top.Doh;
@@ -121,11 +119,16 @@ OnLoad('/doh_js/see_if', function($){
     return true;    
   };
   SeeIf.NotEmptyObject = function(value){
-  return !SeeIf.IsEmptyObject(value);
-};
-});
+    return !SeeIf.IsEmptyObject(value);
+  };
+  DohWatch.SeeIf = false;
+  delete DohWatch.SeeIf;
+}, 'SeeIf');
 
 OnLoad('/doh_js/core', function($){
+  
+  DohWatch.SeeIf = false;
+  delete DohWatch.SeeIf;
   
   Doh.meld_objects(Doh, {
     
@@ -1112,5 +1115,4 @@ OnLoad('/doh_js/core', function($){
       }
     },
   });
-});
-
+}, 'glob');
