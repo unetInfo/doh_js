@@ -98,6 +98,8 @@ Doh.meld_objects(SeeIf_Templates, {
   'NotDefined':SeeIf_Templates.IsUndefined,
   'NotFalsey':SeeIf_Templates.IsTruey,
   'NotTruey':SeeIf_Templates.IsFalsey,
+  'IsSet':SeeIf_Templates.IsDefined,
+  'NotSet':SeeIf_Templates.IsUndefined,
 });
 for(let i in SeeIf_Templates){
   SeeIf[i] = new Function('value', `return ${SeeIf_Templates[i]('value')}`);
@@ -124,9 +126,10 @@ OnLoad('/doh_js/core', function($){
   
   Doh.meld_objects(Doh, {
     
+    ModuleCurrentlyRunning: '/doh_js/core',
+    
     Version:'2.0a',
     
-    ModuleCurrentlyRunning: '/core/patterns',
     PatternsByModule: {},
 
     grep: function( elems, callback, inv ) {
@@ -157,6 +160,21 @@ OnLoad('/doh_js/core', function($){
 
       return -1;
     },
+    
+    _log: function(args, log_type, logger_method, logger){
+      log_type = log_type || '';
+      logger_method = logger_method || 'log';
+      logger = logger || console;
+      var logger_args = [log_type];
+      for(var i in args){
+        if(i === 'length') continue;
+        logger_args.push(args[i]);
+      }
+      logger[logger_method].apply(logger, logger_args);
+    },
+    log: function(){
+      Doh._log(arguments, 'Doh:', 'log');
+    },
     /**
      *  @brief return a custom Doh Error
      *
@@ -167,8 +185,9 @@ OnLoad('/doh_js/core', function($){
      *  Doh.error('error message', object1, 'some string', objectN, ...);
      */
     error: function(){
+      Doh._log(arguments, 'Doh ERROR:', 'error');
       // build and return the custom error
-      return New({pattern:'error',args:arguments});
+      //return New({pattern:'error',args:arguments});
     },
     /**
      *  @brief return a custom Doh Warning
@@ -180,8 +199,9 @@ OnLoad('/doh_js/core', function($){
      *  Doh.error('error message', object1, 'some string', objectN, ...);
      */
     warn: function(){
-      if(Patterns.warning)
-        return New({pattern:'warning',args:arguments});
+      Doh._log(arguments, 'Doh Warning:', 'warn');
+      //if(Patterns.warning)
+      //  return New({pattern:'warning',args:arguments});
     },
 
     /**
@@ -239,7 +259,7 @@ OnLoad('/doh_js/core', function($){
       var extended = {};
       if(SeeIf.NotObjectObject(inherits)) inherits = Doh.normalize_inherits({}, inherits);
       for(var i in inherits){
-        if(!Patterns[i]) Doh.Error(i+' not defined. Pattern is missing...'); // CHRIS:  Andy added this error msg, is there a better way?
+        if(!Patterns[i]) throw Doh.Error(i+' not defined. Pattern is missing...'); // CHRIS:  Andy added this error msg, is there a better way?
         Doh.meld_objects(extended, Doh.extend_inherits(Patterns[i].inherits));
       }
       Doh.meld_objects(extended, inherits);
@@ -922,25 +942,25 @@ OnLoad('/doh_js/core', function($){
         counter += methods_order[methods_order.length-1].length
       }
       phase_methods = counter;
-      console.log('has:', phase_methods, ' phase methods.');
+      Doh.log('has:', phase_methods, ' phase methods.');
       for(let i in object.meld_methods){
         methods_order.push(Doh.meld_method_order(object, object.meld_methods[i]));
         counter += methods_order[methods_order.length-1].length
       }
-      console.log('and:', counter - phase_methods, ' melded methods.');
+      Doh.log('and:', counter - phase_methods, ' melded methods.');
       return methods_order;
     },
     
     log_melded_method: function(object, method){
       var method_array = Doh.meld_method_order(object, method);
       for (i in method_array){
-        console.log(method_array[i],object.inherited[method_array[i].split('.')[0]][method].toString());
+        Doh.log(method_array[i],object.inherited[method_array[i].split('.')[0]][method].toString());
       }
     },
     link_melded_method: function(object, method){
       var method_array = Doh.meld_method_order(object, method);
       for (i in method_array){
-        console.log(method_array[i],object.inherited[method_array[i].split('.')[0]][method]);
+        Doh.log(method_array[i],object.inherited[method_array[i].split('.')[0]][method]);
       }
     }
   });
@@ -982,25 +1002,28 @@ OnLoad('/doh_js/core', function($){
   });
 
   Pattern('log', 'object', {
-    log_type: 'log',
+    log_type: 'Doh:',
     logger:console,
+    logger_method: 'log',
     phases:['log_phase'],
     log_phase: function(){
-      var args = [this.log_type, ': '];
+      var args = [this.log_type];
       for(var i in this.args){
         if(i === 'length') continue;
         args.push(this.args[i]);
       }
-      console.log.apply(console, args);
+      logger[logger_method].apply(logger, args);
     }
   }); // true to skip adding css classes for this object
 
   Pattern('error', 'log', {
-    log_type: 'ERROR',
+    log_type: 'Doh ERROR:',
+    logger_method: 'error',
   }); // true to skip adding css classes for this object
 
   Pattern('warning', 'log', {
-    log_type: 'WARNING',
+    log_type: 'Doh Warning:',
+    logger_method: 'warn',
   });
 
 /*

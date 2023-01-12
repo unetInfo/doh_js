@@ -26,7 +26,7 @@ OnLoad('/doh_js/html', function($){
         else obj = false;
       }
       if(!InstanceOf(obj)){
-        Doh.Warn('Doh.get_dobj could not find a doh object with:', obj);
+        Doh.warn('Doh.get_dobj could not find a doh object with:', e);
       }
       // in any case, at least return e
       return obj || e;
@@ -42,7 +42,7 @@ OnLoad('/doh_js/html', function($){
       // cache the window size on doh
       // window h/w is happily consistent
 
-      Doh.WindowSizes = DWS = {w:jWin.width(), h: jWin.height()};
+      Doh.WindowSizes = DWS = Doh.win = {w:jWin.width(), h: jWin.height()};
       // floor to err on the size of fitting
       // we stash this to keep from dividing by 2 as much as possible
       DWS.w2 = Math.floor(DWS.w*0.5);
@@ -99,7 +99,7 @@ OnLoad('/doh_js/html', function($){
           this.controller = controller;
         } else {
           // otherwise, use the parent with warning
-          Doh.Warn('hierarchy control: ', this, ' could not find a controller');
+          Doh.warn('hierarchy control: ', this, ' could not find a controller. Use the parent: ', this.parent, 'instead.');
           this.controller = this.parent;
         }
         // ensure that our newly assigned controller has controls storage
@@ -115,7 +115,7 @@ OnLoad('/doh_js/html', function($){
   Pattern = Doh.pattern = function(name, inherits, idea) {
   //let off = function(name, inherits, idea) {
     var newPattern = originalPatternize(name, inherits, idea);
-    if(!SeeIf.IsEmptyObject(newPattern.css) || SeeIf.HasValue(newPattern.style)){
+    if(SeeIf.NotEmptyObject(newPattern.css) || SeeIf.HasValue(newPattern.style)){
       // build a class from .css and .style here
       // create a class name
       var className = 'doh-' + newPattern.pattern;
@@ -131,7 +131,7 @@ OnLoad('/doh_js/html', function($){
           if(SeeIf.HasValue(b[0]) && SeeIf.HasValue(b[1])){
             newCSS[(b[0]).trim()] = b[1].trim();
           }else{
-            //Doh.Warn('Patterns failed parsing: '+ a);
+            //Doh.warn('Patterns failed parsing: '+ a);
           }
         });
       }
@@ -140,7 +140,7 @@ OnLoad('/doh_js/html', function($){
         if(i === 'z-index') continue;
         if(i === 'opacity') continue;
         if(SeeIf.IsNumber(newPattern.css[i])){
-          Doh.Warn('Pattern (' + newPattern.pattern + ')found css number for: ' + i + ' of: ' + newPattern.css[i], newPattern);
+          Doh.warn('Pattern (' + newPattern.pattern + ')found css number for: ' + i + ' of: ' + newPattern.css[i] + ' .', 'The value may be ignored!' , newPattern);
         }
       }
       
@@ -237,7 +237,7 @@ OnLoad('/doh_js/html', function($){
             // WARNING: this will overwrite children
             this.e.html(this.html);
           } else {
-            Doh.Warn(`html object tried to overwrite children with: "${this.html}"`,'\n',this);
+            Doh.warn(`html object tried to overwrite children with: "${this.html}"`,'\n',this);
           }
         }
         
@@ -389,7 +389,7 @@ OnLoad('/doh_js/html', function($){
   }
   Doh.run_animation_queue = function(queue_name){
     if(!queue_name){
-      Doh.warn('Tried to start a "false" animation queue.');
+      Doh.warn('Tried to start a "false" animation queue. (i.e.: Doh.run_animation_queue(). A queue_name is required)');
       return;
     }
     queue = Doh.AnimationQueues[queue_name];
@@ -701,7 +701,7 @@ OnLoad('/doh_js/html', function($){
         // WARNING: this will overwrite children
         this.e.html(this.html);
       } else {
-        Doh.Warn(`set_html would have overwritten children with: "${this.html}"`, '\n', this);
+        Doh.warn(`set_html would have overwritten children with: "${this.html}"`, '\n', this);
       }
     }
   });
@@ -786,7 +786,7 @@ OnLoad('/doh_js/html', function($){
             var that = this;
             //var tab_labels_inner = tab_labels, tab_content_inner = tab_content;
             this.e.click(function(){
-              //console.log(that);
+              //Doh.log(that);
               var cur_button, cur_content;
               for(var k in tab_content){
                 cur_button = $('#tab_' + k + '_button');
@@ -878,10 +878,10 @@ OnLoad('/doh_js/html', function($){
     drag_start:function(event, ui){
       this._original_z_index = this.e.css("z-index");
       this.e.css({'z-index':110});
-      //console.log('drag start');
+      //Doh.log('drag start');
     },
     drag_drag:function(event, ui) {
-      //console.log('drag drag');
+      //Doh.log('drag drag');
     },
     drag_stop:function(e,f) {
       this.e.css({'z-index':this.css['z-index']});

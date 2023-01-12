@@ -1,3 +1,4 @@
+console.group('Doh Initial Build');
 // this is a cheat, but it keeps us from messing with top here.
 let meld_objects = function(destination){
   destination = destination || {}; // this may seem unneccesary but OH IS IT EVER NECCESSARY
@@ -497,7 +498,7 @@ Doh = {
         Doh.ScriptIsLoadedQueue[src] = [];
         // indicate that the script is done loading and running it's queue
         Doh.ScriptIsLoaded[src] = true;
-      } else console.log('load_script internal callback on loaded script');
+      } else throw console.error('ERROR: load_script: called an internal callback on an already loaded script');
     };
     // if it's not already loaded, or set to false (currently loading)
     if(!this.ScriptIsLoaded[src] && this.ScriptIsLoaded[src] !== false){
@@ -575,7 +576,7 @@ Doh = {
           }
         }
         if(bundle === current_bundle){
-          if(bundle === 'jquery_core') {
+          if(bundle === 'JQUERYCORE') {
             console.log('Doh is auto-loading jQuery: ', Object.keys(bundles[bundle])[0]);
           }
           //console.log('Loading bundle: ', bundle);
@@ -669,7 +670,7 @@ Doh = {
     
     if(Doh.IsLoaded){
       // modules are already loaded, don't reload
-      console.log('WARNING: Doh.load_doh_finale called after Doh finished loading.');
+      console.warn('WARNING: Doh.load_doh_finale called after Doh finished loading.');
       return;
     }
     
@@ -679,40 +680,41 @@ Doh = {
       Doh.IsLoading = false;
     } else {
       // Doh is neither loading, nor loaded
-      console.log('WARNING: Doh.load_doh_finale called while Doh is NOT loading OR loaded.');
+      console.warn('WARNING: Doh.load_doh_finale called while Doh is NOT loading OR loaded.');
       return;
     }
     
     Doh.jQuery(function($){
-      DohWatchUpdate('After Doh has loaded');
+      DohWatchUpdate('After Doh core has loaded');
       // run deferred modules, 
       for(var module_name in Doh.ModuleWasDeferred) {
         // this call is to a closure wrapper around the actual callback
         Doh.ModuleWasDeferred[module_name]();
       }
-      console.log("Doh deferred the loading of: ", Doh.ModuleWasDeferred);
+      console.log("Doh: deferred the loading of: ", Doh.ModuleWasDeferred);
       Doh.ModuleWasDeferred = {};
+      console.groupEnd();
     });
   },
 
   // release jQuery globals, reset_all will prevent some jquery plugins from loading.
   // use AFTER all desired jquery plugins have loaded.
-  NoConflictjQuery: function(reset_all){
+  no_conflict_jQuery: function(reset_all){
     // return jquery globals to their previous owners
     this.jQuery.noConflict(reset_all);
-    if(reset_all) console.log('Doh has returned jQuery to version: ', jQuery.fn.jquery);
+    if(reset_all) console.log('Doh: returned jQuery to version: ', jQuery.fn.jquery);
   },
 
   // Load Doh using LoadDohBundles, run Doh.load_doh_finale after core bundles have run
   // defer any modules loaded prior to Doh finishing.
   load_doh: function(){
     if(!Doh.IsLoaded && !Doh.IsLoading){
-      console.log('load_doh...');
+      console.log('Doh: IsLoading...');
       Doh.IsLoading = true;
       
       Doh.load_bundles(LoadDohBundles, Doh.load_doh_finale);
     } else {
-      console.log('WARNING: load_doh called while Doh is already loaded or loading');
+      console.warn('WARNING: load_doh called while Doh is already loaded or loading');
     }
   }
 };
@@ -738,7 +740,7 @@ DohWatch.glob = glob;
 window.OnLoad = window.OnLoad || function(module_name, requires, callback){
   // mark the module as loading with explicit false
   if(Doh.ModuleIsLoaded[module_name]) {
-    console.log('FATAL: two OnLoad functions for the same module:', module_name);
+    throw console.error('FATAL: two OnLoad functions for the same module:', module_name);
     return;
   }
   else Doh.ModuleIsLoaded[module_name] = false;
@@ -767,7 +769,7 @@ window.OnLoad = window.OnLoad || function(module_name, requires, callback){
         DohWatchUpdate(module_name);
       } catch (err) {
         Doh.ModuleCurrentlyRunning = false;
-        console.log('OnLoad: running original callback for', module_name, 'failed with error', err);
+        console.error('OnLoad: running original callback for', module_name, 'failed with error', err);
         // don't carry on with callbacks for dependents because we failed to be dependable.
         return;
       }
@@ -801,9 +803,10 @@ window.OnLoad = window.OnLoad || function(module_name, requires, callback){
   // core modules MUST NOT have requirements
   if(Doh.IsLoaded || module_name.indexOf('/doh_js/') === 0){
     setTimeout(module_callback,1);
-  } else {
+  } else { // Doh is not loaded
     // stash our function for later
     Doh.ModuleWasDeferred[module_name] = module_callback;
+    
     if(!Doh.IsLoaded && !Doh.IsLoading){
       // as long as we aren't skipping, LoadDoh
       if(!SKIPLOADDOH) Doh.load_doh();
@@ -840,9 +843,10 @@ window.OnLoad.require = function(module_name, src, callback){
       bundle,
       callback
     );
-  } else {
+  } else { // Doh is not loaded
    // console.log('trying to require', src, 'before Doh is loaded');
     Doh.ModuleWasDeferred[module_name] = function(){window.OnLoad.require(module_name, src, callback);};
+    
     if(!Doh.IsLoaded && !Doh.IsLoading){
       // as long as we aren't skipping, load_doh
       if(!SKIPLOADDOH) Doh.load_doh();
