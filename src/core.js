@@ -3,6 +3,7 @@ if(typeof global != 'undefined'){
   top = global;
   var Doh = top.Doh = {};
   var glob = top.glob = {};
+  var SeeIf = top.SeeIf = {};
 }
 
 Doh = Doh || {};
@@ -29,99 +30,101 @@ Doh.meld_objects = function(destination){
   return destination;
 };
 
+OnLoad('/doh_js/see_if', function($){
 // enshrine the definitions of variable states
-var SeeIf_Templates = {
-  // undefined refers to objects that have not been defined anywhere in code yet
-  'IsUndefined':(value) => `typeof ${value} === 'undefined'`,
-  // null is supposed to refer to objects that have been defined, but have no value. In truth because of "falsey" values, it can have other meanings
-  'IsNull':(value) => `${value} === null`,
-  // defined is supposed to refer to having a usable reference. undefined means without reference. null references are still unusable in JS, so defined nulls should demand special handling
-  'IsDefined':(value) => `(typeof ${value} !== 'undefined' && ${value} !== null)`,
-  // false refers to the binary 0 state (Boolean)
-  'IsFalse':(value) => `${value} === false`,
-  // true refers to the binary 1 state (Boolean)
-  'IsTrue':(value) => `${value} === true`,
-  // falsey refers to values that equal binary 0, even if represented by a different datatype. Falsey values include: Undefined, Null, False, '', 0, -1...[negative numbers]
-  'IsFalsey':(value) => `!${value}`,
-  // truey referes to values that equal binary 1, even if represented by a different datatype. Truey values include: True, HasValue, 1...[positive numbers]
-  'IsTruey':(value) => `${value} == true`,
-  // boolean refers to values that are actual boolean datatype
-  'IsBoolean':(value) => `typeof ${value} === 'boolean'`,
-  // Number refers to values that are a number datatype EXCEPT NaN (Not a Number)
-  'IsNumber':(value) => `(typeof ${value} === 'number' && !isNaN(${value}))`,
-  // string refers to values that are actual string datatype
-  'IsString':(value) => `typeof ${value} === 'string'`,
-  // array refers to values that are actual array datatype
-  'IsArray':(value) => `Array.isArray(${value})`,
-  // iterable refers to values that define a Symbol iterator so that native methods can iterate over them
-  'IsIterable':(value) => `((typeof ${value} !== 'undefined' && ${value} !== null) && typeof value[Symbol.iterator] === 'function')`,
-  // arraylike refers to values that act like arrays in every way. they can be used by native array methods
-  'IsArrayLike':(value) => `(((typeof ${value} !== 'undefined' && ${value} !== null) && typeof value[Symbol.iterator] === 'function') && typeof ${value}.length === 'number' && typeof ${value} !== 'string')`,
-  // function refers to values that are actual functions
-  'IsFunction':(value) => `typeof ${value} === 'function'`,
-  // literal refers to values that are static literals. Strings, booleans, numbers, etc. Basically anything that isn't an object or array. flat values.
-  'IsLiteral':(value) => `typeof ${value} !== 'object'`,
-  // objectobject refers to values that are complex objects with named properties. No flat values or number-keyed lists. 
-  'IsObjectObject':(value) => `(typeof ${value} === 'object' && toString.call(${value}) == '[object Object]')`,
-  // to-be-replaced:
-  // emptyobject refers to values that are objectobject or arraylike but have no properties of their own (empty of named properties that aren't javascript native)
-  'IsEmptyObject':(value) => `${value}`,
-  // dohobject refers to values that are a complex objectobject which was built with Doh
-  'IsDohObject':(value) => `InstanceOf(${value})`,
-  // keysafe refers to values that are safe for use as the key name in a complex objectobject
-  'IsKeySafe':(value) => `(typeof ${value} === 'string' || (typeof ${value} === 'number' && !isNaN(${value})))`,
-  // emptystring refers to values that are string literals with no contents
-  'IsEmptyString':(value) => `${value} === ''`,
-  // hasvalue refers to values that are defined and notemptystring. specifically this includes 0 and negative numbers where truey does not.
-  'HasValue':(value) => `((typeof ${value} !== 'undefined' && ${value} !== null) && ${value} !== '')`,
-  
-  // Not conditions, interestingly different
-  'NotUndefined':(value) => `typeof ${value} !== 'undefined'`,
-  'NotNull':(value) => `${value} !== null`,
-  'NotFalse':(value) => `${value} !== false`,
-  'NotTrue':(value) => `${value} !== true`,
-  'NotBoolean':(value) => `typeof ${value} !== 'boolean'`,
-  'NotNumber':(value) => `(typeof ${value} !== 'number' || isNaN(${value}))`,
-  'NotString':(value) => `typeof ${value} !== 'string'`,
-  'NotArray':(value) => `!Array.isArray(${value})`,
-  'NotIterable':(value) => `!((typeof ${value} !== 'undefined' && ${value} !== null) && typeof value[Symbol.iterator] === 'function')`,
-  'NotArrayLike':(value) => `!(((typeof ${value} !== 'undefined' && ${value} !== null) && typeof value[Symbol.iterator] === 'function') && typeof ${value}.length === 'number' && typeof ${value} !== 'string')`,
-  'NotFunction':(value) => `typeof ${value} !== 'function'`,
-  'NotLiteral':(value) => `typeof ${value} === 'object'`,
-  'NotObjectObject':(value) => `!(typeof ${value} === 'object' && toString.call(${value}) == '[object Object]')`,
-  'NotDohObject':(value) => `!InstanceOf(${value})`,
-  'NotKeySafe':(value) => `!(typeof ${value} === 'string' || (typeof ${value} === 'number' && !isNaN(${value})))`,
-  'NotEmptyString':(value) => `${value} !== ''`,
-  'LacksValue':(value) => `(typeof ${value} === 'undefined' || ${value} === null || ${value} === '')`
-};
-Doh.meld_objects(SeeIf_Templates, {
-  'NotDefined':SeeIf_Templates.IsUndefined,
-  'NotFalsey':SeeIf_Templates.IsTruey,
-  'NotTruey':SeeIf_Templates.IsFalsey,
-  'IsSet':SeeIf_Templates.IsDefined,
-  'NotSet':SeeIf_Templates.IsUndefined,
-});
-for(let i in SeeIf_Templates){
-  SeeIf[i] = new Function('value', `return ${SeeIf_Templates[i]('value')}`);
-}
-SeeIf.IsEmptyObject = function(value) {
-  if(SeeIf.IsDefined(value)) {
-    if (value.length && value.length > 0) { 
-      return false;
-    }
-
-    for (var key in value) {
-      if (hasOwnProperty.call(value, key)) {
+  var SeeIf_Templates = {
+    // undefined refers to objects that have not been defined anywhere in code yet
+    'IsUndefined':(value) => `typeof ${value} === 'undefined'`,
+    // null is supposed to refer to objects that have been defined, but have no value. In truth because of "falsey" values, it can have other meanings
+    'IsNull':(value) => `${value} === null`,
+    // defined is supposed to refer to having a usable reference. undefined means without reference. null references are still unusable in JS, so defined nulls should demand special handling
+    'IsDefined':(value) => `(typeof ${value} !== 'undefined' && ${value} !== null)`,
+    // false refers to the binary 0 state (Boolean)
+    'IsFalse':(value) => `${value} === false`,
+    // true refers to the binary 1 state (Boolean)
+    'IsTrue':(value) => `${value} === true`,
+    // falsey refers to values that equal binary 0, even if represented by a different datatype. Falsey values include: Undefined, Null, False, '', 0, -1...[negative numbers]
+    'IsFalsey':(value) => `!${value}`,
+    // truey referes to values that equal binary 1, even if represented by a different datatype. Truey values include: True, HasValue, 1...[positive numbers]
+    'IsTruey':(value) => `${value} == true`,
+    // boolean refers to values that are actual boolean datatype
+    'IsBoolean':(value) => `typeof ${value} === 'boolean'`,
+    // Number refers to values that are a number datatype EXCEPT NaN (Not a Number)
+    'IsNumber':(value) => `(typeof ${value} === 'number' && !isNaN(${value}))`,
+    // string refers to values that are actual string datatype
+    'IsString':(value) => `typeof ${value} === 'string'`,
+    // array refers to values that are actual array datatype
+    'IsArray':(value) => `Array.isArray(${value})`,
+    // iterable refers to values that define a Symbol iterator so that native methods can iterate over them
+    'IsIterable':(value) => `((typeof ${value} !== 'undefined' && ${value} !== null) && typeof value[Symbol.iterator] === 'function')`,
+    // arraylike refers to values that act like arrays in every way. they can be used by native array methods
+    'IsArrayLike':(value) => `(((typeof ${value} !== 'undefined' && ${value} !== null) && typeof value[Symbol.iterator] === 'function') && typeof ${value}.length === 'number' && typeof ${value} !== 'string')`,
+    // function refers to values that are actual functions
+    'IsFunction':(value) => `typeof ${value} === 'function'`,
+    // literal refers to values that are static literals. Strings, booleans, numbers, etc. Basically anything that isn't an object or array. flat values.
+    'IsLiteral':(value) => `typeof ${value} !== 'object'`,
+    // objectobject refers to values that are complex objects with named properties. No flat values or number-keyed lists. 
+    'IsObjectObject':(value) => `(typeof ${value} === 'object' && toString.call(${value}) == '[object Object]')`,
+    // to-be-replaced:
+    // emptyobject refers to values that are objectobject or arraylike but have no properties of their own (empty of named properties that aren't javascript native)
+    'IsEmptyObject':(value) => `${value}`,
+    // dohobject refers to values that are a complex objectobject which was built with Doh
+    'IsDohObject':(value) => `InstanceOf(${value})`,
+    // keysafe refers to values that are safe for use as the key name in a complex objectobject
+    'IsKeySafe':(value) => `(typeof ${value} === 'string' || (typeof ${value} === 'number' && !isNaN(${value})))`,
+    // emptystring refers to values that are string literals with no contents
+    'IsEmptyString':(value) => `${value} === ''`,
+    // hasvalue refers to values that are defined and notemptystring. specifically this includes 0 and negative numbers where truey does not.
+    'HasValue':(value) => `((typeof ${value} !== 'undefined' && ${value} !== null) && ${value} !== '')`,
+    
+    // Not conditions, interestingly different
+    'NotUndefined':(value) => `typeof ${value} !== 'undefined'`,
+    'NotNull':(value) => `${value} !== null`,
+    'NotFalse':(value) => `${value} !== false`,
+    'NotTrue':(value) => `${value} !== true`,
+    'NotBoolean':(value) => `typeof ${value} !== 'boolean'`,
+    'NotNumber':(value) => `(typeof ${value} !== 'number' || isNaN(${value}))`,
+    'NotString':(value) => `typeof ${value} !== 'string'`,
+    'NotArray':(value) => `!Array.isArray(${value})`,
+    'NotIterable':(value) => `!((typeof ${value} !== 'undefined' && ${value} !== null) && typeof value[Symbol.iterator] === 'function')`,
+    'NotArrayLike':(value) => `!(((typeof ${value} !== 'undefined' && ${value} !== null) && typeof value[Symbol.iterator] === 'function') && typeof ${value}.length === 'number' && typeof ${value} !== 'string')`,
+    'NotFunction':(value) => `typeof ${value} !== 'function'`,
+    'NotLiteral':(value) => `typeof ${value} === 'object'`,
+    'NotObjectObject':(value) => `!(typeof ${value} === 'object' && toString.call(${value}) == '[object Object]')`,
+    'NotDohObject':(value) => `!InstanceOf(${value})`,
+    'NotKeySafe':(value) => `!(typeof ${value} === 'string' || (typeof ${value} === 'number' && !isNaN(${value})))`,
+    'NotEmptyString':(value) => `${value} !== ''`,
+    'LacksValue':(value) => `(typeof ${value} === 'undefined' || ${value} === null || ${value} === '')`
+  };
+  Doh.meld_objects(SeeIf_Templates, {
+    'NotDefined':SeeIf_Templates.IsUndefined,
+    'NotFalsey':SeeIf_Templates.IsTruey,
+    'NotTruey':SeeIf_Templates.IsFalsey,
+    'IsSet':SeeIf_Templates.IsDefined,
+    'NotSet':SeeIf_Templates.IsUndefined,
+  });
+  for(let i in SeeIf_Templates){
+    SeeIf[i] = new Function('value', `return ${SeeIf_Templates[i]('value')}`);
+  }
+  SeeIf.IsEmptyObject = function(value) {
+    if(SeeIf.IsDefined(value)) {
+      if (value.length && value.length > 0) { 
         return false;
       }
+
+      for (var key in value) {
+        if (hasOwnProperty.call(value, key)) {
+          return false;
+        }
+      }
     }
-  }
-  return true;    
-};
-SeeIf.NotEmptyObject = function(value){
+    return true;    
+  };
+  SeeIf.NotEmptyObject = function(value){
   return !SeeIf.IsEmptyObject(value);
 };
-  
+});
+
 OnLoad('/doh_js/core', function($){
   
   Doh.meld_objects(Doh, {
@@ -251,7 +254,7 @@ OnLoad('/doh_js/core', function($){
           destination.inherited[pattern] = Patterns[pattern];
         }
       } else {
-        Doh.Warn('Doh.mixin_pattern(',destination,',',pattern,') did not find the pattern');
+        Doh.error('Doh.mixin_pattern(',destination,',',pattern,') did not find the pattern');
       }
     },
     
