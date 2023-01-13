@@ -121,14 +121,14 @@ OnLoad('/doh_js/see_if', function($){
   SeeIf.NotEmptyObject = function(value){
     return !SeeIf.IsEmptyObject(value);
   };
-  DohWatch.SeeIf = false;
-  delete DohWatch.SeeIf;
 }, 'SeeIf');
 
 OnLoad('/doh_js/core', function($){
   
-  DohWatch.SeeIf = false;
-  delete DohWatch.SeeIf;
+  if(top.DohWatch)if(DohWatch.SeeIf){
+    DohWatch.SeeIf = false;
+    delete DohWatch.SeeIf;
+  }
   
   Doh.meld_objects(Doh, {
     
