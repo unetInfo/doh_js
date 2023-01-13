@@ -450,7 +450,7 @@ OnLoad('/doh_js/core', function($){
       }
 
       // this section is only run after the origin idea was inherited
-      if(destination.inherited)if(destination.inherited.idea){
+      if(destination.inherited)if(destination.machine){
         // we update here so it only happens once
         // we only want to run this after the idea has been melded 
         // inherited is only present on instances, patterns don't have it
@@ -675,7 +675,7 @@ OnLoad('/doh_js/core', function($){
       i = '';
       for(i in patterns){
         if(!Patterns[i]){
-          Doh.Warn('Doh.New: '+ idea.pattern + 'tried to inherit from "', i, '" but it was not found, skipping it entirely.');
+          Doh.warn('Doh.New: '+ idea.pattern + 'tried to inherit from "', i, '" but it was not found, skipping it entirely.');
         } 
         Doh.mixin_pattern(object, i);
       }
@@ -722,7 +722,7 @@ OnLoad('/doh_js/core', function($){
       object.inherited.idea = idea;
       
       // update the meld methods to include the inherited idea we just added
-      Doh.update_meld_methods(object);
+      //Doh.update_meld_methods(object);
 
       //fix the idealize method
       object.idealize = Doh.idealize;
@@ -1546,7 +1546,7 @@ OnLoad('/doh_js/core', function($){
 OnLoad('/doh_js/html', function($){
   var jWin = $(window);
   Doh.meld_objects(Doh, {
-    OnWindowResize:{},
+    OnWindowResizeListeners:{},
     /**
      *  @brief Turns a string or jquery object into a doh object
      *
@@ -2513,8 +2513,8 @@ OnLoad('/doh_js/html', function($){
 
     Doh.jQuery(window).resize(function(e){
       Doh.refresh_win();
-      for(var id in Doh.OnWindowResize) {
-        Doh.OnWindowResize[id].window_resize.call(Doh.OnWindowResize[id], e);
+      for(var id in Doh.OnWindowResizeListeners) {
+        Doh.OnWindowResizeListeners[id].window_resize.call(Doh.OnWindowResizeListeners[id], e);
       }
     });
 

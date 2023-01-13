@@ -450,7 +450,7 @@ OnLoad('/doh_js/core', function($){
       }
 
       // this section is only run after the origin idea was inherited
-      if(destination.inherited)if(destination.inherited.idea){
+      if(destination.inherited)if(destination.machine){
         // we update here so it only happens once
         // we only want to run this after the idea has been melded 
         // inherited is only present on instances, patterns don't have it
@@ -649,7 +649,7 @@ OnLoad('/doh_js/core', function($){
         if(!Patterns[idea.pattern]) {
           // we could not find at least one pattern
           // default to object
-         Doh.Warn('New idea had no inherits OR no pattern was found, default pattern to "object"',idea);
+         Doh.warn('New idea had no inherits OR no pattern was found, default pattern to "object"',idea);
          idea.pattern = 'object';
         }
       }
@@ -722,7 +722,7 @@ OnLoad('/doh_js/core', function($){
       object.inherited.idea = idea;
       
       // update the meld methods to include the inherited idea we just added
-      Doh.update_meld_methods(object);
+      //Doh.update_meld_methods(object);
 
       //fix the idealize method
       object.idealize = Doh.idealize;

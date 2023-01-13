@@ -1,7 +1,7 @@
 OnLoad('/doh_js/html', function($){
   var jWin = $(window);
   Doh.meld_objects(Doh, {
-    OnWindowResize:{},
+    OnWindowResizeListeners:{},
     /**
      *  @brief Turns a string or jquery object into a doh object
      *
@@ -969,8 +969,8 @@ OnLoad('/doh_js/html', function($){
 
     Doh.jQuery(window).resize(function(e){
       Doh.refresh_win();
-      for(var id in Doh.OnWindowResize) {
-        Doh.OnWindowResize[id].window_resize.call(Doh.OnWindowResize[id], e);
+      for(var id in Doh.OnWindowResizeListeners) {
+        Doh.OnWindowResizeListeners[id].window_resize.call(Doh.OnWindowResizeListeners[id], e);
       }
     });
 
