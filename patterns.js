@@ -722,7 +722,7 @@ OnLoad('/doh_js/core', function($){
       object.inherited.idea = idea;
       
       // update the meld methods to include the inherited idea we just added
-      //Doh.update_meld_methods(object);
+      Doh.update_meld_methods(object);
 
       //fix the idealize method
       object.idealize = Doh.idealize;
@@ -1587,7 +1587,7 @@ OnLoad('/doh_js/html', function($){
       // cache the window size on doh
       // window h/w is happily consistent
 
-      Doh.WindowSizes = DWS = Doh.win = {w:jWin.width(), h: jWin.height()};
+      var DWS = Doh.WindowSizes = Doh.win = {w:jWin.width(), h: jWin.height()};
       // floor to err on the size of fitting
       // we stash this to keep from dividing by 2 as much as possible
       DWS.w2 = Math.floor(DWS.w*0.5);

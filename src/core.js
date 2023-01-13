@@ -722,7 +722,7 @@ OnLoad('/doh_js/core', function($){
       object.inherited.idea = idea;
       
       // update the meld methods to include the inherited idea we just added
-      //Doh.update_meld_methods(object);
+      Doh.update_meld_methods(object);
 
       //fix the idealize method
       object.idealize = Doh.idealize;
