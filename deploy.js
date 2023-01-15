@@ -731,6 +731,9 @@ DohWatch.Doh = Doh;
 // always process requires, wait for Doh to load, then run callback
 // can be overloaded to allow skipping the load process
 window.OnLoad = window.OnLoad || function(module_name, requires, callback, globals){
+  
+  // Doh is only the object defined above, or already loaded somehow (this should not happen)
+  
   // mark the module as loading with explicit false
   if(Doh.ModuleIsLoaded[module_name]) {
     throw console.error('FATAL: two OnLoad functions for the same module:', module_name);
@@ -776,6 +779,7 @@ window.OnLoad = window.OnLoad || function(module_name, requires, callback, globa
       //console.log('running module:', module_name);
       DohWatchUpdate('--------------- Between ' + DohWatchUpdate.PreviousName + ' and ' + module_name);
       Doh.ModuleCurrentlyRunning = module_name;
+      // at this point, Doh is loaded and we are now going through the modules
       try{
         if(!Doh.jQuery){
           // find our jQuery version

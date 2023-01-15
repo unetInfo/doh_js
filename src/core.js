@@ -183,7 +183,7 @@ OnLoad('/doh_js/core', function($){
       Doh._log(arguments, 'Doh:', 'log');
     },
     /**
-     *  @brief return a custom Doh Error
+     *  @brief return a custom Doh error
      *
      *  @param [in] context, context, ...   object(s) of relevence to the error
      *  @return Patterns.error object
@@ -197,7 +197,7 @@ OnLoad('/doh_js/core', function($){
       //return New({pattern:'error',args:arguments});
     },
     /**
-     *  @brief return a custom Doh Warning
+     *  @brief return a custom Doh warning
      *
      *  @param [in] context, context, ...   object(s) of relevence to the error
      *  @return Patterns.error object
@@ -266,7 +266,7 @@ OnLoad('/doh_js/core', function($){
       var extended = {};
       if(SeeIf.NotObjectObject(inherits)) inherits = Doh.normalize_inherits({}, inherits);
       for(var i in inherits){
-        if(!Patterns[i]) throw Doh.Error(i+' not defined. Pattern is missing...'); // CHRIS:  Andy added this error msg, is there a better way?
+        if(!Patterns[i]) throw Doh.error(i+' not defined. Pattern is missing...'); // CHRIS:  Andy added this error msg, is there a better way?
         Doh.meld_objects(extended, Doh.extend_inherits(Patterns[i].inherits));
       }
       Doh.meld_objects(extended, inherits);
@@ -541,7 +541,7 @@ OnLoad('/doh_js/core', function($){
         // only allow this if the idea contains its own pattern name
         idea = name;
         if(typeof idea.pattern === 'string') name = idea.pattern;
-        else throw Doh.Error('Doh.pattern('+idea+') tried to make a pattern with no name');
+        else throw Doh.error('Doh.pattern('+idea+') tried to make a pattern with no name');
 
         // inherits will be in the idea
         inherits = false;
@@ -558,7 +558,7 @@ OnLoad('/doh_js/core', function($){
       idea.pattern = name;
       
       if(Patterns[name]){
-        Doh.Warn('(',name,') pattern is being overwritten.\nOriginal Module:',Doh.PatternModule[name],'\nNew Module:',Doh.ModuleCurrentlyRunning);
+        Doh.warn('(',name,') pattern is being overwritten.\nOriginal Module:',Doh.PatternModule[name],'\nNew Module:',Doh.ModuleCurrentlyRunning);
       }
 
       // normalize passed in inherits
@@ -649,7 +649,7 @@ OnLoad('/doh_js/core', function($){
         if(!Patterns[idea.pattern]) {
           // we could not find at least one pattern
           // default to object
-         Doh.warn('New idea had no inherits OR no pattern was found, default pattern to "object"',idea);
+         Doh.error('New idea had no inherits OR no pattern was found, default pattern to "object"',idea);
          idea.pattern = 'object';
         }
       }
@@ -675,7 +675,7 @@ OnLoad('/doh_js/core', function($){
       i = '';
       for(i in patterns){
         if(!Patterns[i]){
-          Doh.Warn('Doh.New: '+ idea.pattern + 'tried to inherit from "', i, '" but it was not found, skipping it entirely.');
+          Doh.warn('Doh.New: '+ idea.pattern + 'tried to inherit from "', i, '" but it was not found, skipping it entirely.');
         } 
         Doh.mixin_pattern(object, i);
       }
@@ -795,16 +795,18 @@ OnLoad('/doh_js/core', function($){
         which_idea = patterns[i];
         j = '';
         // loop over the idea and use it to add properties from the inherited.idea
-        for(j in obj.inherited[which_idea]){
-          if(!methods){
-            if(typeof obj[j] !== 'function'){
-              new_idea[j] = obj[j];
-            }
-          } else {
-            if(methods === 'both'){
-              new_idea[j] = obj[j];
-            } else if(typeof obj[j] === 'function'){
-              new_idea[j] = obj[j];
+        for(j in Patterns[which_idea]){
+          if(which_idea != 'object' /*|| i != 'html'*/){
+            if(!methods){
+              if(typeof obj[j] !== 'function'){
+                new_idea[j] = obj[j];
+              }
+            } else {
+              if(methods === 'both'){
+                new_idea[j] = obj[j];
+              } else if(typeof obj[j] === 'function'){
+                new_idea[j] = obj[j];
+              }
             }
           }
         }

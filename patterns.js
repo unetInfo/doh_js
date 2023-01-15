@@ -183,7 +183,7 @@ OnLoad('/doh_js/core', function($){
       Doh._log(arguments, 'Doh:', 'log');
     },
     /**
-     *  @brief return a custom Doh Error
+     *  @brief return a custom Doh error
      *
      *  @param [in] context, context, ...   object(s) of relevence to the error
      *  @return Patterns.error object
@@ -197,7 +197,7 @@ OnLoad('/doh_js/core', function($){
       //return New({pattern:'error',args:arguments});
     },
     /**
-     *  @brief return a custom Doh Warning
+     *  @brief return a custom Doh warning
      *
      *  @param [in] context, context, ...   object(s) of relevence to the error
      *  @return Patterns.error object
@@ -266,7 +266,7 @@ OnLoad('/doh_js/core', function($){
       var extended = {};
       if(SeeIf.NotObjectObject(inherits)) inherits = Doh.normalize_inherits({}, inherits);
       for(var i in inherits){
-        if(!Patterns[i]) throw Doh.Error(i+' not defined. Pattern is missing...'); // CHRIS:  Andy added this error msg, is there a better way?
+        if(!Patterns[i]) throw Doh.error(i+' not defined. Pattern is missing...'); // CHRIS:  Andy added this error msg, is there a better way?
         Doh.meld_objects(extended, Doh.extend_inherits(Patterns[i].inherits));
       }
       Doh.meld_objects(extended, inherits);
@@ -541,7 +541,7 @@ OnLoad('/doh_js/core', function($){
         // only allow this if the idea contains its own pattern name
         idea = name;
         if(typeof idea.pattern === 'string') name = idea.pattern;
-        else throw Doh.Error('Doh.pattern('+idea+') tried to make a pattern with no name');
+        else throw Doh.error('Doh.pattern('+idea+') tried to make a pattern with no name');
 
         // inherits will be in the idea
         inherits = false;
@@ -558,7 +558,7 @@ OnLoad('/doh_js/core', function($){
       idea.pattern = name;
       
       if(Patterns[name]){
-        Doh.Warn('(',name,') pattern is being overwritten.\nOriginal Module:',Doh.PatternModule[name],'\nNew Module:',Doh.ModuleCurrentlyRunning);
+        Doh.warn('(',name,') pattern is being overwritten.\nOriginal Module:',Doh.PatternModule[name],'\nNew Module:',Doh.ModuleCurrentlyRunning);
       }
 
       // normalize passed in inherits
@@ -649,7 +649,7 @@ OnLoad('/doh_js/core', function($){
         if(!Patterns[idea.pattern]) {
           // we could not find at least one pattern
           // default to object
-         Doh.Warn('New idea had no inherits OR no pattern was found, default pattern to "object"',idea);
+         Doh.error('New idea had no inherits OR no pattern was found, default pattern to "object"',idea);
          idea.pattern = 'object';
         }
       }
@@ -795,16 +795,18 @@ OnLoad('/doh_js/core', function($){
         which_idea = patterns[i];
         j = '';
         // loop over the idea and use it to add properties from the inherited.idea
-        for(j in obj.inherited[which_idea]){
-          if(!methods){
-            if(typeof obj[j] !== 'function'){
-              new_idea[j] = obj[j];
-            }
-          } else {
-            if(methods === 'both'){
-              new_idea[j] = obj[j];
-            } else if(typeof obj[j] === 'function'){
-              new_idea[j] = obj[j];
+        for(j in Patterns[which_idea]){
+          if(which_idea != 'object' /*|| i != 'html'*/){
+            if(!methods){
+              if(typeof obj[j] !== 'function'){
+                new_idea[j] = obj[j];
+              }
+            } else {
+              if(methods === 'both'){
+                new_idea[j] = obj[j];
+              } else if(typeof obj[j] === 'function'){
+                new_idea[j] = obj[j];
+              }
             }
           }
         }
@@ -1565,13 +1567,14 @@ OnLoad('/doh_js/html', function($){
           if( obj[0].dobj ) obj = obj[0].dobj;
           // or make a new one for it
           // TO ANDY: I don't think we use this and I don't really like it.
+          // test raising warning
           else obj = New({pattern:'element', e:obj, parent:obj.parent()}, 'parenting_phase');
         }
         // the jQuery selector object is empty, we didn't find an actual element
         else obj = false;
       }
       if(!InstanceOf(obj)){
-        Doh.Warn('Doh.get_dobj could not find a doh object with:', obj);
+        Doh.warn('Doh.get_dobj could not find a doh object with:', e);
       }
       // in any case, at least return e
       return obj || e;
@@ -1644,7 +1647,7 @@ OnLoad('/doh_js/html', function($){
           this.controller = controller;
         } else {
           // otherwise, use the parent with warning
-          Doh.Warn('hierarchy control: ', this, ' could not find a controller');
+          Doh.warn('hierarchy control: ', this, ' could not find a controller. Use the parent: ', this.parent, 'instead.');
           this.controller = this.parent;
         }
         // ensure that our newly assigned controller has controls storage
@@ -1676,7 +1679,7 @@ OnLoad('/doh_js/html', function($){
           if(SeeIf.HasValue(b[0]) && SeeIf.HasValue(b[1])){
             newCSS[(b[0]).trim()] = b[1].trim();
           }else{
-            //Doh.Warn('Patterns failed parsing: '+ a);
+            //Doh.warn('Patterns failed parsing: '+ a);
           }
         });
       }
@@ -1685,7 +1688,7 @@ OnLoad('/doh_js/html', function($){
         if(i === 'z-index') continue;
         if(i === 'opacity') continue;
         if(SeeIf.IsNumber(newPattern.css[i])){
-          Doh.Warn('Pattern (' + newPattern.pattern + ')found css number for: ' + i + ' of: ' + newPattern.css[i], newPattern);
+          Doh.warn('Pattern (' + newPattern.pattern + ')found css number for: ' + i + ' of: ' + newPattern.css[i] + ' .', 'The value may be ignored!' , newPattern);
         }
       }
       
@@ -1704,6 +1707,40 @@ OnLoad('/doh_js/html', function($){
       
     }
     return newPattern;
+  }
+  
+  Doh.fix_untitled_controls = function(){
+    // if doh previously identified things that it constructed which did not have a title
+    if(Doh.UntitledControls){
+      console.groupCollapsed('Doh.fix_untitled_controls Returned:');
+      let DUC;
+      for(var id in Doh.UntitledControls){
+        DUC = Doh.UntitledControls[id];
+        // we are still a control?
+        if(DUC.control){
+          // did we set a title?
+          if(DUC.attrs.title){
+            // ok, so something set our title, is it at least not empty string on the actual DDM object?
+            if(SeeIf.IsEmptyString(DUC.e.attr('title'))){
+              // so we wanted it to be set but it's empty on the DOM object, fix that:
+              Doh.log('Tooltip title was set BUT it was deleted. Restored to the value originally set.', DUC.id, 'Pattern:', DUC.pattern, '.control:', DUC.control);
+              DUC.e.attr('title', DUC.attrs.title);
+            }
+          } else {
+            // so we didn't set a title, but did a title get set by someone else?
+            if(!DUC.e.attr('title')){
+              // no title was set and it was never updated up to this point
+              Doh.log('Tooltip title was not set AND it was never updated. Set to .control', DUC.id, 'Pattern:', DUC.pattern, '.control:', DUC.control);
+              DUC.e.attr('title', DUC.control);
+            } else {
+              // a title was not defined by us, but someone updated us to have one, which somehow seems fine for now
+              Doh.log('Tooltip title was not set BUT it was updated later. Abort.', DUC.id, 'Pattern:', DUC.pattern, '.control:', DUC.control);
+            }
+          }
+        }
+      }
+      console.groupEnd();
+    }
   }
   
   Pattern('html', 'control', {
@@ -1782,7 +1819,7 @@ OnLoad('/doh_js/html', function($){
             // WARNING: this will overwrite children
             this.e.html(this.html);
           } else {
-            Doh.Warn(`html object tried to overwrite children with: "${this.html}"`,'\n',this);
+            Doh.warn(`html object tried to overwrite children with: "${this.html}"`,'\n',this);
           }
         }
         
@@ -1831,6 +1868,11 @@ OnLoad('/doh_js/html', function($){
         if(i === 'length') continue;
         // build the children up or machine them forward
         this.children[i] = New(this.children[i], this.machine_children_to);
+      }
+      
+      if(this.control && !this.attrs.title && ! this.e.attr('title')){
+        Doh.UntitledControls = Doh.UntitledControls || {};
+        Doh.UntitledControls[this.id]=this;
       }
     },
     get_style:function(){
@@ -1934,7 +1976,7 @@ OnLoad('/doh_js/html', function($){
   }
   Doh.run_animation_queue = function(queue_name){
     if(!queue_name){
-      Doh.warn('Tried to start a "false" animation queue.');
+      Doh.warn('Tried to start a "false" animation queue. (i.e.: Doh.run_animation_queue(). A queue_name is required)');
       return;
     }
     queue = Doh.AnimationQueues[queue_name];
@@ -2246,7 +2288,7 @@ OnLoad('/doh_js/html', function($){
         // WARNING: this will overwrite children
         this.e.html(this.html);
       } else {
-        Doh.Warn(`set_html would have overwritten children with: "${this.html}"`, '\n', this);
+        Doh.warn(`set_html would have overwritten children with: "${this.html}"`, '\n', this);
       }
     }
   });
@@ -2331,7 +2373,7 @@ OnLoad('/doh_js/html', function($){
             var that = this;
             //var tab_labels_inner = tab_labels, tab_content_inner = tab_content;
             this.e.click(function(){
-              //console.log(that);
+              //Doh.log(that);
               var cur_button, cur_content;
               for(var k in tab_content){
                 cur_button = $('#tab_' + k + '_button');
@@ -2423,10 +2465,10 @@ OnLoad('/doh_js/html', function($){
     drag_start:function(event, ui){
       this._original_z_index = this.e.css("z-index");
       this.e.css({'z-index':110});
-      //console.log('drag start');
+      //Doh.log('drag start');
     },
     drag_drag:function(event, ui) {
-      //console.log('drag drag');
+      //Doh.log('drag drag');
     },
     drag_stop:function(e,f) {
       this.e.css({'z-index':this.css['z-index']});
@@ -2509,17 +2551,16 @@ OnLoad('/doh_js/html', function($){
       //window.setTimeout(this.delays_hover_over, 0); // this fixes a race issue at launch but means hover will get called at launch one time
     },
   });
+  
+  Doh.jQuery(window).resize(function(e){
+    Doh.refresh_win();
+    for(var id in Doh.OnWindowResizeListeners) {
+      Doh.OnWindowResizeListeners[id].window_resize.call(Doh.OnWindowResizeListeners[id], e);
+    }
+  });
 
-
-    Doh.jQuery(window).resize(function(e){
-      Doh.refresh_win();
-      for(var id in Doh.OnWindowResizeListeners) {
-        Doh.OnWindowResizeListeners[id].window_resize.call(Doh.OnWindowResizeListeners[id], e);
-      }
-    });
-
-    var jBody = Doh.jQuery('body');
-    Doh.body = New('html',{tag:'body',e:jBody,parent:jBody.parent()}, 'parenting_phase');                 
+  var jBody = Doh.jQuery('body');
+  Doh.body = New('html',{tag:'body',e:jBody,parent:jBody.parent()}, 'parenting_phase');                 
 });
 
 OnLoad('/doh_js/element', function($){

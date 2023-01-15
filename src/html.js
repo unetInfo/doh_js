@@ -162,6 +162,40 @@ OnLoad('/doh_js/html', function($){
     return newPattern;
   }
   
+  Doh.fix_untitled_controls = function(){
+    // if doh previously identified things that it constructed which did not have a title
+    if(Doh.UntitledControls){
+      console.groupCollapsed('Doh.fix_untitled_controls Returned:');
+      let DUC;
+      for(var id in Doh.UntitledControls){
+        DUC = Doh.UntitledControls[id];
+        // we are still a control?
+        if(DUC.control){
+          // did we set a title?
+          if(DUC.attrs.title){
+            // ok, so something set our title, is it at least not empty string on the actual DDM object?
+            if(SeeIf.IsEmptyString(DUC.e.attr('title'))){
+              // so we wanted it to be set but it's empty on the DOM object, fix that:
+              Doh.log('Tooltip title was set BUT it was deleted. Restored to the value originally set.', DUC.id, 'Pattern:', DUC.pattern, '.control:', DUC.control);
+              DUC.e.attr('title', DUC.attrs.title);
+            }
+          } else {
+            // so we didn't set a title, but did a title get set by someone else?
+            if(!DUC.e.attr('title')){
+              // no title was set and it was never updated up to this point
+              Doh.log('Tooltip title was not set AND it was never updated. Set to .control', DUC.id, 'Pattern:', DUC.pattern, '.control:', DUC.control);
+              DUC.e.attr('title', DUC.control);
+            } else {
+              // a title was not defined by us, but someone updated us to have one, which somehow seems fine for now
+              Doh.log('Tooltip title was not set BUT it was updated later. Abort.', DUC.id, 'Pattern:', DUC.pattern, '.control:', DUC.control);
+            }
+          }
+        }
+      }
+      console.groupEnd();
+    }
+  }
+  
   Pattern('html', 'control', {
     meld_arrays: [
       'classes',
@@ -287,6 +321,10 @@ OnLoad('/doh_js/html', function($){
         if(i === 'length') continue;
         // build the children up or machine them forward
         this.children[i] = New(this.children[i], this.machine_children_to);
+      }
+      
+      if(this.control && !this.attrs.title && ! this.e.attr('title')){
+        Doh.UntitledControls[this.id]=this;
       }
     },
     get_style:function(){
@@ -965,16 +1003,15 @@ OnLoad('/doh_js/html', function($){
       //window.setTimeout(this.delays_hover_over, 0); // this fixes a race issue at launch but means hover will get called at launch one time
     },
   });
+  
+  Doh.jQuery(window).resize(function(e){
+    Doh.refresh_win();
+    for(var id in Doh.OnWindowResizeListeners) {
+      Doh.OnWindowResizeListeners[id].window_resize.call(Doh.OnWindowResizeListeners[id], e);
+    }
+  });
 
-
-    Doh.jQuery(window).resize(function(e){
-      Doh.refresh_win();
-      for(var id in Doh.OnWindowResizeListeners) {
-        Doh.OnWindowResizeListeners[id].window_resize.call(Doh.OnWindowResizeListeners[id], e);
-      }
-    });
-
-    var jBody = Doh.jQuery('body');
-    Doh.body = New('html',{tag:'body',e:jBody,parent:jBody.parent()}, 'parenting_phase');                 
+  var jBody = Doh.jQuery('body');
+  Doh.body = New('html',{tag:'body',e:jBody,parent:jBody.parent()}, 'parenting_phase');                 
 });
 
