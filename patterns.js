@@ -430,34 +430,37 @@ OnLoad('/doh_js/core', function($){
       let prop_name = '';
       //test melded stuff and make sure it is what we expect
       if(idea.melded){
-        if(destination.melded){
-          // we only want to know if the destination is going to be overwritten by the idea
-          for(prop_name in idea.melded){
+        // we only want to know if the destination is going to be overwritten by the idea
+        for(prop_name in idea.melded){
+          if(destination.melded){
             // deal with destination defines a meld type that is different from idea
             if(destination.melded[prop_name])if(destination.melded[prop_name] != idea.melded[prop_name]){
               throw Doh.error('Doh.meld_ideas(',destination,',',idea,'). destination.melded[',prop_name,']:',destination.melded[prop_name],'will be overwritten by idea.melded[',prop_name,']:',idea.melded[prop_name]);
             }
-            // deal with idea has a property of type that is incompatible with idea.melded type
-            if(SeeIf.IsDefined(idea[prop_name]))if(idea.melded[prop_name])if(!Doh.type_of_match(idea[prop_name], idea.melded[prop_name])){
-              throw Doh.error('Doh.meld_ideas(',destination,',',idea,'). idea[',prop_name,']:',idea[prop_name],'is an incompatible type with idea.melded[',prop_name,']:',idea.melded[prop_name]);
-            }
-            // deal with destination already has a property of type that is incompatible with idea.melded type
-            if(SeeIf.IsDefined(destination[prop_name]))if(idea.melded[prop_name])if(!Doh.type_of_match(destination[prop_name], idea.melded[prop_name])){
+          }
+          // deal with destination already has a property of type that is incompatible with idea.melded type
+          if(SeeIf.IsDefined(destination[prop_name])){
+            if(!Doh.type_of_match(destination[prop_name], idea.melded[prop_name])){
               throw Doh.error('Doh.meld_ideas(',destination,',',idea,'). destination[',prop_name,']:',destination[prop_name],'is an incompatible type with idea.melded[',prop_name,']:',idea.melded[prop_name]);
+            }
+          }
+          // deal with idea has a property of type that is incompatible with idea.melded type
+          if(SeeIf.IsDefined(idea[prop_name])){
+            if(!Doh.type_of_match(idea[prop_name], idea.melded[prop_name])){
+              throw Doh.error('Doh.meld_ideas(',destination,',',idea,'). idea[',prop_name,']:',idea[prop_name],'is an incompatible type with idea.melded[',prop_name,']:',idea.melded[prop_name]);
             }
           }
         }
       }
+      prop_name = '';
+      for(prop_name in destination.melded){
+        // deal with idea has a property of type that is incompatible with destination melded type
+        if(SeeIf.IsDefined(idea[prop_name]))if(destination.melded[prop_name])if(!Doh.type_of_match(idea[prop_name], destination.melded[prop_name])){
+          throw Doh.error('Doh.meld_ideas(',destination,',',idea,'). idea[',prop_name,']:',idea[prop_name],'is an incompatible type with destination.melded[',prop_name,']:',destination.melded[prop_name]);
+        }
+      }
       // build name-keyed objects of the melded value lists
       let melded = Doh.meld_objects(destination.melded, idea.melded);
-      /*
-      meld_arrays = Doh.object_keys_from_array_values(Doh.meld_arrays(destination.meld_arrays, idea.meld_arrays, true)),
-
-      meld_objects = Doh.object_keys_from_array_values(Doh.meld_arrays(destination.meld_objects, idea.meld_objects, true)),
-
-      meld_methods = Doh.object_keys_from_array_values(Doh.meld_arrays(destination.meld_methods, idea.meld_methods, true)),
-      meld_phases = Doh.object_keys_from_array_values(Doh.meld_arrays(destination.phases, idea.phases, true));
-      */
       // loop over the idea and decide what to do with the properties
       prop_name = '';
       for(prop_name in idea){
