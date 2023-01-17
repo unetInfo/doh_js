@@ -607,32 +607,37 @@ OnLoad('/doh_js/core', function($){
           case 'array':
             old_meld_type = 'meld_arrays';
             meld_type_js = [];
+            if(!Array.isArray(idea[prop_name])) throw Doh.error('Doh.patterns(',idea.pattern,').',prop_name,' was defined as a melded',meld_type_name,' but is not a',meld_type_name,'.',idea[prop_name]);
             break;
           case 'object':
             old_meld_type = 'meld_objects';
             meld_type_js = {};
+            if(SeeIf.NotObjectObject(idea[prop_name])) throw Doh.error('Doh.patterns(',idea.pattern,').',prop_name,' was defined as a melded',meld_type_name,' but is not a',meld_type_name,'.',idea[prop_name]);
             break;
           case 'method':
             old_meld_type = 'meld_methods';
             meld_type_js = function(){};
+            if(typeof idea[prop_name] !== 'function') throw Doh.error('Doh.patterns(',idea.pattern,').',prop_name,' was defined as a melded',meld_type_name,' but is not a',meld_type_name,'.',idea[prop_name]);
             break;
           case 'phase':
             old_meld_type = 'phases';
             meld_type_js = function(){};
+            if(typeof idea[prop_name] !== 'function') throw Doh.error('Doh.patterns(',idea.pattern,').',prop_name,' was defined as a melded',meld_type_name,' but is not a',meld_type_name,'.',idea[prop_name]);
             break;
           case 'idea':
             old_meld_type = false;
             meld_type_js = {};
+            if(SeeIf.NotObjectObject(idea[prop_name])) throw Doh.error('Doh.patterns(',idea.pattern,').',prop_name,' was defined as a melded',meld_type_name,' but is not a',meld_type_name,'.',idea[prop_name]);
             break;
           default:
             throw Doh.error('Doh.pattern() tried to define meld type:',meld_type_name,'for pattern:',idea.pattern,idea);
             break;
         }
         // default the property if needed. if we define the meld, we should at least implement it
-        if(SeeIf.IsUndefined(idea[prop_name])){
+        //if(SeeIf.IsUndefined(idea[prop_name])){
           //Doh.warn('Doh.pattern(',idea.pattern,') created a default for:',prop_name,'of type:',meld_type_name,meld_type_js);
-          Doh.warn('Doh.pattern(',idea.pattern,') has no default for:',prop_name,'of melded type:',meld_type_name,meld_type_js);
-        }
+        //  Doh.warn('Doh.pattern(',idea.pattern,') has no default for:',prop_name,'of melded type:',meld_type_name,meld_type_js);
+        //}
         idea[prop_name] = idea[prop_name] || meld_type_js;
         /*
         if(old_meld_type){
