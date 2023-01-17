@@ -408,6 +408,7 @@ OnLoad('/doh_js/core', function($){
       var i,
 
       // build name-keyed objects of the melded value lists
+      melded = Doh.meld_objects(destination.melded, idea.melded),
       meld_arrays = Doh.object_keys_from_array_values(Doh.meld_arrays(destination.meld_arrays, idea.meld_arrays, true)),
 
       meld_objects = Doh.object_keys_from_array_values(Doh.meld_arrays(destination.meld_objects, idea.meld_objects, true)),
@@ -421,18 +422,18 @@ OnLoad('/doh_js/core', function($){
         if(idea[i] !== undefined){
           
           //if(/*meld_arrays[i] || */(Array.isArray(idea[i])/* && !idea[i].length*/)){
-          if(meld_arrays[i] || (Array.isArray(idea[i]) && !idea[i].length)){
+          if((melded[i] === 'array' || meld_arrays[i]) || (Array.isArray(idea[i]) && !idea[i].length)){
             // it's a melded array or an empty default
             destination[i] = Doh.meld_arrays(destination[i], idea[i]);
             continue;
           }
           //if(/*meld_objects[i] || */(typeof idea[i] == 'object' && !Array.isArray(idea[i])/* && SeeIf.IsEmptyObject(idea[i])*/)){
-          if(meld_objects[i] || (typeof idea[i] == 'object' && !Array.isArray(idea[i]) && SeeIf.IsEmptyObject(idea[i]))){
+          if((melded[i] === 'object' || meld_objects[i]) || (typeof idea[i] == 'object' && !Array.isArray(idea[i]) && SeeIf.IsEmptyObject(idea[i]))){
             // it's a melded object or an empty default
             destination[i] = Doh.meld_objects(destination[i], idea[i]);
             continue;
           }
-          if(meld_methods[i] || meld_phases[i]){
+          if(melded[i] === 'method' || melded[i] === 'phase' || meld_methods[i] || meld_phases[i]){
             // we handle melded methods and phases later
             // we set to null to preserve property order
             destination[i] = null;
@@ -441,10 +442,13 @@ OnLoad('/doh_js/core', function($){
           // stack the ifs for speed
           if(idea[i].pattern)if(!idea[i].machine)if(!idea[i].skip_auto_build){
             // it's an auto-build property, auto-meld it
+            destination.melded[i] = melded[i] = 'idea';
+            //destination.meld_objects = Doh.meld_arrays(destination.meld_objects, [i]);
+            //continue;
+          }
+          if(melded[i] === 'idea'){
             destination[i] = destination[i] || {};
             destination[i] = Doh.meld_ideas(destination[i], idea[i]);
-            // if it's being melded once, meld it always
-            //destination.meld_objects = Doh.meld_arrays(destination.meld_objects, [i]);
             continue;
           }
           // non-melded property
@@ -591,12 +595,48 @@ OnLoad('/doh_js/core', function($){
         Doh.PatternInheritedBy[ancestor] = Doh.PatternInheritedBy[ancestor] || [];
         Doh.PatternInheritedBy[ancestor].push(name);
       }
+      // we need to fix the .melded collection here:
+      let meld_type_name, meld_type_js, old_meld_type;
+      for(var prop_name in idea.melded){
+        meld_type_name = idea.melded[prop_name];
+        switch(meld_type_name){
+          case 'array':
+            old_meld_type = 'meld_arrays';
+            meld_type_js = [];
+            break;
+          case 'object':
+            old_meld_type = 'meld_objects';
+            meld_type_js = {};
+            break;
+          case 'method':
+            old_meld_type = 'meld_methods';
+            meld_type_js = function(){};
+            break;
+          case 'phase':
+            old_meld_type = 'phases';
+            meld_type_js = function(){};
+            break;
+          case 'idea':
+            old_meld_type = false;
+            meld_type_js = {};
+            break;
+        }
+        // default the property if needed. if we define the meld, we should at least implement it
+        idea[prop_name] = idea[prop_name] || meld_type_js;
+        if(old_meld_type){
+          // fill the old meld system from the new one
+          idea[old_meld_type] = Doh.meld_arrays(idea[old_meld_type], [prop_name], true);
+        }
+        
+      }
+      
       // store the new pattern for the builder
       Patterns[name] = idea;
       // note the new pattern's load module, if present
       Doh.PatternModule[name] = Doh.ModuleCurrentlyRunning;
       Doh.ModulePatterns[Doh.ModuleCurrentlyRunning] = Doh.ModulePatterns[Doh.ModuleCurrentlyRunning] || [];
       Doh.ModulePatterns[Doh.ModuleCurrentlyRunning].push(name);
+      
       // return the new pattern
       return idea;
     },
@@ -1045,20 +1085,31 @@ OnLoad('/doh_js/core', function($){
 
   // set the prototype for the object constructor
   Pattern('object', {
-    meld_arrays: [
-      'meld_arrays',
-      'meld_objects',
-      'meld_methods',
-      'phases',
-    ],
-    phases: [
-      'object_phase',
-    ],
+    melded:{
+      /*
+       * Old ways
+       */
+      meld_arrays:'array',
+      meld_objects:'array',
+      meld_methods:'array',
+      phases:'array',
+      /*
+       * New ways
+       */
+      melded:'object',
+      object_phase:'phase',
+    },
+    /*
+    meld_arrays:[],
+    meld_objects:[],
+    meld_methods:[],
+    phases:[],
+    */
     // ensure that we are the base object phase
     object_phase: function() {
       for(var prop in this) {
         if(prop === 'prototype' || prop === '__proto__') continue;
-        if(this[prop].pattern && !this[prop].machine && !this[prop].skip_auto_build){
+        if(this[prop])if(this[prop].pattern)if(!this[prop].machine)if(!this[prop].skip_auto_build){
           this.auto_built = this.auto_built || {};
           this[prop]._auto_built_by = this;
           this[prop] = New(this[prop], 'object_phase');
@@ -1072,7 +1123,10 @@ OnLoad('/doh_js/core', function($){
     log_type: 'Doh:',
     logger:console,
     logger_method: 'log',
-    phases:['log_phase'],
+    melded:{
+      log_phase:'phase'
+    },
+    //phases:['log_phase'],
     log_phase: function(){
       var args = [this.log_type];
       for(var i in this.args){
@@ -1109,7 +1163,7 @@ OnLoad('/doh_js/core', function($){
 */
 
 
-  Pattern('hierarchy', 'object', {
+  Pattern('parenting', 'object', {
     // parent should be a Doh Object or false
     parent: false,
     // list of child objects to build
@@ -1140,7 +1194,7 @@ OnLoad('/doh_js/core', function($){
   });
 
   //fab_iterator = null;
-  Pattern('fab', 'hierarchy', {
+  Pattern('fab', 'parenting', {
     // list of things to fab, key is fab_iterator
     fab: {},
     // base idea used to build each child
@@ -1690,7 +1744,7 @@ OnLoad('/doh_js/html', function($){
     return false;
   }
   
-  Pattern('control', 'hierarchy', {
+  Pattern('control', 'parenting', {
     // advance the children machine to this phase when building
     machine_children_to: 'control_phase',
     // setup our phases for building controls
@@ -1804,6 +1858,14 @@ OnLoad('/doh_js/html', function($){
   }
   
   Pattern('html', 'control', {
+    melded:{
+      classes:'array',
+      pattern_styles:'array',
+      css:'object',
+      attrs:'object',
+      append_phase:'phase'
+    },
+    /*
     meld_arrays: [
       'classes',
       'pattern_styles'
@@ -1815,6 +1877,7 @@ OnLoad('/doh_js/html', function($){
     phases: [
       'append_phase',
     ],
+    */
     // e should be a jQuery [Element/Array]
     // or false for using a passed in selector
     e: false,
