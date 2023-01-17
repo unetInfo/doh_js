@@ -1828,7 +1828,6 @@ OnLoad('/doh_js/html', function($){
     object_phase:function(){
       // ensure that the parent is a setting, already set,
       // or the body
-      this.parent = this.parent || 'body';
       if( typeof this.parent === 'string' ) {
         this.parent = Doh.get_dobj(this.parent);
       }
