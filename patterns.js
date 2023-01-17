@@ -1243,7 +1243,14 @@ OnLoad('/doh_js/core', function($){
     object_phase: function(){
       // move our phase to before parenting_phase
       // we need to populate the children ideas prior to building
-      Doh.array_move(this.phases, this.phases.indexOf('fab_phase'), this.phases.indexOf('parenting_phase'));
+      let old_melded = this.melded;
+      this.melded = {};
+      for(prop_name in old_melded){
+        if(prop_name == 'parenting_phase') this.melded.fab_phase = 'phase';
+        if(prop_name == 'fab_phase') continue;
+        this.melded[prop_name] = old_melded[prop_name];
+      }
+      //Doh.array_move(this.phases, this.phases.indexOf('fab_phase'), this.phases.indexOf('parenting_phase'));
     },
     // create a phase to build children ideas
     fab_phase: function(){
