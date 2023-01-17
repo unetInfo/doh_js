@@ -262,13 +262,25 @@ OnLoad('/doh_js/core', function($){
       }
     },
     
-    extend_inherits: function(inherits){
+    extend_inherits: function(inherits, skip_core = false){
       var extended = {};
       if(SeeIf.NotObjectObject(inherits)) inherits = Doh.normalize_inherits({}, inherits);
-      for(var i in inherits){
-        if(!Patterns[i]) throw Doh.error(i+' not defined. Pattern is missing...'); // CHRIS:  Andy added this error msg, is there a better way?
-        Doh.meld_objects(extended, Doh.extend_inherits(Patterns[i].inherits));
+      //if(skip_core) Doh.log('Doh.extend_inherits is skipping core.');
+      for(var pattern_name in inherits){
+        if(!Patterns[pattern_name]) throw Doh.error('Doh.extend_inherits() did not find pattern:', pattern_name, 'in inherits list:', inherits); // CHRIS:  Andy added this error msg, is there a better way?
+        if(skip_core){
+          //Doh.log(Doh.PatternModule[pattern_name],'spawns',pattern_name,'from',inherits);
+          if(pattern_name !== 'idea')if(Doh.PatternModule[pattern_name].indexOf('/doh_js/') == 0){
+            //Doh.log('Doh.extend_inherits() is skipping core and found a core pattern:', pattern_name, 'from module:', Doh.PatternModule[pattern_name]);
+            // this is a core module because the string starts with /doh_js/
+            inherits[pattern_name] = null;
+            delete inherits[pattern_name]
+            continue;
+          }
+        }
+        Doh.meld_objects(extended, Doh.extend_inherits(Patterns[pattern_name].inherits, skip_core));
       }
+      //if(skip_core) console.groupEnd();
       Doh.meld_objects(extended, inherits);
       return extended;
     },
@@ -407,11 +419,14 @@ OnLoad('/doh_js/core', function($){
       i = '';
       for(i in idea){
         if(idea[i] !== undefined){
+          
+          //if(/*meld_arrays[i] || */(Array.isArray(idea[i])/* && !idea[i].length*/)){
           if(meld_arrays[i] || (Array.isArray(idea[i]) && !idea[i].length)){
             // it's a melded array or an empty default
             destination[i] = Doh.meld_arrays(destination[i], idea[i]);
             continue;
           }
+          //if(/*meld_objects[i] || */(typeof idea[i] == 'object' && !Array.isArray(idea[i])/* && SeeIf.IsEmptyObject(idea[i])*/)){
           if(meld_objects[i] || (typeof idea[i] == 'object' && !Array.isArray(idea[i]) && SeeIf.IsEmptyObject(idea[i]))){
             // it's a melded object or an empty default
             destination[i] = Doh.meld_objects(destination[i], idea[i]);
@@ -426,13 +441,15 @@ OnLoad('/doh_js/core', function($){
           // stack the ifs for speed
           if(idea[i].pattern)if(!idea[i].machine)if(!idea[i].skip_auto_build){
             // it's an auto-build property, auto-meld it
-            destination[i] = Doh.meld_objects(destination[i], idea[i]);
+            destination[i] = destination[i] || {};
+            destination[i] = Doh.meld_ideas(destination[i], idea[i]);
             // if it's being melded once, meld it always
-            destination.meld_objects = Doh.meld_arrays(destination.meld_objects, [i]);
+            //destination.meld_objects = Doh.meld_arrays(destination.meld_objects, [i]);
             continue;
           }
           // non-melded property
           if(!skip_methods){
+            //if(typeof idea[i] == 'object' && !Array.isArray(idea[i])) Doh.log('non-melded, non-function:',i,'in:',idea);
             destination[i] = idea[i];
             continue;
           } else if(typeof idea[i] !== 'function'){
@@ -497,8 +514,8 @@ OnLoad('/doh_js/core', function($){
       return destination;
     },
     
-    pattern_inherits_extended: function(pattern_name_or_inherits){
-      return Object.keys(Doh.extend_inherits(Doh.normalize_inherits({}, pattern_name_or_inherits)));
+    pattern_inherits_extended: function(pattern_name_or_inherits, skip_core = false){
+      return Object.keys(Doh.extend_inherits(Doh.normalize_inherits({}, pattern_name_or_inherits), skip_core));
     },
     
     PatternInheritedBy: {},
@@ -613,6 +630,8 @@ OnLoad('/doh_js/core', function($){
       if(typeof pattern == 'string'){
         // then everything is normal
         idea = idea || {};
+        // overwrite the idea's pattern?
+        // NOTE: we need a new way to deal with this.
         idea.pattern = pattern;
 
       // if the pattern is an array,
@@ -624,8 +643,10 @@ OnLoad('/doh_js/core', function($){
         // merge pattern into idea.inherits
         i = '';
         for(i in pattern){
+          if(i === 'length') continue;
           idea.inherits[pattern[i]] = true;
         }
+        // NOTE: What is this? blah. I mean, I get it, but also...
         idea.pattern = 'idea';
       // pattern is the idea
       } else {
@@ -640,8 +661,11 @@ OnLoad('/doh_js/core', function($){
         idea.machine(phase);
         return idea;
       }
+      
+      //idea.pattern = something should be here, not above. 
 
       // normalize passed-in inherits
+      // this should now contain all patterns defined in the many places that things can be added to objects
       if(idea.inherits) idea.inherits = Doh.normalize_inherits({}, idea.inherits);
 
       // the builder requires at least one pattern
@@ -654,8 +678,6 @@ OnLoad('/doh_js/core', function($){
         }
       }
 
-      // start with a fresh object and the container for recording inheritence
-      //var object = new DohObject();
       // start with a fresh object and the container for recording inheritence
       var object = Doh.Prototype();
 
@@ -726,6 +748,9 @@ OnLoad('/doh_js/core', function($){
 
       //fix the idealize method
       object.idealize = Doh.idealize;
+      
+      //fix the perspective method
+      object.perspective = Doh.perspective.bind(object, object);
 
       // run the machine to the specified phase and return the object
       return object.machine(phase);
@@ -744,6 +769,8 @@ OnLoad('/doh_js/core', function($){
                                                              
   */                                                                                                              
                                                                                                                      
+    // change param name to inherits to indicate a inherits type array
+    
     idealize: function(patterns, active) {
       let j, new_idea = {}, which_idea;
       // default to finding the original idea
@@ -768,6 +795,7 @@ OnLoad('/doh_js/core', function($){
             if(active){
               new_idea[j] = this[j];
             } else if(this.inherited[which_idea][j] !== undefined) {
+              
               new_idea[j] = this.inherited[which_idea][j];
             }
           }
@@ -780,36 +808,60 @@ OnLoad('/doh_js/core', function($){
       }
       return new_idea;
     },
+    
     // show me properties/methods/both of a doh object filtered by [patterns]
     perspective: function(obj, patterns, methods = false){
       if(!obj) return false;
-      let j, new_idea = {}, which_idea;
+      let prop, new_idea = {}, which_idea, pattern_object, original_patterns = patterns;
+      
+      Doh.log('Doh.perspective() was sent patterns:',patterns,'and methods:',methods);
       // default to finding the original idea
       patterns = patterns || 'idea';
-      // make sure that patterns is an array
-      if(!Array.isArray(patterns)) patterns = [patterns];
-      // default to expanding the pattern, require it to be shut off
-      patterns = Doh.pattern_inherits_extended(patterns);
+      if(patterns === 'idea'){
+        pattern_object = obj.inherited.idea;
+        /*
+         * ideas can introduce patterns for inheritance in: .inherits, New('pattern_name', ...), and New(['pattern_1', 'pattern_2'], ...)
+         * this is also the order of signifigance
+         * so pattern_2 will be the last pattern inherited.
+         */
+         patterns = {};
+         Doh.normalize_inherits(patterns, pattern_object.inherits);
+         Doh.normalize_inherits(patterns, pattern_object.pattern);
+      }
+      Doh.log('Doh.perspective() is using',patterns,'to extend inherits.');
+      // default to expanding the pattern, but skip core patterns, cause we never need those
+      patterns = Doh.pattern_inherits_extended(patterns, true);
+      Doh.log('Doh.perspective() found:',patterns);
       // for each filter idea
       for(let i=0; i<patterns.length; i++){
         which_idea = patterns[i];
-        j = '';
-        // loop over the idea and use it to add properties from the inherited.idea
-        for(j in Patterns[which_idea]){
-          if(which_idea != 'object' /*|| i != 'html'*/){
+        if(which_idea === 'idea'){
+          pattern_object = obj.inherited.idea;
+        } else {
+          pattern_object = Patterns[which_idea];
+        }
+        prop = '';
+        // loop over the pattern or idea and use it to add properties to new_idea
+        for(prop in pattern_object){
+          //if(which_idea !== 'object' /*|| i != 'html'*/){
             if(!methods){
-              if(typeof obj[j] !== 'function'){
-                new_idea[j] = obj[j];
+              if(typeof obj[prop] !== 'function'){
+                new_idea[prop] = obj[prop];
               }
             } else {
               if(methods === 'both'){
-                new_idea[j] = obj[j];
-              } else if(typeof obj[j] === 'function'){
-                new_idea[j] = obj[j];
+                new_idea[prop] = obj[prop];
+              } else if(typeof obj[prop] === 'function'){
+                new_idea[prop] = obj[prop];
               }
             }
-          }
+          //}
         }
+        // if it's a pattern or the idea that has a function for it's "perspective" state, then run it
+        if(pattern_object)
+          if(typeof pattern_object.perspective === 'function'){
+            pattern_object.perspective.call(this, obj, patterns, methods, which_idea, pattern_object, new_idea);
+          }
       }
       return new_idea;
     },
@@ -938,6 +990,7 @@ OnLoad('/doh_js/core', function($){
       }
       return pre_meld_method_order.concat(meld_method_order);
     },
+    
     phases_method_order: function(object){
       var phases_method_order = [];
       for(var i in object.phases){
@@ -968,6 +1021,7 @@ OnLoad('/doh_js/core', function($){
         Doh.log(method_array[i],object.inherited[method_array[i].split('.')[0]][method].toString());
       }
     },
+    
     link_melded_method: function(object, method){
       var method_array = Doh.meld_method_order(object, method);
       for (i in method_array){
@@ -1002,11 +1056,11 @@ OnLoad('/doh_js/core', function($){
     ],
     // ensure that we are the base object phase
     object_phase: function() {
-      for(var i in this) {
-        if(i === 'prototype' || i === '__proto__') continue;
-        if(this[i].pattern && !this[i].machine && !this[i].skip_auto_build){
-          this[i]._auto_built_by = this;
-          this[i] = New(this[i]);
+      for(var prop in this) {
+        if(prop === 'prototype' || prop === '__proto__') continue;
+        if(this[prop].pattern && !this[prop].machine && !this[prop].skip_auto_build){
+          this[prop]._auto_built_by = this;
+          this[prop] = New(this[prop]);
         }
       }
     },
