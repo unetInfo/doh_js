@@ -1,3 +1,4 @@
+
 OnLoad('/doh_js/html', function($){
   var jWin = $(window);
   Doh.meld_objects(Doh, {
@@ -291,6 +292,7 @@ OnLoad('/doh_js/html', function($){
       if(this._machine_children_to){
         // if we stashed the intended state, restore it here
         this.machine_children_to = this._machine_children_to;
+        // if this is already past then we need to be append phase
       } else {
         // tell the append to machine children to append_phase
         this.machine_children_to = 'append_phase';
@@ -325,6 +327,7 @@ OnLoad('/doh_js/html', function($){
       }
       
       if(this.control && !this.attrs.title && ! this.e.attr('title')){
+        Doh.UntitledControls = Doh.UntitledControls || {};
         Doh.UntitledControls[this.id]=this;
       }
     },
@@ -1015,4 +1018,3 @@ OnLoad('/doh_js/html', function($){
   var jBody = Doh.jQuery('body');
   Doh.body = New('html',{tag:'body',e:jBody,parent:jBody.parent()}, 'parenting_phase');                 
 });
-

@@ -1059,8 +1059,10 @@ OnLoad('/doh_js/core', function($){
       for(var prop in this) {
         if(prop === 'prototype' || prop === '__proto__') continue;
         if(this[prop].pattern && !this[prop].machine && !this[prop].skip_auto_build){
+          this.auto_built = this.auto_built || {};
           this[prop]._auto_built_by = this;
-          this[prop] = New(this[prop]);
+          this[prop] = New(this[prop], 'object_phase');
+          this.auto_built[prop] = this[prop];
         }
       }
     },
@@ -1125,10 +1127,14 @@ OnLoad('/doh_js/core', function($){
     // create a phase to build children
     parenting_phase: function(){
       // loop through the children and attempt to build them
-      var that = this;
+      var i = '';
       for(var i in this.children) {
         if(i === 'length') continue;
         this.children[i] = New(Doh.meld_objects({parent:this}, this.children[i]), this.machine_children_to);
+      }
+      i = '';
+      for(var i in this.auto_built) {
+        this.children.push(New(Doh.meld_objects({parent:this}, this.auto_built[i]), this.machine_children_to));
       }
     },
   });
@@ -1892,6 +1898,7 @@ OnLoad('/doh_js/html', function($){
       if(this._machine_children_to){
         // if we stashed the intended state, restore it here
         this.machine_children_to = this._machine_children_to;
+        // if this is already past then we need to be append phase
       } else {
         // tell the append to machine children to append_phase
         this.machine_children_to = 'append_phase';
