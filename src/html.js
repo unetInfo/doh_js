@@ -225,16 +225,17 @@ OnLoad('/doh_js/html', function($){
     html: '',
 
     object_phase:function(){
-      // ensure that the parent is a setting, already set,
-      // or the body
-      if( typeof this.parent === 'string' ) {
-        this.parent = Doh.get_dobj(this.parent);
-      }
       // if our auto-built properties don't have a parent, make us the parent
       if(!this.parent) {
         if(this._auto_built_by) this.parent = this._auto_built_by;
       }
+      // ensure that the parent is a setting, already set,
+      // or the body
       this.parent = this.parent || 'body';
+      // convert to DohObject if we are a string selector
+      if( typeof this.parent === 'string' ) {
+        this.parent = Doh.get_dobj(this.parent);
+      }
       // ensure that the element is a setting, already set, or a new jQuery element using this.tag
       this.e = this.e || $('<'+this.tag+'>');
       if( typeof this.e === 'string' ) {
