@@ -227,7 +227,6 @@ OnLoad('/doh_js/html', function($){
     object_phase:function(){
       // ensure that the parent is a setting, already set,
       // or the body
-      this.parent = this.parent || 'body';
       if( typeof this.parent === 'string' ) {
         this.parent = Doh.get_dobj(this.parent);
       }
@@ -235,6 +234,7 @@ OnLoad('/doh_js/html', function($){
       if(!this.parent) {
         if(this._auto_built_by) this.parent = this._auto_built_by;
       }
+      this.parent = this.parent || 'body';
       // ensure that the element is a setting, already set, or a new jQuery element using this.tag
       this.e = this.e || $('<'+this.tag+'>');
       if( typeof this.e === 'string' ) {
