@@ -392,6 +392,20 @@ OnLoad('/doh_js/core', function($){
       }
     },
 
+    TypeOf: {
+      'phase':SeeIf.IsFunction,
+      'method':SeeIf.IsFunction,
+      'object':SeeIf.IsObjectObject,
+      'array':SeeIf.IsArray,
+      'idea':SeeIf.IsObjectObject
+    },
+    type_of: function(value){
+      for(let type in Doh.TypeOf){
+        if(Doh.TypeOf[type](value)) return type;
+      }
+      return typeof value;
+    },
+
     /*
 
                                ,,        ,,     ,,        ,,                           
@@ -406,71 +420,77 @@ OnLoad('/doh_js/core', function($){
 
   */                                     
 
-
     meld_ideas:function(destination, idea, skip_methods) {
       idea = idea || {};
-      var i,
-
+      let prop_name = '';
+      //test melded stuff and make sure it is what we expect
+      if(idea.melded){
+        if(destination.melded){
+          // we only want to know if the destination is going to be overwritten by the idea
+          for(prop_name in idea.melded){
+            // deal with destination defines a meld type that is different from idea
+            if(destination.melded[prop_name])if(destination.melded[prop_name] != idea.melded[prop_name]){
+              throw Doh.error('Doh.meld_ideas(',destination,',',idea,'). destination.melded[',prop_name,']:',destination.melded[prop_name],'will be overwritten by idea.melded[',prop_name,']:',idea.melded[prop_name]);
+            }
+          }
+          // deal with idea has a property of type that is incompatible with idea.melded type
+          // deal with destination already has a property of type that is incompatible with idea.melded type
+          if(SeeIf.IsDefined(destination[prop_name]))if(idea.melded[prop_name])if(Doh.type_of(destination[prop_name]) != idea.melded[prop_name]){
+            throw Doh.error('Doh.meld_ideas(',destination,',',idea,'). destination[',prop_name,']:',destination[prop_name],'is an incompatible type of:',Doh.type_of(destination[prop_name]),'with idea.melded[',prop_name,']:',idea.melded[prop_name]);
+          }
+        }
+      }
       // build name-keyed objects of the melded value lists
-      melded = Doh.meld_objects(destination.melded, idea.melded),
+      let melded = Doh.meld_objects(destination.melded, idea.melded);
+      /*
       meld_arrays = Doh.object_keys_from_array_values(Doh.meld_arrays(destination.meld_arrays, idea.meld_arrays, true)),
 
       meld_objects = Doh.object_keys_from_array_values(Doh.meld_arrays(destination.meld_objects, idea.meld_objects, true)),
 
       meld_methods = Doh.object_keys_from_array_values(Doh.meld_arrays(destination.meld_methods, idea.meld_methods, true)),
       meld_phases = Doh.object_keys_from_array_values(Doh.meld_arrays(destination.phases, idea.phases, true));
-
+      */
       // loop over the idea and decide what to do with the properties
-      i = '';
-      for(i in idea){
-        if(idea[i] !== undefined){
+      prop_name = '';
+      for(prop_name in idea){
+        if(idea[prop_name] !== undefined){
           
-          //if(/*meld_arrays[i] || */(Array.isArray(idea[i])/* && !idea[i].length*/)){
-          if((melded[i] === 'array' || meld_arrays[i]) || (Array.isArray(idea[i]) && !idea[i].length)){
+          if(melded[prop_name] === 'array' || (Array.isArray(idea[prop_name]) && !idea[prop_name].length)){
             // it's a melded array or an empty default
-            destination[i] = Doh.meld_arrays(destination[i], idea[i]);
+            destination[prop_name] = Doh.meld_arrays(destination[prop_name], idea[prop_name]);
             continue;
           }
-          //if(/*meld_objects[i] || */(typeof idea[i] == 'object' && !Array.isArray(idea[i])/* && SeeIf.IsEmptyObject(idea[i])*/)){
-          if((melded[i] === 'object' || meld_objects[i]) || (typeof idea[i] == 'object' && !Array.isArray(idea[i]) && SeeIf.IsEmptyObject(idea[i]))){
+          if(melded[prop_name] === 'object' || (typeof idea[prop_name] == 'object' && !Array.isArray(idea[prop_name]) && SeeIf.IsEmptyObject(idea[prop_name]))){
             // it's a melded object or an empty default
-            destination[i] = Doh.meld_objects(destination[i], idea[i]);
+            destination[prop_name] = Doh.meld_objects(destination[prop_name], idea[prop_name]);
             continue;
           }
-          if(melded[i] === 'method' || melded[i] === 'phase' || meld_methods[i] || meld_phases[i]){
+          if(melded[prop_name] === 'method' || melded[prop_name] === 'phase'){
             // we handle melded methods and phases later
             // we set to null to preserve property order
-            destination[i] = null;
+            destination[prop_name] = null;
             continue;
           }
           // stack the ifs for speed
-          if(idea[i].pattern)if(!idea[i].machine)if(!idea[i].skip_auto_build){
+          if(idea[prop_name].pattern)if(!idea[prop_name].machine)if(!idea[prop_name].skip_auto_build){
             // it's an auto-build property, auto-meld it
-            destination.melded[i] = melded[i] = 'idea';
-            //destination.meld_objects = Doh.meld_arrays(destination.meld_objects, [i]);
+            destination.melded[prop_name] = melded[prop_name] = 'idea';
+            //destination.meld_objects = Doh.meld_arrays(destination.meld_objects, [prop_name]);
             //continue;
           }
-          if(melded[i] === 'idea'){
-            destination[i] = destination[i] || {};
-            destination[i] = Doh.meld_ideas(destination[i], idea[i]);
+          if(melded[prop_name] === 'idea'){
+            destination[prop_name] = destination[prop_name] || {};
+            destination[prop_name] = Doh.meld_ideas(destination[prop_name], idea[prop_name]);
             continue;
           }
           // non-melded property
           if(!skip_methods){
-            //if(typeof idea[i] == 'object' && !Array.isArray(idea[i])) Doh.log('non-melded, non-function:',i,'in:',idea);
-            destination[i] = idea[i];
+            //if(typeof idea[prop_name] == 'object' && !Array.isArray(idea[prop_name])) Doh.log('non-melded, non-function:',prop_name,'in:',idea);
+            destination[prop_name] = idea[prop_name];
             continue;
-          } else if(typeof idea[i] !== 'function'){
-            destination[i] = idea[i];
+          } else if(typeof idea[prop_name] !== 'function'){
+            destination[prop_name] = idea[prop_name];
           }
-        }
-      }
-      
-      if(destination.meld_methods){
-        i = '';
-        for(i in meld_phases){
-          // don't allow phases to be in meld_methods
-          delete destination.meld_methods[i];
         }
       }
 
@@ -600,44 +620,34 @@ OnLoad('/doh_js/core', function($){
         Doh.PatternInheritedBy[ancestor].push(name);
       }
       // we need to fix the .melded collection here:
-      let meld_type_name, meld_type_js, old_meld_type;
+      let meld_type_name, meld_type_js;
       for(var prop_name in idea.melded){
         meld_type_name = idea.melded[prop_name];
+        if(Doh.type_of(idea[prop_name]) != meld_type_name){
+          throw Doh.error('Doh.patterns(',idea.pattern,').',prop_name,' was defined as a melded',meld_type_name,' but is not a',meld_type_name,'.',idea[prop_name]);
+        }
+        // find the base js for defaulting melded stuff
         switch(meld_type_name){
-          case 'array':
-            old_meld_type = 'meld_arrays';
-            meld_type_js = [];
-            if(!Array.isArray(idea[prop_name])) throw Doh.error('Doh.patterns(',idea.pattern,').',prop_name,' was defined as a melded',meld_type_name,' but is not a',meld_type_name,'.',idea[prop_name]);
-            break;
-          case 'object':
-            old_meld_type = 'meld_objects';
-            meld_type_js = {};
-            if(SeeIf.NotObjectObject(idea[prop_name])) throw Doh.error('Doh.patterns(',idea.pattern,').',prop_name,' was defined as a melded',meld_type_name,' but is not a',meld_type_name,'.',idea[prop_name]);
+          case 'phase':
+            meld_type_js = function(){};
             break;
           case 'method':
-            old_meld_type = 'meld_methods';
             meld_type_js = function(){};
-            if(typeof idea[prop_name] !== 'function') throw Doh.error('Doh.patterns(',idea.pattern,').',prop_name,' was defined as a melded',meld_type_name,' but is not a',meld_type_name,'.',idea[prop_name]);
             break;
-          case 'phase':
-            old_meld_type = 'phases';
-            meld_type_js = function(){};
-            if(typeof idea[prop_name] !== 'function') throw Doh.error('Doh.patterns(',idea.pattern,').',prop_name,' was defined as a melded',meld_type_name,' but is not a',meld_type_name,'.',idea[prop_name]);
+          case 'object':
+            meld_type_js = {};
+            break;
+          case 'array':
+            meld_type_js = [];
             break;
           case 'idea':
-            old_meld_type = false;
             meld_type_js = {};
-            if(SeeIf.NotObjectObject(idea[prop_name])) throw Doh.error('Doh.patterns(',idea.pattern,').',prop_name,' was defined as a melded',meld_type_name,' but is not a',meld_type_name,'.',idea[prop_name]);
             break;
           default:
-            throw Doh.error('Doh.pattern() tried to define meld type:',meld_type_name,'for pattern:',idea.pattern,idea);
+            throw Doh.error('Doh.pattern() tried to define unknown meld type:',meld_type_name,'for pattern:',idea.pattern,idea);
             break;
         }
         // default the property if needed. if we define the meld, we should at least implement it
-        //if(SeeIf.IsUndefined(idea[prop_name])){
-          //Doh.warn('Doh.pattern(',idea.pattern,') created a default for:',prop_name,'of type:',meld_type_name,meld_type_js);
-        //  Doh.warn('Doh.pattern(',idea.pattern,') has no default for:',prop_name,'of melded type:',meld_type_name,meld_type_js);
-        //}
         idea[prop_name] = idea[prop_name] || meld_type_js;
         /*
         if(old_meld_type){
