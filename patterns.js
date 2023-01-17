@@ -629,6 +629,9 @@ OnLoad('/doh_js/core', function($){
             break;
         }
         // default the property if needed. if we define the meld, we should at least implement it
+        if(SeeIf.IsUndefined(idea[prop_name])){
+          Doh.warn('Doh.pattern(',idea.pattern,') created a default for:',prop_name,'of:',meld_type_name,meld_type_js);
+        }
         idea[prop_name] = idea[prop_name] || meld_type_js;
         /*
         if(old_meld_type){
@@ -1906,7 +1909,7 @@ OnLoad('/doh_js/html', function($){
   Pattern('html', 'control', {
     melded:{
       classes:'array',
-      pattern_styles:'array',
+      //pattern_styles:'array',
       css:'object',
       attrs:'object',
       append_phase:'phase'
@@ -2262,7 +2265,7 @@ OnLoad('/doh_js/html', function($){
     available_properties: {'value':'label of the button', 'button_options':'jQuery UI Button options object'},
     melded:{button_options:'object'},
     //meld_objects: ['button_options'],
-    //button_options: {},
+    button_options: {},
     pre_parenting_phase: function(){
       if (typeof this.value !== 'undefined' && typeof this.button_options.label == 'undefined') this.button_options.label = this.value;
     },
@@ -2448,7 +2451,7 @@ OnLoad('/doh_js/html', function($){
     available_properties: {'slider_options':'jQuery UI Slider options object'},
     melded:{slider_options:'object'},
     //meld_objects: ['slider_options'],
-    //slider_options: {},
+    slider_options: {},
     append_phase: function(){
       this.e.slider(this.slider_options);
     }
