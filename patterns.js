@@ -393,17 +393,22 @@ OnLoad('/doh_js/core', function($){
     },
 
     TypeOf: {
-      'phase':SeeIf.IsFunction,
       'method':SeeIf.IsFunction,
+      'phase':SeeIf.IsFunction,
       'object':SeeIf.IsObjectObject,
       'array':SeeIf.IsArray,
       'idea':SeeIf.IsObjectObject
     },
     type_of: function(value){
       for(let type in Doh.TypeOf){
-        if(Doh.TypeOf[type](value)) return type;
+        if(Doh.TypeOf[type](value)){
+          return type;
+        }
       }
       return typeof value;
+    },
+    type_of_match: function(value, is){
+      return Doh.TypeOf[is](value);
     },
 
     /*
@@ -435,7 +440,7 @@ OnLoad('/doh_js/core', function($){
           }
           // deal with idea has a property of type that is incompatible with idea.melded type
           // deal with destination already has a property of type that is incompatible with idea.melded type
-          if(SeeIf.IsDefined(destination[prop_name]))if(idea.melded[prop_name])if(Doh.type_of(destination[prop_name]) != idea.melded[prop_name]){
+          if(SeeIf.IsDefined(destination[prop_name]))if(idea.melded[prop_name])if(!Doh.type_of_match(destination[prop_name], idea.melded[prop_name])){
             throw Doh.error('Doh.meld_ideas(',destination,',',idea,'). destination[',prop_name,']:',destination[prop_name],'is an incompatible type of:',Doh.type_of(destination[prop_name]),'with idea.melded[',prop_name,']:',idea.melded[prop_name]);
           }
         }
@@ -623,8 +628,8 @@ OnLoad('/doh_js/core', function($){
       let meld_type_name, meld_type_js;
       for(var prop_name in idea.melded){
         meld_type_name = idea.melded[prop_name];
-        if(Doh.type_of(idea[prop_name]) != meld_type_name){
-          throw Doh.error('Doh.patterns(',idea.pattern,').',prop_name,' was defined as a melded',meld_type_name,' but is not a',meld_type_name,'.',idea[prop_name]);
+        if(SeeIf.IsDefined(idea[prop_name]))if(!Doh.type_of_match(idea[prop_name], meld_type_name)){
+          throw Doh.error('Doh.patterns(',idea.pattern,').',prop_name,' was defined as a melded',meld_type_name,' but is not a',meld_type_name,'.',idea[prop_name],idea);
         }
         // find the base js for defaulting melded stuff
         switch(meld_type_name){
