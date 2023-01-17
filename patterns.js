@@ -631,9 +631,9 @@ OnLoad('/doh_js/core', function($){
         // default the property if needed. if we define the meld, we should at least implement it
         if(SeeIf.IsUndefined(idea[prop_name])){
           //Doh.warn('Doh.pattern(',idea.pattern,') created a default for:',prop_name,'of type:',meld_type_name,meld_type_js);
-          Doh.warn('Doh.pattern(',idea.pattern,') has no default for:',prop_name,'of type:',meld_type_name,meld_type_js);
+          Doh.warn('Doh.pattern(',idea.pattern,') has no default for:',prop_name,'of melded type:',meld_type_name,meld_type_js);
         }
-        //idea[prop_name] = idea[prop_name] || meld_type_js;
+        idea[prop_name] = idea[prop_name] || meld_type_js;
         /*
         if(old_meld_type){
           // fill the old meld system from the new one
@@ -1112,25 +1112,9 @@ OnLoad('/doh_js/core', function($){
   // set the prototype for the object constructor
   Pattern('object', {
     melded:{
-      /*
-       * Old ways
-      meld_arrays:'array',
-      meld_objects:'array',
-      meld_methods:'array',
-      phases:'array',
-       */
-      /*
-       * New ways
-       */
       melded:'object',
       object_phase:'phase',
     },
-    /*
-    meld_arrays:[],
-    meld_objects:[],
-    meld_methods:[],
-    phases:[],
-    */
     // ensure that we are the base object phase
     object_phase: function() {
       for(var prop in this) {
@@ -1159,7 +1143,7 @@ OnLoad('/doh_js/core', function($){
         if(i === 'length') continue;
         args.push(this.args[i]);
       }
-      logger[logger_method].apply(logger, args);
+      this.logger[this.logger_method].apply(this.logger, args);
     }
   }); // true to skip adding css classes for this object
 
