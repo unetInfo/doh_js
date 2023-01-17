@@ -437,11 +437,14 @@ OnLoad('/doh_js/core', function($){
             if(destination.melded[prop_name])if(destination.melded[prop_name] != idea.melded[prop_name]){
               throw Doh.error('Doh.meld_ideas(',destination,',',idea,'). destination.melded[',prop_name,']:',destination.melded[prop_name],'will be overwritten by idea.melded[',prop_name,']:',idea.melded[prop_name]);
             }
-          }
-          // deal with idea has a property of type that is incompatible with idea.melded type
-          // deal with destination already has a property of type that is incompatible with idea.melded type
-          if(SeeIf.IsDefined(destination[prop_name]))if(idea.melded[prop_name])if(!Doh.type_of_match(destination[prop_name], idea.melded[prop_name])){
-            throw Doh.error('Doh.meld_ideas(',destination,',',idea,'). destination[',prop_name,']:',destination[prop_name],'is an incompatible type of:',Doh.type_of(destination[prop_name]),'with idea.melded[',prop_name,']:',idea.melded[prop_name]);
+            // deal with idea has a property of type that is incompatible with idea.melded type
+            if(SeeIf.IsDefined(idea[prop_name]))if(idea.melded[prop_name])if(!Doh.type_of_match(idea[prop_name], idea.melded[prop_name])){
+              throw Doh.error('Doh.meld_ideas(',destination,',',idea,'). idea[',prop_name,']:',idea[prop_name],'is an incompatible type with idea.melded[',prop_name,']:',idea.melded[prop_name]);
+            }
+            // deal with destination already has a property of type that is incompatible with idea.melded type
+            if(SeeIf.IsDefined(destination[prop_name]))if(idea.melded[prop_name])if(!Doh.type_of_match(destination[prop_name], idea.melded[prop_name])){
+              throw Doh.error('Doh.meld_ideas(',destination,',',idea,'). destination[',prop_name,']:',destination[prop_name],'is an incompatible type with idea.melded[',prop_name,']:',idea.melded[prop_name]);
+            }
           }
         }
       }
