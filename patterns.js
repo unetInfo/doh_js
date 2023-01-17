@@ -378,13 +378,17 @@ OnLoad('/doh_js/core', function($){
     },
     // update meld_methods and phases of obj
     update_meld_methods: function(obj){
-      let mms = obj.meld_methods || [], melders = [...mms, ...obj.phases], len = melders.length;
-      for(let i=0;i<len;i++){
-        // conditionally update only the method stack
-        if(typeof obj[melders[i]] === 'function')if(typeof obj[melders[i]].update_meld_stack === 'function'){
-          obj[melders[i]].update_meld_stack();
+      //let mms = obj.meld_methods || [], melders = [...mms, ...obj.phases], len = melders.length;
+      //for(let i=0;i<len;i++){
+      for(let melded_prop in obj.melded){
+        if(obj.melded[melded_prop] === 'method' || obj.melded[melded_prop] === 'phase'){
+          // conditionally update only the method stack
+          if(typeof obj[melded_prop] === 'function')if(typeof obj[melded_prop].update_meld_stack === 'function'){
+            obj[melded_prop].update_meld_stack();
+            continue;
+          }
+          obj[melded_prop] = Doh.meld_method(obj, melded_prop);
         }
-        obj[melders[i]] = Doh.meld_method(obj, melders[i]);
       }
     },
 
@@ -620,14 +624,18 @@ OnLoad('/doh_js/core', function($){
             old_meld_type = false;
             meld_type_js = {};
             break;
+          default:
+            throw Doh.error('Doh.pattern() tried to define meld type:',meld_type_name,'for pattern:',idea.pattern,idea);
+            break;
         }
         // default the property if needed. if we define the meld, we should at least implement it
         idea[prop_name] = idea[prop_name] || meld_type_js;
+        /*
         if(old_meld_type){
           // fill the old meld system from the new one
           idea[old_meld_type] = Doh.meld_arrays(idea[old_meld_type], [prop_name], true);
         }
-        
+        */
       }
       
       // store the new pattern for the builder
@@ -753,24 +761,27 @@ OnLoad('/doh_js/core', function($){
 
       // attach the object machine
       object.machine = function(phase){
-        let phase_name, len = this.phases.length;
+        //let phase_name, len = this.phases.length;
         // go through the phases to the one specified, or the last
-        for(let i = 0; i < len; i++){
-          // stash the phase name
-          phase_name = this.phases[i];
-          // as long as the phase hasn't been run
-          if(!this.machine[phase_name]){
-            // update the phase we are on
-            this.machine.phase = phase_name;
-            // mark it as not run
-            this.machine[phase_name] = false;
-            // run the phase
-            this[phase_name].apply(this);
-            // mark it as run
-            this.machine[phase_name] = true;
+        //for(let i = 0; i < len; i++){
+        for(let phase_name in this.melded){
+          if(this.melded[phase_name] === 'phase'){
+            // stash the phase name
+            //phase_name = this.phases[i];
+            // as long as the phase hasn't been run
+            if(!this.machine[phase_name]){
+              // update the phase we are on
+              this.machine.phase = phase_name;
+              // mark it as not run
+              this.machine[phase_name] = false;
+              // run the phase
+              this[phase_name].apply(this);
+              // mark it as run
+              this.machine[phase_name] = true;
+            }
+            // if this is the phase we are building to, then exit here
+            if(phase_name == phase) return this;
           }
-          // if this is the phase we are building to, then exit here
-          if(phase_name == phase) return this;
         }
         // always return the object. New() relies on this.
         return this;
@@ -1033,14 +1044,24 @@ OnLoad('/doh_js/core', function($){
     
     phases_method_order: function(object){
       var phases_method_order = [];
-      for(var i in object.phases){
-        phases_method_order.push(Doh.meld_method_order(object, object.phases[i]));
+      for(var melded_prop in object.melded){
+        if(object.melded[melded_prop] === 'phase'){
+          phases_method_order.push(Doh.meld_method_order(object, melded_prop));
+        }
       }
       return phases_method_order;
     },
     
     meld_methods_order: function(object){
       var methods_order = [], counter = 0, phase_methods = 0;
+      
+      for(var melded_prop in object.melded){
+        if(object.melded[melded_prop] === 'method' || object.melded[melded_prop] === 'phase'){
+          methods_order.push(Doh.meld_method_order(object, melded_prop));
+          counter += methods_order[methods_order.length-1].length
+        }
+      }
+      /*
       for(let i in object.phases){
         methods_order.push(Doh.meld_method_order(object, object.phases[i]));
         counter += methods_order[methods_order.length-1].length
@@ -1052,6 +1073,7 @@ OnLoad('/doh_js/core', function($){
         counter += methods_order[methods_order.length-1].length
       }
       Doh.log('and:', counter - phase_methods, ' melded methods.');
+      */
       return methods_order;
     },
     
@@ -1088,11 +1110,11 @@ OnLoad('/doh_js/core', function($){
     melded:{
       /*
        * Old ways
-       */
       meld_arrays:'array',
       meld_objects:'array',
       meld_methods:'array',
       phases:'array',
+       */
       /*
        * New ways
        */
@@ -1171,6 +1193,12 @@ OnLoad('/doh_js/core', function($){
     // advance the children machine to this phase when building
     machine_children_to: 'parenting_phase',
     // extend the children array
+    melded:{
+      children:'array',
+      // setup our phases for building children and controls
+      parenting_phase:'phase',
+    },
+    /*
     meld_arrays: [
       'children'
     ],
@@ -1178,6 +1206,7 @@ OnLoad('/doh_js/core', function($){
     phases: [
       'parenting_phase',
     ],
+    */
     // create a phase to build children
     parenting_phase: function(){
       // loop through the children and attempt to build them
@@ -1199,11 +1228,18 @@ OnLoad('/doh_js/core', function($){
     fab: {},
     // base idea used to build each child
     fab_idea: {skip_auto_build:true},
+    melded:{
+      fab:'object',
+      fab_idea:'object',
+      fab_phase:'phase',
+    },
+    /*
     meld_objects: ['fab', 'fab_idea'],
     // add our own phase
     phases: [
       'fab_phase',
     ],
+    */
     object_phase: function(){
       // move our phase to before parenting_phase
       // we need to populate the children ideas prior to building
@@ -1748,9 +1784,12 @@ OnLoad('/doh_js/html', function($){
     // advance the children machine to this phase when building
     machine_children_to: 'control_phase',
     // setup our phases for building controls
+    melded:{control_phase:'phase'},
+    /*
     phases: [
       'control_phase',
     ],
+    */
     control_phase: function(){
       // if we have a control name
       if(this.control){
@@ -2068,7 +2107,8 @@ OnLoad('/doh_js/html', function($){
   });
 
   Pattern('HTMLPosition', 'element', {
-    meld_objects:['position'],
+    melded:{position:'object'},
+    //meld_objects:['position'],
     place:function(opts){
       opts = opts || this.position;
       let newOpts = {};
@@ -2140,8 +2180,12 @@ OnLoad('/doh_js/html', function($){
     queue: false,
     animation:[],
     animation_options: {},
-    meld_objects: ['animation_options'],
-    phases:['animation_phase'],
+    melded:{
+      animation_phase:'phase',
+      animation_options:'object'
+    },
+    //meld_objects: ['animation_options'],
+    //phases:['animation_phase'],
     animation_phase: function() {
       this.queue = this.queue || 'doh';
       if(!Doh.AnimationQueues[this.queue])Doh.AnimationQueues[this.queue]=[];
@@ -2209,8 +2253,9 @@ OnLoad('/doh_js/html', function($){
   Pattern('button', ['click', 'disableable'], {
     tag: 'button',
     available_properties: {'value':'label of the button', 'button_options':'jQuery UI Button options object'},
-    meld_objects: ['button_options'],
-    button_options: {},
+    melded:{button_options:'object'},
+    //meld_objects: ['button_options'],
+    //button_options: {},
     pre_parenting_phase: function(){
       if (typeof this.value !== 'undefined' && typeof this.button_options.label == 'undefined') this.button_options.label = this.value;
     },
@@ -2228,7 +2273,8 @@ OnLoad('/doh_js/html', function($){
     click_queue:false,
     click_animation:['fadeOut',function(){if(this.next_queue)Doh.run_animation_queue(this.next_queue);}],
     next_queue:false,
-    meld_methods:['click'],
+    melded:{click:'method'},
+    //meld_methods:['click'],
     append_phase:function(){
       this.click_queue = this.click_queue || this.id+'_click';
       this.original_queue = this.queue;
@@ -2393,8 +2439,9 @@ OnLoad('/doh_js/html', function($){
 
   Pattern('slider', 'element', {
     available_properties: {'slider_options':'jQuery UI Slider options object'},
-    meld_objects: ['slider_options'],
-    slider_options: {},
+    melded:{slider_options:'object'},
+    //meld_objects: ['slider_options'],
+    //slider_options: {},
     append_phase: function(){
       this.e.slider(this.slider_options);
     }
@@ -2524,7 +2571,8 @@ OnLoad('/doh_js/html', function($){
   });
 
   Pattern('dialog', 'element', {
-    meld_objects:['dialog_options'],
+    melded:{dialog_options:'object'},
+    //meld_objects:['dialog_options'],
     dialog_options:{height:'auto',width:'auto'},
     append_phase: function(){
       /*
@@ -2585,7 +2633,8 @@ OnLoad('/doh_js/html', function($){
 
 
   Pattern('drag', 'element', {
-    meld_methods:['drag_start','drag_drag','drag_stop'],
+    melded:{drag_start:'method',drag_drag:'method',drag_stop:'method'},
+    //meld_methods:['drag_start','drag_drag','drag_stop'],
     css: {cursor: "move"},
     drag_start:function(event, ui){
       this._original_z_index = this.e.css("z-index");
@@ -2618,7 +2667,12 @@ OnLoad('/doh_js/html', function($){
   Pattern('draggable', 'drag',{});
 
   Pattern('resizable', 'element', {
-    meld_methods:['resize_start','resize','resize_stop'],
+    melded:{
+      resize_start:'method',
+      resize:'method',
+      resize_stop:'method'
+    },
+    //meld_methods:['resize_start','resize','resize_stop'],
     resize_start:function(event, ui){
     },
     resize:function(event, ui) {
@@ -2641,7 +2695,8 @@ OnLoad('/doh_js/html', function($){
   });
 
   Pattern('hover', 'element', {
-    meld_methods:['hover_over','hover_out'],
+    melded:{hover_over:'method',hover_out:'method'},
+    //meld_methods:['hover_over','hover_out'],
     hover_over: function(){},
     hover_out: function(){},
     append_phase: function(){
@@ -2656,7 +2711,8 @@ OnLoad('/doh_js/html', function($){
 
   Pattern('hover_delayed', 'element', {
     delay_time_ms: 600,
-    meld_methods:['hover_over','hover_out'],
+    //meld_methods:['hover_over','hover_out'],
+    melded:{hover_over:'method',hover_out:'method'},
     _timer: null,
     delays_hover_over: function() {
       let that = this;
