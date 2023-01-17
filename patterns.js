@@ -630,9 +630,10 @@ OnLoad('/doh_js/core', function($){
         }
         // default the property if needed. if we define the meld, we should at least implement it
         if(SeeIf.IsUndefined(idea[prop_name])){
-          Doh.warn('Doh.pattern(',idea.pattern,') created a default for:',prop_name,'of:',meld_type_name,meld_type_js);
+          //Doh.warn('Doh.pattern(',idea.pattern,') created a default for:',prop_name,'of type:',meld_type_name,meld_type_js);
+          Doh.warn('Doh.pattern(',idea.pattern,') has no default for:',prop_name,'of type:',meld_type_name,meld_type_js);
         }
-        idea[prop_name] = idea[prop_name] || meld_type_js;
+        //idea[prop_name] = idea[prop_name] || meld_type_js;
         /*
         if(old_meld_type){
           // fill the old meld system from the new one
@@ -2118,6 +2119,7 @@ OnLoad('/doh_js/html', function($){
 
   Pattern('HTMLPosition', 'element', {
     melded:{position:'object'},
+    position:{},
     //meld_objects:['position'],
     place:function(opts){
       opts = opts || this.position;
