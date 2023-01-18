@@ -427,6 +427,7 @@ OnLoad('/doh_js/core', function($){
 
     meld_ideas:function(destination, idea, skip_methods) {
       idea = idea || {};
+      
       let prop_name = '';
       //test melded stuff and make sure it is what we expect
       if(idea.melded){
@@ -452,6 +453,7 @@ OnLoad('/doh_js/core', function($){
           }
         }
       }
+      
       prop_name = '';
       for(prop_name in destination.melded){
         // deal with idea has a property of type that is incompatible with destination melded type
@@ -459,6 +461,7 @@ OnLoad('/doh_js/core', function($){
           throw Doh.error('Doh.meld_ideas(',destination,',',idea,'). idea[',prop_name,']:',idea[prop_name],'is an incompatible type with destination.melded[',prop_name,']:',destination.melded[prop_name]);
         }
       }
+      
       // build name-keyed objects of the melded value lists
       let melded = Doh.meld_objects(destination.melded, idea.melded);
       // loop over the idea and decide what to do with the properties
@@ -484,10 +487,8 @@ OnLoad('/doh_js/core', function($){
           }
           // stack the ifs for speed
           if(idea[prop_name].pattern)if(!idea[prop_name].machine)if(!idea[prop_name].skip_auto_build){
-            // it's an auto-build property, auto-meld it
+            // it's an auto-build property, auto-meld it below
             destination.melded[prop_name] = melded[prop_name] = 'idea';
-            //destination.meld_objects = Doh.meld_arrays(destination.meld_objects, [prop_name]);
-            //continue;
           }
           if(melded[prop_name] === 'idea'){
             destination[prop_name] = destination[prop_name] || {};
@@ -1162,7 +1163,6 @@ OnLoad('/doh_js/core', function($){
     melded:{
       log_phase:'phase'
     },
-    //phases:['log_phase'],
     log_phase: function(){
       var args = [this.log_type];
       for(var i in this.args){
@@ -1212,25 +1212,28 @@ OnLoad('/doh_js/core', function($){
       // setup our phases for building children and controls
       parenting_phase:'phase',
     },
-    /*
-    meld_arrays: [
-      'children'
-    ],
-    // setup our phases for building children and controls
-    phases: [
-      'parenting_phase',
-    ],
-    */
     // create a phase to build children
     parenting_phase: function(){
       // loop through the children and attempt to build them
-      var i = '';
+      var i = '', child = false;
       for(var i in this.children) {
         if(i === 'length') continue;
-        this.children[i] = New(Doh.meld_objects({parent:this}, this.children[i]), this.machine_children_to);
+        child = this.children[i];
+        // if the child is a string then check if a property with that name is an idea that wants to be auto-built
+        if(typeof child === 'string')if(this.auto_built[child]){
+          // if the child string points to a valid auto-built property, then suck it up here and keep it from being auto-built more
+          this.auto_built[child] = null;
+          delete this.auto_built[child];
+          // store a copy of our property name on our parent
+          this[child].parental_name = child;
+          // make the thing we are working on the parent property that our string points to
+          child = this[child];
+        }
+        this.children[i] = New(Doh.meld_objects({parent:this}, child), this.machine_children_to);
       }
       i = '';
       for(var i in this.auto_built) {
+        // auto build remaining property ideas at the end
         this.children.push(New(Doh.meld_objects({parent:this}, this.auto_built[i]), this.machine_children_to));
       }
     },
@@ -1247,13 +1250,6 @@ OnLoad('/doh_js/core', function($){
       fab_idea:'object',
       fab_phase:'phase',
     },
-    /*
-    meld_objects: ['fab', 'fab_idea'],
-    // add our own phase
-    phases: [
-      'fab_phase',
-    ],
-    */
     object_phase: function(){
       // move our phase to before parenting_phase
       // we need to populate the children ideas prior to building

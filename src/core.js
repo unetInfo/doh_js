@@ -378,14 +378,37 @@ OnLoad('/doh_js/core', function($){
     },
     // update meld_methods and phases of obj
     update_meld_methods: function(obj){
-      let mms = obj.meld_methods || [], melders = [...mms, ...obj.phases], len = melders.length;
-      for(let i=0;i<len;i++){
-        // conditionally update only the method stack
-        if(typeof obj[melders[i]] === 'function')if(typeof obj[melders[i]].update_meld_stack === 'function'){
-          obj[melders[i]].update_meld_stack();
+      //let mms = obj.meld_methods || [], melders = [...mms, ...obj.phases], len = melders.length;
+      //for(let i=0;i<len;i++){
+      for(let melded_prop in obj.melded){
+        if(obj.melded[melded_prop] === 'method' || obj.melded[melded_prop] === 'phase'){
+          // conditionally update only the method stack
+          if(typeof obj[melded_prop] === 'function')if(typeof obj[melded_prop].update_meld_stack === 'function'){
+            obj[melded_prop].update_meld_stack();
+            continue;
+          }
+          obj[melded_prop] = Doh.meld_method(obj, melded_prop);
         }
-        obj[melders[i]] = Doh.meld_method(obj, melders[i]);
       }
+    },
+
+    TypeOf: {
+      'method':SeeIf.IsFunction,
+      'phase':SeeIf.IsFunction,
+      'object':SeeIf.IsObjectObject,
+      'array':SeeIf.IsArray,
+      'idea':SeeIf.IsObjectObject
+    },
+    type_of: function(value){
+      for(let type in Doh.TypeOf){
+        if(Doh.TypeOf[type](value)){
+          return type;
+        }
+      }
+      return typeof value;
+    },
+    type_of_match: function(value, is){
+      return Doh.TypeOf[is](value);
     },
 
     /*
@@ -402,67 +425,83 @@ OnLoad('/doh_js/core', function($){
 
   */                                     
 
-
     meld_ideas:function(destination, idea, skip_methods) {
       idea = idea || {};
-      var i,
-
+      let prop_name = '';
+      //test melded stuff and make sure it is what we expect
+      if(idea.melded){
+        // we only want to know if the destination is going to be overwritten by the idea
+        for(prop_name in idea.melded){
+          if(destination.melded){
+            // deal with destination defines a meld type that is different from idea
+            if(destination.melded[prop_name])if(destination.melded[prop_name] != idea.melded[prop_name]){
+              throw Doh.error('Doh.meld_ideas(',destination,',',idea,'). destination.melded[',prop_name,']:',destination.melded[prop_name],'will be overwritten by idea.melded[',prop_name,']:',idea.melded[prop_name]);
+            }
+          }
+          // deal with destination already has a property of type that is incompatible with idea.melded type
+          if(SeeIf.IsDefined(destination[prop_name])){
+            if(!Doh.type_of_match(destination[prop_name], idea.melded[prop_name])){
+              throw Doh.error('Doh.meld_ideas(',destination,',',idea,'). destination[',prop_name,']:',destination[prop_name],'is an incompatible type with idea.melded[',prop_name,']:',idea.melded[prop_name]);
+            }
+          }
+          // deal with idea has a property of type that is incompatible with idea.melded type
+          if(SeeIf.IsDefined(idea[prop_name])){
+            if(!Doh.type_of_match(idea[prop_name], idea.melded[prop_name])){
+              throw Doh.error('Doh.meld_ideas(',destination,',',idea,'). idea[',prop_name,']:',idea[prop_name],'is an incompatible type with idea.melded[',prop_name,']:',idea.melded[prop_name]);
+            }
+          }
+        }
+      }
+      prop_name = '';
+      for(prop_name in destination.melded){
+        // deal with idea has a property of type that is incompatible with destination melded type
+        if(SeeIf.IsDefined(idea[prop_name]))if(destination.melded[prop_name])if(!Doh.type_of_match(idea[prop_name], destination.melded[prop_name])){
+          throw Doh.error('Doh.meld_ideas(',destination,',',idea,'). idea[',prop_name,']:',idea[prop_name],'is an incompatible type with destination.melded[',prop_name,']:',destination.melded[prop_name]);
+        }
+      }
       // build name-keyed objects of the melded value lists
-      meld_arrays = Doh.object_keys_from_array_values(Doh.meld_arrays(destination.meld_arrays, idea.meld_arrays, true)),
-
-      meld_objects = Doh.object_keys_from_array_values(Doh.meld_arrays(destination.meld_objects, idea.meld_objects, true)),
-
-      meld_methods = Doh.object_keys_from_array_values(Doh.meld_arrays(destination.meld_methods, idea.meld_methods, true)),
-      meld_phases = Doh.object_keys_from_array_values(Doh.meld_arrays(destination.phases, idea.phases, true));
-
+      let melded = Doh.meld_objects(destination.melded, idea.melded);
       // loop over the idea and decide what to do with the properties
-      i = '';
-      for(i in idea){
-        if(idea[i] !== undefined){
+      prop_name = '';
+      for(prop_name in idea){
+        if(idea[prop_name] !== undefined){
           
-          //if(/*meld_arrays[i] || */(Array.isArray(idea[i])/* && !idea[i].length*/)){
-          if(meld_arrays[i] || (Array.isArray(idea[i]) && !idea[i].length)){
+          if(melded[prop_name] === 'array' || (Array.isArray(idea[prop_name]) && !idea[prop_name].length)){
             // it's a melded array or an empty default
-            destination[i] = Doh.meld_arrays(destination[i], idea[i]);
+            destination[prop_name] = Doh.meld_arrays(destination[prop_name], idea[prop_name]);
             continue;
           }
-          //if(/*meld_objects[i] || */(typeof idea[i] == 'object' && !Array.isArray(idea[i])/* && SeeIf.IsEmptyObject(idea[i])*/)){
-          if(meld_objects[i] || (typeof idea[i] == 'object' && !Array.isArray(idea[i]) && SeeIf.IsEmptyObject(idea[i]))){
+          if(melded[prop_name] === 'object' || (typeof idea[prop_name] == 'object' && !Array.isArray(idea[prop_name]) && SeeIf.IsEmptyObject(idea[prop_name]))){
             // it's a melded object or an empty default
-            destination[i] = Doh.meld_objects(destination[i], idea[i]);
+            destination[prop_name] = Doh.meld_objects(destination[prop_name], idea[prop_name]);
             continue;
           }
-          if(meld_methods[i] || meld_phases[i]){
+          if(melded[prop_name] === 'method' || melded[prop_name] === 'phase'){
             // we handle melded methods and phases later
             // we set to null to preserve property order
-            destination[i] = null;
+            destination[prop_name] = null;
             continue;
           }
           // stack the ifs for speed
-          if(idea[i].pattern)if(!idea[i].machine)if(!idea[i].skip_auto_build){
+          if(idea[prop_name].pattern)if(!idea[prop_name].machine)if(!idea[prop_name].skip_auto_build){
             // it's an auto-build property, auto-meld it
-            destination[i] = destination[i] || {};
-            destination[i] = Doh.meld_ideas(destination[i], idea[i]);
-            // if it's being melded once, meld it always
-            //destination.meld_objects = Doh.meld_arrays(destination.meld_objects, [i]);
+            destination.melded[prop_name] = melded[prop_name] = 'idea';
+            //destination.meld_objects = Doh.meld_arrays(destination.meld_objects, [prop_name]);
+            //continue;
+          }
+          if(melded[prop_name] === 'idea'){
+            destination[prop_name] = destination[prop_name] || {};
+            destination[prop_name] = Doh.meld_ideas(destination[prop_name], idea[prop_name]);
             continue;
           }
           // non-melded property
           if(!skip_methods){
-            //if(typeof idea[i] == 'object' && !Array.isArray(idea[i])) Doh.log('non-melded, non-function:',i,'in:',idea);
-            destination[i] = idea[i];
+            //if(typeof idea[prop_name] == 'object' && !Array.isArray(idea[prop_name])) Doh.log('non-melded, non-function:',prop_name,'in:',idea);
+            destination[prop_name] = idea[prop_name];
             continue;
-          } else if(typeof idea[i] !== 'function'){
-            destination[i] = idea[i];
+          } else if(typeof idea[prop_name] !== 'function'){
+            destination[prop_name] = idea[prop_name];
           }
-        }
-      }
-      
-      if(destination.meld_methods){
-        i = '';
-        for(i in meld_phases){
-          // don't allow phases to be in meld_methods
-          delete destination.meld_methods[i];
         }
       }
 
@@ -591,12 +630,51 @@ OnLoad('/doh_js/core', function($){
         Doh.PatternInheritedBy[ancestor] = Doh.PatternInheritedBy[ancestor] || [];
         Doh.PatternInheritedBy[ancestor].push(name);
       }
+      // we need to fix the .melded collection here:
+      let meld_type_name, meld_type_js;
+      for(var prop_name in idea.melded){
+        meld_type_name = idea.melded[prop_name];
+        if(SeeIf.IsDefined(idea[prop_name]))if(!Doh.type_of_match(idea[prop_name], meld_type_name)){
+          throw Doh.error('Doh.patterns(',idea.pattern,').',prop_name,' was defined as a melded',meld_type_name,' but is not a',meld_type_name,'.',idea[prop_name],idea);
+        }
+        // find the base js for defaulting melded stuff
+        switch(meld_type_name){
+          case 'phase':
+            meld_type_js = function(){};
+            break;
+          case 'method':
+            meld_type_js = function(){};
+            break;
+          case 'object':
+            meld_type_js = {};
+            break;
+          case 'array':
+            meld_type_js = [];
+            break;
+          case 'idea':
+            meld_type_js = {};
+            break;
+          default:
+            throw Doh.error('Doh.pattern() tried to define unknown meld type:',meld_type_name,'for pattern:',idea.pattern,idea);
+            break;
+        }
+        // default the property if needed. if we define the meld, we should at least implement it
+        idea[prop_name] = idea[prop_name] || meld_type_js;
+        /*
+        if(old_meld_type){
+          // fill the old meld system from the new one
+          idea[old_meld_type] = Doh.meld_arrays(idea[old_meld_type], [prop_name], true);
+        }
+        */
+      }
+      
       // store the new pattern for the builder
       Patterns[name] = idea;
       // note the new pattern's load module, if present
       Doh.PatternModule[name] = Doh.ModuleCurrentlyRunning;
       Doh.ModulePatterns[Doh.ModuleCurrentlyRunning] = Doh.ModulePatterns[Doh.ModuleCurrentlyRunning] || [];
       Doh.ModulePatterns[Doh.ModuleCurrentlyRunning].push(name);
+      
       // return the new pattern
       return idea;
     },
@@ -713,24 +791,27 @@ OnLoad('/doh_js/core', function($){
 
       // attach the object machine
       object.machine = function(phase){
-        let phase_name, len = this.phases.length;
+        //let phase_name, len = this.phases.length;
         // go through the phases to the one specified, or the last
-        for(let i = 0; i < len; i++){
-          // stash the phase name
-          phase_name = this.phases[i];
-          // as long as the phase hasn't been run
-          if(!this.machine[phase_name]){
-            // update the phase we are on
-            this.machine.phase = phase_name;
-            // mark it as not run
-            this.machine[phase_name] = false;
-            // run the phase
-            this[phase_name].apply(this);
-            // mark it as run
-            this.machine[phase_name] = true;
+        //for(let i = 0; i < len; i++){
+        for(let phase_name in this.melded){
+          if(this.melded[phase_name] === 'phase'){
+            // stash the phase name
+            //phase_name = this.phases[i];
+            // as long as the phase hasn't been run
+            if(!this.machine[phase_name]){
+              // update the phase we are on
+              this.machine.phase = phase_name;
+              // mark it as not run
+              this.machine[phase_name] = false;
+              // run the phase
+              this[phase_name].apply(this);
+              // mark it as run
+              this.machine[phase_name] = true;
+            }
+            // if this is the phase we are building to, then exit here
+            if(phase_name == phase) return this;
           }
-          // if this is the phase we are building to, then exit here
-          if(phase_name == phase) return this;
         }
         // always return the object. New() relies on this.
         return this;
@@ -993,14 +1074,24 @@ OnLoad('/doh_js/core', function($){
     
     phases_method_order: function(object){
       var phases_method_order = [];
-      for(var i in object.phases){
-        phases_method_order.push(Doh.meld_method_order(object, object.phases[i]));
+      for(var melded_prop in object.melded){
+        if(object.melded[melded_prop] === 'phase'){
+          phases_method_order.push(Doh.meld_method_order(object, melded_prop));
+        }
       }
       return phases_method_order;
     },
     
     meld_methods_order: function(object){
       var methods_order = [], counter = 0, phase_methods = 0;
+      
+      for(var melded_prop in object.melded){
+        if(object.melded[melded_prop] === 'method' || object.melded[melded_prop] === 'phase'){
+          methods_order.push(Doh.meld_method_order(object, melded_prop));
+          counter += methods_order[methods_order.length-1].length
+        }
+      }
+      /*
       for(let i in object.phases){
         methods_order.push(Doh.meld_method_order(object, object.phases[i]));
         counter += methods_order[methods_order.length-1].length
@@ -1012,6 +1103,7 @@ OnLoad('/doh_js/core', function($){
         counter += methods_order[methods_order.length-1].length
       }
       Doh.log('and:', counter - phase_methods, ' melded methods.');
+      */
       return methods_order;
     },
     
@@ -1045,20 +1137,15 @@ OnLoad('/doh_js/core', function($){
 
   // set the prototype for the object constructor
   Pattern('object', {
-    meld_arrays: [
-      'meld_arrays',
-      'meld_objects',
-      'meld_methods',
-      'phases',
-    ],
-    phases: [
-      'object_phase',
-    ],
+    melded:{
+      melded:'object',
+      object_phase:'phase',
+    },
     // ensure that we are the base object phase
     object_phase: function() {
       for(var prop in this) {
         if(prop === 'prototype' || prop === '__proto__') continue;
-        if(this[prop].pattern && !this[prop].machine && !this[prop].skip_auto_build){
+        if(this[prop])if(this[prop].pattern)if(!this[prop].machine)if(!this[prop].skip_auto_build){
           this.auto_built = this.auto_built || {};
           this[prop]._auto_built_by = this;
           this[prop] = New(this[prop], 'object_phase');
@@ -1072,14 +1159,17 @@ OnLoad('/doh_js/core', function($){
     log_type: 'Doh:',
     logger:console,
     logger_method: 'log',
-    phases:['log_phase'],
+    melded:{
+      log_phase:'phase'
+    },
+    //phases:['log_phase'],
     log_phase: function(){
       var args = [this.log_type];
       for(var i in this.args){
         if(i === 'length') continue;
         args.push(this.args[i]);
       }
-      logger[logger_method].apply(logger, args);
+      this.logger[this.logger_method].apply(this.logger, args);
     }
   }); // true to skip adding css classes for this object
 
@@ -1109,7 +1199,7 @@ OnLoad('/doh_js/core', function($){
 */
 
 
-  Pattern('hierarchy', 'object', {
+  Pattern('parenting', 'object', {
     // parent should be a Doh Object or false
     parent: false,
     // list of child objects to build
@@ -1117,6 +1207,12 @@ OnLoad('/doh_js/core', function($){
     // advance the children machine to this phase when building
     machine_children_to: 'parenting_phase',
     // extend the children array
+    melded:{
+      children:'array',
+      // setup our phases for building children and controls
+      parenting_phase:'phase',
+    },
+    /*
     meld_arrays: [
       'children'
     ],
@@ -1124,6 +1220,7 @@ OnLoad('/doh_js/core', function($){
     phases: [
       'parenting_phase',
     ],
+    */
     // create a phase to build children
     parenting_phase: function(){
       // loop through the children and attempt to build them
@@ -1140,20 +1237,34 @@ OnLoad('/doh_js/core', function($){
   });
 
   //fab_iterator = null;
-  Pattern('fab', 'hierarchy', {
+  Pattern('fab', 'parenting', {
     // list of things to fab, key is fab_iterator
     fab: {},
     // base idea used to build each child
     fab_idea: {skip_auto_build:true},
+    melded:{
+      fab:'object',
+      fab_idea:'object',
+      fab_phase:'phase',
+    },
+    /*
     meld_objects: ['fab', 'fab_idea'],
     // add our own phase
     phases: [
       'fab_phase',
     ],
+    */
     object_phase: function(){
       // move our phase to before parenting_phase
       // we need to populate the children ideas prior to building
-      Doh.array_move(this.phases, this.phases.indexOf('fab_phase'), this.phases.indexOf('parenting_phase'));
+      let old_melded = this.melded;
+      this.melded = {};
+      for(prop_name in old_melded){
+        if(prop_name == 'parenting_phase') this.melded.fab_phase = 'phase';
+        if(prop_name == 'fab_phase') continue;
+        this.melded[prop_name] = old_melded[prop_name];
+      }
+      //Doh.array_move(this.phases, this.phases.indexOf('fab_phase'), this.phases.indexOf('parenting_phase'));
     },
     // create a phase to build children ideas
     fab_phase: function(){

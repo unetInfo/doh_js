@@ -14,8 +14,6 @@ let meld_objects = function(destination){
   return destination;
 };
 
-
-
 // simply add a property to DohWatch with a reference to the object you want "watched"
 // DohWatch.MyWatchedName = MyWatchedObject;
 var DohWatch = DohWatch || {top:top};
@@ -715,8 +713,6 @@ Doh = {
       Doh.IsLoading = true;
       
       Doh.load_bundles(LoadDohBundles, Doh.load_doh_finale);
-    } else {
-      console.warn('WARNING: load_doh called while Doh is already loaded or loading');
     }
   }
 };
@@ -830,10 +826,8 @@ window.OnLoad = window.OnLoad || function(module_name, requires, callback, globa
     // stash our function for later
     Doh.ModuleWasDeferred[module_name] = module_callback;
     
-    if(!Doh.IsLoaded && !Doh.IsLoading){
-      // as long as we aren't skipping, LoadDoh
-      if(!SKIPLOADDOH) Doh.load_doh();
-    }
+    // as long as we aren't skipping, LoadDoh
+    if(!SKIPLOADDOH) Doh.load_doh();
   }
 }
 // define a named module that requires a script, or list of scripts and
