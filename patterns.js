@@ -393,22 +393,36 @@ OnLoad('/doh_js/core', function($){
     },
 
     TypeOf: {
+      // currently implemented in 
       'method':SeeIf.IsFunction,
       'phase':SeeIf.IsFunction,
       'object':SeeIf.IsObjectObject,
       'array':SeeIf.IsArray,
-      'idea':SeeIf.IsObjectObject
+      'idea':SeeIf.IsObjectObject,
     },
     type_of: function(value){
-      for(let type in Doh.TypeOf){
+      let type;
+      for(type in Doh.TypeOf){
         if(Doh.TypeOf[type](value)){
           return type;
         }
       }
+      type = '';
+      for(type in SeeIf){
+        if(SeeIf[type](value)){
+          return type;
+        }
+      }
+      // at least return what primative we are
       return typeof value;
     },
     type_of_match: function(value, is){
-      return Doh.TypeOf[is](value);
+      if(typeof Doh.TypeOf[is] === 'function')
+        return Doh.TypeOf[is](value);
+      else if(typeof SeeIf[is] === 'function')
+        return SeeIf[is](value);
+
+      return false;
     },
 
     /*
@@ -656,17 +670,16 @@ OnLoad('/doh_js/core', function($){
             meld_type_js = {};
             break;
           default:
-            throw Doh.error('Doh.pattern() tried to define unknown meld type:',meld_type_name,'for pattern:',idea.pattern,idea);
+            // is it a known SeeIf type?
+            if(!SeeIf[meld_type_name]){
+              throw Doh.error('Doh.pattern() tried to define unknown meld type:',meld_type_name,'for pattern:',idea.pattern,idea);
+            }
             break;
         }
         // default the property if needed. if we define the meld, we should at least implement it
-        idea[prop_name] = idea[prop_name] || meld_type_js;
-        /*
-        if(old_meld_type){
-          // fill the old meld system from the new one
-          idea[old_meld_type] = Doh.meld_arrays(idea[old_meld_type], [prop_name], true);
+        if(meld_type_js){
+          idea[prop_name] = idea[prop_name] || meld_type_js;
         }
-        */
       }
       
       // store the new pattern for the builder
@@ -1208,15 +1221,16 @@ OnLoad('/doh_js/core', function($){
     machine_children_to: 'parenting_phase',
     // extend the children array
     melded:{
-      children:'array',
+      children: 'array',
       // setup our phases for building children and controls
-      parenting_phase:'phase',
+      parenting_phase: 'phase',
+      seek_parent: 'method',
     },
     // create a phase to build children
     parenting_phase: function(){
       // loop through the children and attempt to build them
-      var i = '', child = false;
-      for(var i in this.children) {
+      var i = '', child = false, prop_name = false;
+      for(i in this.children) {
         if(i === 'length') continue;
         child = this.children[i];
         // if the child is a string then check if a property with that name is an idea that wants to be auto-built
@@ -1224,17 +1238,30 @@ OnLoad('/doh_js/core', function($){
           // if the child string points to a valid auto-built property, then suck it up here and keep it from being auto-built more
           this.auto_built[child] = null;
           delete this.auto_built[child];
-          // store a copy of our property name on our parent
+          // store a copy of our property name from our parent
           this[child].parental_name = child;
           // make the thing we are working on the parent property that our string points to
           child = this[child];
         }
-        this.children[i] = New(Doh.meld_objects({parent:this}, child), this.machine_children_to);
+        // build the new object up to the phase indicated
+        this.children[i] = Doh.meld_objects({parent:this}, child);
       }
-      i = '';
-      for(var i in this.auto_built) {
+      prop_name = '';
+      for(prop_name in this.auto_built) {
         // auto build remaining property ideas at the end
-        this.children.push(New(Doh.meld_objects({parent:this}, this.auto_built[i]), this.machine_children_to));
+        this.children.push(Doh.meld_objects({parent:this}, this.auto_built[prop_name]));
+        // always remove ourself from any known system that we are replacing.
+        // object only machines through object_phase, we are required to machine our own properties
+        this.auto_built[prop_name] = null;
+        delete this.auto_built[prop_name];
+      }
+      this.machine_children(this.machine_children_to);
+    },
+    machine_children: function(phase){
+      // loop through the children and attempt to machine them
+      for(var i in this.children) {
+        if(i === 'length') continue;
+        this.children[i] = New(this.children[i], phase);
       }
     },
   });
@@ -1284,6 +1311,7 @@ OnLoad('/doh_js/core', function($){
       }
     },
   });
+
 }, 'glob');
 
 /**
@@ -1801,12 +1829,9 @@ OnLoad('/doh_js/html', function($){
     // advance the children machine to this phase when building
     machine_children_to: 'control_phase',
     // setup our phases for building controls
-    melded:{control_phase:'phase'},
-    /*
-    phases: [
-      'control_phase',
-    ],
-    */
+    melded:{
+      control_phase:'phase'
+    },
     control_phase: function(){
       // if we have a control name
       if(this.control){
@@ -1825,7 +1850,7 @@ OnLoad('/doh_js/html', function($){
         // add ourself to it
         this.controller.controls[this.control] = this;
       }
-    }
+    },
   });
   
   var CSSClassCache = {};
@@ -1916,24 +1941,10 @@ OnLoad('/doh_js/html', function($){
   Pattern('html', 'control', {
     melded:{
       classes:'array',
-      //pattern_styles:'array',
       css:'object',
       attrs:'object',
       append_phase:'phase'
     },
-    /*
-    meld_arrays: [
-      'classes',
-      'pattern_styles'
-    ],
-    meld_objects: [
-      'css',
-      'attrs',
-    ],
-    phases: [
-      'append_phase',
-    ],
-    */
     // e should be a jQuery [Element/Array]
     // or false for using a passed in selector
     e: false,
@@ -1952,8 +1963,8 @@ OnLoad('/doh_js/html', function($){
 
     object_phase:function(){
       // if our auto-built properties don't have a parent, make us the parent
-      if(!this.parent) {
-        if(this._auto_built_by) this.parent = this._auto_built_by;
+      if(this._auto_built_by) {
+        this.parent = this.parent || this._auto_built_by;
       }
       // ensure that the parent is a setting, already set,
       // or the body
@@ -2026,7 +2037,7 @@ OnLoad('/doh_js/html', function($){
     append_phase:function(){
       // as long as we haven't already appended
       if(!this.machine.append_phase) {
-
+        
         // convert the parent to a doh object if not already one
         if( typeof this.parent === 'string' || this.parent instanceof Doh.jQuery) {
           this.parent = Doh.get_dobj(this.parent);
@@ -2044,12 +2055,7 @@ OnLoad('/doh_js/html', function($){
       // put in parent (can be used to relocate as well)
       this.parent.e.append(this.e);
 
-      // loop through the children and attempt to place them
-      for(var i in this.children) {
-        if(i === 'length') continue;
-        // build the children up or machine them forward
-        this.children[i] = New(this.children[i], this.machine_children_to);
-      }
+      this.machine_children(this.machine_children_to);
       
       if(this.control && !this.attrs.title && ! this.e.attr('title')){
         Doh.UntitledControls = Doh.UntitledControls || {};
