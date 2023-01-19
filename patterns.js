@@ -31,43 +31,43 @@ Doh.meld_objects = function(destination){
 OnLoad('/doh_js/see_if', function($){
 // enshrine the definitions of variable states
   var SeeIf_Templates = {
-    // undefined refers to objects that have not been defined anywhere in code yet
-    'IsUndefined':(value) => `typeof ${value} === 'undefined'`,
-    // null is supposed to refer to objects that have been defined, but have no value. In truth because of "falsey" values, it can have other meanings
-    'IsNull':(value) => `${value} === null`,
-    // defined is supposed to refer to having a usable reference. undefined means without reference. null references are still unusable in JS, so defined nulls should demand special handling
-    'IsDefined':(value) => `(typeof ${value} !== 'undefined' && ${value} !== null)`,
-    // false refers to the binary 0 state (Boolean)
-    'IsFalse':(value) => `${value} === false`,
-    // true refers to the binary 1 state (Boolean)
-    'IsTrue':(value) => `${value} === true`,
-    // falsey refers to values that equal binary 0, even if represented by a different datatype. Falsey values include: Undefined, Null, False, '', 0, -1...[negative numbers]
-    'IsFalsey':(value) => `!${value}`,
-    // truey referes to values that equal binary 1, even if represented by a different datatype. Truey values include: True, HasValue, 1...[positive numbers]
-    'IsTruey':(value) => `${value} == true`,
-    // boolean refers to values that are actual boolean datatype
-    'IsBoolean':(value) => `typeof ${value} === 'boolean'`,
-    // Number refers to values that are a number datatype EXCEPT NaN (Not a Number)
-    'IsNumber':(value) => `(typeof ${value} === 'number' && !isNaN(${value}))`,
-    // string refers to values that are actual string datatype
-    'IsString':(value) => `typeof ${value} === 'string'`,
-    // array refers to values that are actual array datatype
-    'IsArray':(value) => `Array.isArray(${value})`,
-    // iterable refers to values that define a Symbol iterator so that native methods can iterate over them
-    'IsIterable':(value) => `((typeof ${value} !== 'undefined' && ${value} !== null) && typeof value[Symbol.iterator] === 'function')`,
-    // arraylike refers to values that act like arrays in every way. they can be used by native array methods
-    'IsArrayLike':(value) => `(((typeof ${value} !== 'undefined' && ${value} !== null) && typeof value[Symbol.iterator] === 'function') && typeof ${value}.length === 'number' && typeof ${value} !== 'string')`,
-    // function refers to values that are actual functions
-    'IsFunction':(value) => `typeof ${value} === 'function'`,
-    // literal refers to values that are static literals. Strings, booleans, numbers, etc. Basically anything that isn't an object or array. flat values.
-    'IsLiteral':(value) => `typeof ${value} !== 'object'`,
+    // dohobject refers to values that are a complex objectobject which was built with Doh
+    'IsDohObject':(value) => `InstanceOf(${value})`,
     // objectobject refers to values that are complex objects with named properties. No flat values or number-keyed lists. 
     'IsObjectObject':(value) => `(typeof ${value} === 'object' && toString.call(${value}) == '[object Object]')`,
+    // function refers to values that are actual functions
+    'IsFunction':(value) => `typeof ${value} === 'function'`,
+    // string refers to values that are actual string datatype
+    'IsString':(value) => `typeof ${value} === 'string'`,
+    // Number refers to values that are a number datatype EXCEPT NaN (Not a Number)
+    'IsNumber':(value) => `(typeof ${value} === 'number' && !isNaN(${value}))`,
+    // array refers to values that are actual array datatype
+    'IsArray':(value) => `Array.isArray(${value})`,
+    // boolean refers to values that are actual native boolean datatype
+    'IsBoolean':(value) => `typeof ${value} === 'boolean'`,
+    // true refers to the binary 1 state (Boolean)
+    'IsTrue':(value) => `${value} === true`,
+    // false refers to the binary 0 state (Boolean)
+    'IsFalse':(value) => `${value} === false`,
+    // null is supposed to refer to objects that have been defined, but have no value. In truth because of "falsey" values, it can have other meanings
+    'IsNull':(value) => `${value} === null`,
+    // undefined refers to objects that have not been defined anywhere in code yet
+    'IsUndefined':(value) => `typeof ${value} === 'undefined'`,
+    // defined is supposed to refer to having a usable reference. undefined means without reference. null references are still unusable in JS, so defined nulls should demand special handling
+    'IsDefined':(value) => `(typeof ${value} !== 'undefined' && ${value} !== null)`,
+    // truey referes to values that equal binary 1, even if represented by a different datatype. Truey values include: True, HasValue, 1...[positive numbers]
+    'IsTruey':(value) => `${value} == true`,
+    // falsey refers to values that equal binary 0, even if represented by a different datatype. Falsey values include: Undefined, Null, False, '', 0, -1...[negative numbers]
+    'IsFalsey':(value) => `!${value}`,
+    // arraylike refers to values that act like arrays in every way. they can be used by native array methods
+    'IsArrayLike':(value) => `(((typeof ${value} !== 'undefined' && ${value} !== null) && typeof value[Symbol.iterator] === 'function') && typeof ${value}.length === 'number' && typeof ${value} !== 'string')`,
+    // iterable refers to values that define a Symbol iterator so that native methods can iterate over them
+    'IsIterable':(value) => `((typeof ${value} !== 'undefined' && ${value} !== null) && typeof value[Symbol.iterator] === 'function')`,
+    // literal refers to values that are static literals. Strings, booleans, numbers, etc. Basically anything that isn't an object or array. flat values.
+    'IsLiteral':(value) => `typeof ${value} !== 'object'`,
     // to-be-replaced:
     // emptyobject refers to values that are objectobject or arraylike but have no properties of their own (empty of named properties that aren't javascript native)
     'IsEmptyObject':(value) => `${value}`,
-    // dohobject refers to values that are a complex objectobject which was built with Doh
-    'IsDohObject':(value) => `InstanceOf(${value})`,
     // keysafe refers to values that are safe for use as the key name in a complex objectobject
     'IsKeySafe':(value) => `(typeof ${value} === 'string' || (typeof ${value} === 'number' && !isNaN(${value})))`,
     // emptystring refers to values that are string literals with no contents
@@ -392,22 +392,28 @@ OnLoad('/doh_js/core', function($){
       }
     },
 
-    TypeOf: {
-      // currently implemented in 
-      'method':SeeIf.IsFunction,
-      'phase':SeeIf.IsFunction,
-      'object':SeeIf.IsObjectObject,
-      'array':SeeIf.IsArray,
-      'idea':SeeIf.IsObjectObject,
-    },
+/*
+Doh.type_of()
+'IsUndefined'
+Doh.type_of('')
+'IsString'
+Doh.type_of(0)
+'IsNumber'
+Doh.type_of(false)
+'IsBoolean'
+Doh.type_of(null)
+'IsNull'
+Doh.type_of([])
+'IsArray'
+Doh.type_of({})
+'IsObjectObject'
+Doh.type_of(function(){})
+'IsFunction'
+Doh.type_of(unet.uNetNodes['1-1'])
+'IsDohObject'
+*/
     type_of: function(value){
       let type;
-      for(type in Doh.TypeOf){
-        if(Doh.TypeOf[type](value)){
-          return type;
-        }
-      }
-      type = '';
       for(type in SeeIf){
         if(SeeIf[type](value)){
           return type;
@@ -416,9 +422,21 @@ OnLoad('/doh_js/core', function($){
       // at least return what primative we are
       return typeof value;
     },
-    type_of_match: function(value, is){
-      if(typeof Doh.TypeOf[is] === 'function')
-        return Doh.TypeOf[is](value);
+    
+    MeldedTypeMatch: {
+      // currently implemented in 
+      'method':SeeIf.IsFunction,
+      'phase':SeeIf.IsFunction,
+      'object':SeeIf.IsObjectObject,
+      'array':SeeIf.IsArray,
+      'idea':SeeIf.IsObjectObject,
+    },
+    type_match: function(value, is){
+      //if(Doh.type_of(Doh.MeldedTypeMatch[is]) === 'IsFunction')
+      //if(SeeIf.IsFunction(Doh.MeldedTypeMatch[is]))
+      //if(SeeIf['IsFunction'](Doh.MeldedTypeMatch[is]))
+      if(typeof Doh.MeldedTypeMatch[is] === 'function')
+        return Doh.MeldedTypeMatch[is](value);
       else if(typeof SeeIf[is] === 'function')
         return SeeIf[is](value);
 
@@ -455,13 +473,13 @@ OnLoad('/doh_js/core', function($){
           }
           // deal with destination already has a property of type that is incompatible with idea.melded type
           if(SeeIf.IsDefined(destination[prop_name])){
-            if(!Doh.type_of_match(destination[prop_name], idea.melded[prop_name])){
+            if(!Doh.type_match(destination[prop_name], idea.melded[prop_name])){
               throw Doh.error('Doh.meld_ideas(',destination,',',idea,'). destination[',prop_name,']:',destination[prop_name],'is an incompatible type with idea.melded[',prop_name,']:',idea.melded[prop_name]);
             }
           }
           // deal with idea has a property of type that is incompatible with idea.melded type
           if(SeeIf.IsDefined(idea[prop_name])){
-            if(!Doh.type_of_match(idea[prop_name], idea.melded[prop_name])){
+            if(!Doh.type_match(idea[prop_name], idea.melded[prop_name])){
               throw Doh.error('Doh.meld_ideas(',destination,',',idea,'). idea[',prop_name,']:',idea[prop_name],'is an incompatible type with idea.melded[',prop_name,']:',idea.melded[prop_name]);
             }
           }
@@ -471,7 +489,7 @@ OnLoad('/doh_js/core', function($){
       prop_name = '';
       for(prop_name in destination.melded){
         // deal with idea has a property of type that is incompatible with destination melded type
-        if(SeeIf.IsDefined(idea[prop_name]))if(destination.melded[prop_name])if(!Doh.type_of_match(idea[prop_name], destination.melded[prop_name])){
+        if(SeeIf.IsDefined(idea[prop_name]))if(destination.melded[prop_name])if(!Doh.type_match(idea[prop_name], destination.melded[prop_name])){
           throw Doh.error('Doh.meld_ideas(',destination,',',idea,'). idea[',prop_name,']:',idea[prop_name],'is an incompatible type with destination.melded[',prop_name,']:',destination.melded[prop_name]);
         }
       }
@@ -649,7 +667,7 @@ OnLoad('/doh_js/core', function($){
       let meld_type_name, meld_type_js;
       for(var prop_name in idea.melded){
         meld_type_name = idea.melded[prop_name];
-        if(SeeIf.IsDefined(idea[prop_name]))if(!Doh.type_of_match(idea[prop_name], meld_type_name)){
+        if(SeeIf.IsDefined(idea[prop_name]))if(!Doh.type_match(idea[prop_name], meld_type_name)){
           throw Doh.error('Doh.patterns(',idea.pattern,').',prop_name,' was defined as a melded',meld_type_name,' but is not a',meld_type_name,'.',idea[prop_name],idea);
         }
         // find the base js for defaulting melded stuff
