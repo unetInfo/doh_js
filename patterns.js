@@ -31,8 +31,12 @@ Doh.meld_objects = function(destination){
 OnLoad('/doh_js/see_if', function($){
 // enshrine the definitions of variable states
   var SeeIf_Templates = {
+    /*
+     * These have to be in this order because they are the base types for type_of
+     * When we loop over SeeIf, we will always catch one of these, so these are the most primitive types
+     */
     // dohobject refers to values that are a complex objectobject which was built with Doh
-    'IsDohObject':(value) => `InstanceOf(${value})`,
+    'IsDohObject':(value) => `(InstanceOf?InstanceOf(${value}):false)`,
     // objectobject refers to values that are complex objects with named properties. No flat values or number-keyed lists. 
     'IsObjectObject':(value) => `(typeof ${value} === 'object' && toString.call(${value}) == '[object Object]')`,
     // function refers to values that are actual functions
@@ -45,16 +49,19 @@ OnLoad('/doh_js/see_if', function($){
     'IsArray':(value) => `Array.isArray(${value})`,
     // boolean refers to values that are actual native boolean datatype
     'IsBoolean':(value) => `typeof ${value} === 'boolean'`,
-    // true refers to the binary 1 state (Boolean)
-    'IsTrue':(value) => `${value} === true`,
-    // false refers to the binary 0 state (Boolean)
-    'IsFalse':(value) => `${value} === false`,
     // null is supposed to refer to objects that have been defined, but have no value. In truth because of "falsey" values, it can have other meanings
     'IsNull':(value) => `${value} === null`,
     // undefined refers to objects that have not been defined anywhere in code yet
     'IsUndefined':(value) => `typeof ${value} === 'undefined'`,
+    /*
+     * Now the rest for type_match and regular SeeIf usage
+     */
     // defined is supposed to refer to having a usable reference. undefined means without reference. null references are still unusable in JS, so defined nulls should demand special handling
     'IsDefined':(value) => `(typeof ${value} !== 'undefined' && ${value} !== null)`,
+    // true refers to the binary 1 state (Boolean)
+    'IsTrue':(value) => `${value} === true`,
+    // false refers to the binary 0 state (Boolean)
+    'IsFalse':(value) => `${value} === false`,
     // truey referes to values that equal binary 1, even if represented by a different datatype. Truey values include: True, HasValue, 1...[positive numbers]
     'IsTruey':(value) => `${value} == true`,
     // falsey refers to values that equal binary 0, even if represented by a different datatype. Falsey values include: Undefined, Null, False, '', 0, -1...[negative numbers]
@@ -419,12 +426,12 @@ Doh.type_of(unet.uNetNodes['1-1'])
           return type;
         }
       }
-      // at least return what primative we are
-      return typeof value;
+      // SeeIf can't see it, so it's not defined
+      return undefined;
     },
     
     MeldedTypeMatch: {
-      // currently implemented in 
+      // currently implemented meldable types
       'method':SeeIf.IsFunction,
       'phase':SeeIf.IsFunction,
       'object':SeeIf.IsObjectObject,
@@ -499,11 +506,11 @@ Doh.type_of(unet.uNetNodes['1-1'])
       // loop over the idea and decide what to do with the properties
       prop_name = '';
       for(prop_name in idea){
-        if(idea[prop_name] !== undefined){
-          
-          if(melded[prop_name] === 'array' || (Array.isArray(idea[prop_name]) && !idea[prop_name].length)){
-            // it's a melded array or an empty default
-            destination[prop_name] = Doh.meld_arrays(destination[prop_name], idea[prop_name]);
+        if(idea[prop_name] !== undefined && idea[prop_name] !== destination[prop_name]){
+          if(melded[prop_name] === 'method' || melded[prop_name] === 'phase'){
+            // we handle melded methods and phases later
+            // we set to null to preserve property order
+            destination[prop_name] = null;
             continue;
           }
           if(melded[prop_name] === 'object' || (typeof idea[prop_name] == 'object' && !Array.isArray(idea[prop_name]) && SeeIf.IsEmptyObject(idea[prop_name]))){
@@ -511,10 +518,9 @@ Doh.type_of(unet.uNetNodes['1-1'])
             destination[prop_name] = Doh.meld_objects(destination[prop_name], idea[prop_name]);
             continue;
           }
-          if(melded[prop_name] === 'method' || melded[prop_name] === 'phase'){
-            // we handle melded methods and phases later
-            // we set to null to preserve property order
-            destination[prop_name] = null;
+          if(melded[prop_name] === 'array' || (Array.isArray(idea[prop_name]) && !idea[prop_name].length)){
+            // it's a melded array or an empty default
+            destination[prop_name] = Doh.meld_arrays(destination[prop_name], idea[prop_name]);
             continue;
           }
           // stack the ifs for speed
@@ -527,14 +533,9 @@ Doh.type_of(unet.uNetNodes['1-1'])
             destination[prop_name] = Doh.meld_ideas(destination[prop_name], idea[prop_name]);
             continue;
           }
+          
           // non-melded property
-          if(!skip_methods){
-            //if(typeof idea[prop_name] == 'object' && !Array.isArray(idea[prop_name])) Doh.log('non-melded, non-function:',prop_name,'in:',idea);
-            destination[prop_name] = idea[prop_name];
-            continue;
-          } else if(typeof idea[prop_name] !== 'function'){
-            destination[prop_name] = idea[prop_name];
-          }
+          destination[prop_name] = idea[prop_name];
         }
       }
 
@@ -544,7 +545,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
         // we only want to run this after the idea has been melded 
         // inherited is only present on instances, patterns don't have it
         // and neither do plain ideas
-        if(!skip_methods) Doh.update_meld_methods(destination);
+        Doh.update_meld_methods(destination);
       }
 
       return destination;
@@ -737,15 +738,27 @@ Doh.type_of(unet.uNetNodes['1-1'])
       var i = '';
 
       // if the pattern is a string,
-      if(typeof pattern == 'string'){
+      if(SeeIf.IsString(pattern)){
         // then everything is normal
         idea = idea || {};
         // overwrite the idea's pattern?
         // NOTE: we need a new way to deal with this.
+        if(SeeIf.IsString(idea.pattern))if(SeeIf.HasValue(idea.pattern))if(pattern !== idea.pattern){
+          Doh.warn('Doh.New(',pattern,',',idea,',',phase,') was sent pattern:',pattern,'AND different idea.pattern:',idea.pattern);
+          if(SeeIf.HasValue(idea.inherits)){
+            if(SeeIf.NotObjectObject(idea.inherits)){
+              // convert inherits from whatever it is to an object so we can add to it.
+              idea.inherits = Doh.normalize_inherits({}, idea.inherits);
+            }
+          } else {
+            idea.inherits = idea.inherits || {};
+          }
+          idea.inherits[idea.pattern] = true;
+        }
         idea.pattern = pattern;
 
       // if the pattern is an array,
-      } else if(Array.isArray(pattern)){
+      } else if(SeeIf.IsArray(pattern)){
         // make sure idea is an object
         idea = idea || {};
         // normalize passed-in inherits
@@ -765,6 +778,9 @@ Doh.type_of(unet.uNetNodes['1-1'])
       }
       // ensure that the idea object is at least blank
       idea = idea || {};
+      // either a specified phase or final. final works because it's reserved.
+      // since there is no 'final' phase, the machine will always keep advancing
+      // even if you add more phases after phase-time and run machine again.
       phase = phase || 'final';
       // if the idea already has a machine, just run it to the specified or final phase
       if(idea.machine){
@@ -823,13 +839,9 @@ Doh.type_of(unet.uNetNodes['1-1'])
 
       // attach the object machine
       object.machine = function(phase){
-        //let phase_name, len = this.phases.length;
         // go through the phases to the one specified, or the last
-        //for(let i = 0; i < len; i++){
         for(let phase_name in this.melded){
           if(this.melded[phase_name] === 'phase'){
-            // stash the phase name
-            //phase_name = this.phases[i];
             // as long as the phase hasn't been run
             if(!this.machine[phase_name]){
               // update the phase we are on
@@ -1175,13 +1187,21 @@ Doh.type_of(unet.uNetNodes['1-1'])
     },
     // ensure that we are the base object phase
     object_phase: function() {
-      for(var prop in this) {
-        if(prop === 'prototype' || prop === '__proto__') continue;
-        if(this[prop])if(this[prop].pattern)if(!this[prop].machine)if(!this[prop].skip_auto_build){
+      // find any properties that are ideas
+      for(var prop_name in this) {
+        if(prop_name === 'prototype' || prop_name === '__proto__') continue; // sometimes these pop up. iterating 'this' is dangerous for some reason
+        // nest the if's for speed
+        // it has to exist, have .pattern, not have .machine and not have .skip_auto_build.
+        // check existance, check for pattern, check for if we have been built already, check for wanting to be ignored
+        if(this[prop_name])if(this[prop_name].pattern)if(!this[prop_name].machine)if(!this[prop_name].skip_auto_build){
+          // only things that have auto_built should have this
           this.auto_built = this.auto_built || {};
-          this[prop]._auto_built_by = this;
-          this[prop] = New(this[prop], 'object_phase');
-          this.auto_built[prop] = this[prop];
+          // tell the thing that we are auto building it. this allows the thing to react to being auto_built if needed
+          this[prop_name]._auto_built_by = this;
+          // for instance, auto_building only runs to object phase. if further or 'final' phase is desired, run .machine_properties(phase)
+          this[prop_name] = New(this[prop_name], 'object_phase');
+          // add our new reference to auto_built
+          this.auto_built[prop_name] = this[prop_name];
         }
       }
     },
@@ -1242,7 +1262,6 @@ Doh.type_of(unet.uNetNodes['1-1'])
       children: 'array',
       // setup our phases for building children and controls
       parenting_phase: 'phase',
-      seek_parent: 'method',
     },
     // create a phase to build children
     parenting_phase: function(){
@@ -1264,14 +1283,16 @@ Doh.type_of(unet.uNetNodes['1-1'])
         // build the new object up to the phase indicated
         this.children[i] = Doh.meld_objects({parent:this}, child);
       }
-      prop_name = '';
-      for(prop_name in this.auto_built) {
-        // auto build remaining property ideas at the end
-        this.children.push(Doh.meld_objects({parent:this}, this.auto_built[prop_name]));
-        // always remove ourself from any known system that we are replacing.
-        // object only machines through object_phase, we are required to machine our own properties
-        this.auto_built[prop_name] = null;
-        delete this.auto_built[prop_name];
+      if(SeeIf.NotEmptyObject(this.auto_built)){
+        prop_name = '';
+        for(prop_name in this.auto_built) {
+          // auto build remaining property ideas at the end
+          this.children.push(Doh.meld_objects({parent:this}, this.auto_built[prop_name]));
+          // always remove ourself from any known system that we are replacing.
+          // object only machines through object_phase, we are required to machine our own properties
+          this.auto_built[prop_name] = null;
+          delete this.auto_built[prop_name];
+        }
       }
       this.machine_children(this.machine_children_to);
     },
@@ -1868,6 +1889,8 @@ OnLoad('/doh_js/html', function($){
         // add ourself to it
         this.controller.controls[this.control] = this;
       }
+      // make our children keep up with us in the phases
+      //if(this.machine_children_to === 'control_phase') this.machine_children(this.machine_children_to);
     },
   });
   

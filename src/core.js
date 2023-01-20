@@ -31,43 +31,50 @@ Doh.meld_objects = function(destination){
 OnLoad('/doh_js/see_if', function($){
 // enshrine the definitions of variable states
   var SeeIf_Templates = {
-    // undefined refers to objects that have not been defined anywhere in code yet
-    'IsUndefined':(value) => `typeof ${value} === 'undefined'`,
-    // null is supposed to refer to objects that have been defined, but have no value. In truth because of "falsey" values, it can have other meanings
-    'IsNull':(value) => `${value} === null`,
-    // defined is supposed to refer to having a usable reference. undefined means without reference. null references are still unusable in JS, so defined nulls should demand special handling
-    'IsDefined':(value) => `(typeof ${value} !== 'undefined' && ${value} !== null)`,
-    // false refers to the binary 0 state (Boolean)
-    'IsFalse':(value) => `${value} === false`,
-    // true refers to the binary 1 state (Boolean)
-    'IsTrue':(value) => `${value} === true`,
-    // falsey refers to values that equal binary 0, even if represented by a different datatype. Falsey values include: Undefined, Null, False, '', 0, -1...[negative numbers]
-    'IsFalsey':(value) => `!${value}`,
-    // truey referes to values that equal binary 1, even if represented by a different datatype. Truey values include: True, HasValue, 1...[positive numbers]
-    'IsTruey':(value) => `${value} == true`,
-    // boolean refers to values that are actual boolean datatype
-    'IsBoolean':(value) => `typeof ${value} === 'boolean'`,
-    // Number refers to values that are a number datatype EXCEPT NaN (Not a Number)
-    'IsNumber':(value) => `(typeof ${value} === 'number' && !isNaN(${value}))`,
-    // string refers to values that are actual string datatype
-    'IsString':(value) => `typeof ${value} === 'string'`,
-    // array refers to values that are actual array datatype
-    'IsArray':(value) => `Array.isArray(${value})`,
-    // iterable refers to values that define a Symbol iterator so that native methods can iterate over them
-    'IsIterable':(value) => `((typeof ${value} !== 'undefined' && ${value} !== null) && typeof value[Symbol.iterator] === 'function')`,
-    // arraylike refers to values that act like arrays in every way. they can be used by native array methods
-    'IsArrayLike':(value) => `(((typeof ${value} !== 'undefined' && ${value} !== null) && typeof value[Symbol.iterator] === 'function') && typeof ${value}.length === 'number' && typeof ${value} !== 'string')`,
-    // function refers to values that are actual functions
-    'IsFunction':(value) => `typeof ${value} === 'function'`,
-    // literal refers to values that are static literals. Strings, booleans, numbers, etc. Basically anything that isn't an object or array. flat values.
-    'IsLiteral':(value) => `typeof ${value} !== 'object'`,
+    /*
+     * These have to be in this order because they are the base types for type_of
+     * When we loop over SeeIf, we will always catch one of these, so these are the most primitive types
+     */
+    // dohobject refers to values that are a complex objectobject which was built with Doh
+    'IsDohObject':(value) => `(InstanceOf?InstanceOf(${value}):false)`,
     // objectobject refers to values that are complex objects with named properties. No flat values or number-keyed lists. 
     'IsObjectObject':(value) => `(typeof ${value} === 'object' && toString.call(${value}) == '[object Object]')`,
+    // function refers to values that are actual functions
+    'IsFunction':(value) => `typeof ${value} === 'function'`,
+    // string refers to values that are actual string datatype
+    'IsString':(value) => `typeof ${value} === 'string'`,
+    // Number refers to values that are a number datatype EXCEPT NaN (Not a Number)
+    'IsNumber':(value) => `(typeof ${value} === 'number' && !isNaN(${value}))`,
+    // array refers to values that are actual array datatype
+    'IsArray':(value) => `Array.isArray(${value})`,
+    // boolean refers to values that are actual native boolean datatype
+    'IsBoolean':(value) => `typeof ${value} === 'boolean'`,
+    // null is supposed to refer to objects that have been defined, but have no value. In truth because of "falsey" values, it can have other meanings
+    'IsNull':(value) => `${value} === null`,
+    // undefined refers to objects that have not been defined anywhere in code yet
+    'IsUndefined':(value) => `typeof ${value} === 'undefined'`,
+    /*
+     * Now the rest for type_match and regular SeeIf usage
+     */
+    // defined is supposed to refer to having a usable reference. undefined means without reference. null references are still unusable in JS, so defined nulls should demand special handling
+    'IsDefined':(value) => `(typeof ${value} !== 'undefined' && ${value} !== null)`,
+    // true refers to the binary 1 state (Boolean)
+    'IsTrue':(value) => `${value} === true`,
+    // false refers to the binary 0 state (Boolean)
+    'IsFalse':(value) => `${value} === false`,
+    // truey referes to values that equal binary 1, even if represented by a different datatype. Truey values include: True, HasValue, 1...[positive numbers]
+    'IsTruey':(value) => `${value} == true`,
+    // falsey refers to values that equal binary 0, even if represented by a different datatype. Falsey values include: Undefined, Null, False, '', 0, -1...[negative numbers]
+    'IsFalsey':(value) => `!${value}`,
+    // arraylike refers to values that act like arrays in every way. they can be used by native array methods
+    'IsArrayLike':(value) => `(((typeof ${value} !== 'undefined' && ${value} !== null) && typeof value[Symbol.iterator] === 'function') && typeof ${value}.length === 'number' && typeof ${value} !== 'string')`,
+    // iterable refers to values that define a Symbol iterator so that native methods can iterate over them
+    'IsIterable':(value) => `((typeof ${value} !== 'undefined' && ${value} !== null) && typeof value[Symbol.iterator] === 'function')`,
+    // literal refers to values that are static literals. Strings, booleans, numbers, etc. Basically anything that isn't an object or array. flat values.
+    'IsLiteral':(value) => `typeof ${value} !== 'object'`,
     // to-be-replaced:
     // emptyobject refers to values that are objectobject or arraylike but have no properties of their own (empty of named properties that aren't javascript native)
     'IsEmptyObject':(value) => `${value}`,
-    // dohobject refers to values that are a complex objectobject which was built with Doh
-    'IsDohObject':(value) => `InstanceOf(${value})`,
     // keysafe refers to values that are safe for use as the key name in a complex objectobject
     'IsKeySafe':(value) => `(typeof ${value} === 'string' || (typeof ${value} === 'number' && !isNaN(${value})))`,
     // emptystring refers to values that are string literals with no contents
@@ -392,23 +399,55 @@ OnLoad('/doh_js/core', function($){
       }
     },
 
-    TypeOf: {
+/*
+Doh.type_of()
+'IsUndefined'
+Doh.type_of('')
+'IsString'
+Doh.type_of(0)
+'IsNumber'
+Doh.type_of(false)
+'IsBoolean'
+Doh.type_of(null)
+'IsNull'
+Doh.type_of([])
+'IsArray'
+Doh.type_of({})
+'IsObjectObject'
+Doh.type_of(function(){})
+'IsFunction'
+Doh.type_of(unet.uNetNodes['1-1'])
+'IsDohObject'
+*/
+    type_of: function(value){
+      let type;
+      for(type in SeeIf){
+        if(SeeIf[type](value)){
+          return type;
+        }
+      }
+      // SeeIf can't see it, so it's not defined
+      return undefined;
+    },
+    
+    MeldedTypeMatch: {
+      // currently implemented meldable types
       'method':SeeIf.IsFunction,
       'phase':SeeIf.IsFunction,
       'object':SeeIf.IsObjectObject,
       'array':SeeIf.IsArray,
-      'idea':SeeIf.IsObjectObject
+      'idea':SeeIf.IsObjectObject,
     },
-    type_of: function(value){
-      for(let type in Doh.TypeOf){
-        if(Doh.TypeOf[type](value)){
-          return type;
-        }
-      }
-      return typeof value;
-    },
-    type_of_match: function(value, is){
-      return Doh.TypeOf[is](value);
+    type_match: function(value, is){
+      //if(Doh.type_of(Doh.MeldedTypeMatch[is]) === 'IsFunction')
+      //if(SeeIf.IsFunction(Doh.MeldedTypeMatch[is]))
+      //if(SeeIf['IsFunction'](Doh.MeldedTypeMatch[is]))
+      if(typeof Doh.MeldedTypeMatch[is] === 'function')
+        return Doh.MeldedTypeMatch[is](value);
+      else if(typeof SeeIf[is] === 'function')
+        return SeeIf[is](value);
+
+      return false;
     },
 
     /*
@@ -427,6 +466,7 @@ OnLoad('/doh_js/core', function($){
 
     meld_ideas:function(destination, idea, skip_methods) {
       idea = idea || {};
+      
       let prop_name = '';
       //test melded stuff and make sure it is what we expect
       if(idea.melded){
@@ -440,35 +480,37 @@ OnLoad('/doh_js/core', function($){
           }
           // deal with destination already has a property of type that is incompatible with idea.melded type
           if(SeeIf.IsDefined(destination[prop_name])){
-            if(!Doh.type_of_match(destination[prop_name], idea.melded[prop_name])){
+            if(!Doh.type_match(destination[prop_name], idea.melded[prop_name])){
               throw Doh.error('Doh.meld_ideas(',destination,',',idea,'). destination[',prop_name,']:',destination[prop_name],'is an incompatible type with idea.melded[',prop_name,']:',idea.melded[prop_name]);
             }
           }
           // deal with idea has a property of type that is incompatible with idea.melded type
           if(SeeIf.IsDefined(idea[prop_name])){
-            if(!Doh.type_of_match(idea[prop_name], idea.melded[prop_name])){
+            if(!Doh.type_match(idea[prop_name], idea.melded[prop_name])){
               throw Doh.error('Doh.meld_ideas(',destination,',',idea,'). idea[',prop_name,']:',idea[prop_name],'is an incompatible type with idea.melded[',prop_name,']:',idea.melded[prop_name]);
             }
           }
         }
       }
+      
       prop_name = '';
       for(prop_name in destination.melded){
         // deal with idea has a property of type that is incompatible with destination melded type
-        if(SeeIf.IsDefined(idea[prop_name]))if(destination.melded[prop_name])if(!Doh.type_of_match(idea[prop_name], destination.melded[prop_name])){
+        if(SeeIf.IsDefined(idea[prop_name]))if(destination.melded[prop_name])if(!Doh.type_match(idea[prop_name], destination.melded[prop_name])){
           throw Doh.error('Doh.meld_ideas(',destination,',',idea,'). idea[',prop_name,']:',idea[prop_name],'is an incompatible type with destination.melded[',prop_name,']:',destination.melded[prop_name]);
         }
       }
+      
       // build name-keyed objects of the melded value lists
       let melded = Doh.meld_objects(destination.melded, idea.melded);
       // loop over the idea and decide what to do with the properties
       prop_name = '';
       for(prop_name in idea){
-        if(idea[prop_name] !== undefined){
-          
-          if(melded[prop_name] === 'array' || (Array.isArray(idea[prop_name]) && !idea[prop_name].length)){
-            // it's a melded array or an empty default
-            destination[prop_name] = Doh.meld_arrays(destination[prop_name], idea[prop_name]);
+        if(idea[prop_name] !== undefined && idea[prop_name] !== destination[prop_name]){
+          if(melded[prop_name] === 'method' || melded[prop_name] === 'phase'){
+            // we handle melded methods and phases later
+            // we set to null to preserve property order
+            destination[prop_name] = null;
             continue;
           }
           if(melded[prop_name] === 'object' || (typeof idea[prop_name] == 'object' && !Array.isArray(idea[prop_name]) && SeeIf.IsEmptyObject(idea[prop_name]))){
@@ -476,32 +518,24 @@ OnLoad('/doh_js/core', function($){
             destination[prop_name] = Doh.meld_objects(destination[prop_name], idea[prop_name]);
             continue;
           }
-          if(melded[prop_name] === 'method' || melded[prop_name] === 'phase'){
-            // we handle melded methods and phases later
-            // we set to null to preserve property order
-            destination[prop_name] = null;
+          if(melded[prop_name] === 'array' || (Array.isArray(idea[prop_name]) && !idea[prop_name].length)){
+            // it's a melded array or an empty default
+            destination[prop_name] = Doh.meld_arrays(destination[prop_name], idea[prop_name]);
             continue;
           }
           // stack the ifs for speed
           if(idea[prop_name].pattern)if(!idea[prop_name].machine)if(!idea[prop_name].skip_auto_build){
-            // it's an auto-build property, auto-meld it
+            // it's an auto-build property, auto-meld it below
             destination.melded[prop_name] = melded[prop_name] = 'idea';
-            //destination.meld_objects = Doh.meld_arrays(destination.meld_objects, [prop_name]);
-            //continue;
           }
           if(melded[prop_name] === 'idea'){
             destination[prop_name] = destination[prop_name] || {};
             destination[prop_name] = Doh.meld_ideas(destination[prop_name], idea[prop_name]);
             continue;
           }
+          
           // non-melded property
-          if(!skip_methods){
-            //if(typeof idea[prop_name] == 'object' && !Array.isArray(idea[prop_name])) Doh.log('non-melded, non-function:',prop_name,'in:',idea);
-            destination[prop_name] = idea[prop_name];
-            continue;
-          } else if(typeof idea[prop_name] !== 'function'){
-            destination[prop_name] = idea[prop_name];
-          }
+          destination[prop_name] = idea[prop_name];
         }
       }
 
@@ -511,7 +545,7 @@ OnLoad('/doh_js/core', function($){
         // we only want to run this after the idea has been melded 
         // inherited is only present on instances, patterns don't have it
         // and neither do plain ideas
-        if(!skip_methods) Doh.update_meld_methods(destination);
+        Doh.update_meld_methods(destination);
       }
 
       return destination;
@@ -634,7 +668,7 @@ OnLoad('/doh_js/core', function($){
       let meld_type_name, meld_type_js;
       for(var prop_name in idea.melded){
         meld_type_name = idea.melded[prop_name];
-        if(SeeIf.IsDefined(idea[prop_name]))if(!Doh.type_of_match(idea[prop_name], meld_type_name)){
+        if(SeeIf.IsDefined(idea[prop_name]))if(!Doh.type_match(idea[prop_name], meld_type_name)){
           throw Doh.error('Doh.patterns(',idea.pattern,').',prop_name,' was defined as a melded',meld_type_name,' but is not a',meld_type_name,'.',idea[prop_name],idea);
         }
         // find the base js for defaulting melded stuff
@@ -655,17 +689,16 @@ OnLoad('/doh_js/core', function($){
             meld_type_js = {};
             break;
           default:
-            throw Doh.error('Doh.pattern() tried to define unknown meld type:',meld_type_name,'for pattern:',idea.pattern,idea);
+            // is it a known SeeIf type?
+            if(!SeeIf[meld_type_name]){
+              throw Doh.error('Doh.pattern() tried to define unknown meld type:',meld_type_name,'for pattern:',idea.pattern,idea);
+            }
             break;
         }
         // default the property if needed. if we define the meld, we should at least implement it
-        idea[prop_name] = idea[prop_name] || meld_type_js;
-        /*
-        if(old_meld_type){
-          // fill the old meld system from the new one
-          idea[old_meld_type] = Doh.meld_arrays(idea[old_meld_type], [prop_name], true);
+        if(meld_type_js){
+          idea[prop_name] = idea[prop_name] || meld_type_js;
         }
-        */
       }
       
       // store the new pattern for the builder
@@ -705,15 +738,27 @@ OnLoad('/doh_js/core', function($){
       var i = '';
 
       // if the pattern is a string,
-      if(typeof pattern == 'string'){
+      if(SeeIf.IsString(pattern)){
         // then everything is normal
         idea = idea || {};
         // overwrite the idea's pattern?
         // NOTE: we need a new way to deal with this.
+        if(SeeIf.IsString(idea.pattern))if(SeeIf.HasValue(idea.pattern))if(pattern !== idea.pattern){
+          Doh.warn('Doh.New(',pattern,',',idea,',',phase,') was sent pattern:',pattern,'AND different idea.pattern:',idea.pattern);
+          if(SeeIf.HasValue(idea.inherits)){
+            if(SeeIf.NotObjectObject(idea.inherits)){
+              // convert inherits from whatever it is to an object so we can add to it.
+              idea.inherits = Doh.normalize_inherits({}, idea.inherits);
+            }
+          } else {
+            idea.inherits = idea.inherits || {};
+          }
+          idea.inherits[idea.pattern] = true;
+        }
         idea.pattern = pattern;
 
       // if the pattern is an array,
-      } else if(Array.isArray(pattern)){
+      } else if(SeeIf.IsArray(pattern)){
         // make sure idea is an object
         idea = idea || {};
         // normalize passed-in inherits
@@ -733,6 +778,9 @@ OnLoad('/doh_js/core', function($){
       }
       // ensure that the idea object is at least blank
       idea = idea || {};
+      // either a specified phase or final. final works because it's reserved.
+      // since there is no 'final' phase, the machine will always keep advancing
+      // even if you add more phases after phase-time and run machine again.
       phase = phase || 'final';
       // if the idea already has a machine, just run it to the specified or final phase
       if(idea.machine){
@@ -791,13 +839,9 @@ OnLoad('/doh_js/core', function($){
 
       // attach the object machine
       object.machine = function(phase){
-        //let phase_name, len = this.phases.length;
         // go through the phases to the one specified, or the last
-        //for(let i = 0; i < len; i++){
         for(let phase_name in this.melded){
           if(this.melded[phase_name] === 'phase'){
-            // stash the phase name
-            //phase_name = this.phases[i];
             // as long as the phase hasn't been run
             if(!this.machine[phase_name]){
               // update the phase we are on
@@ -1143,13 +1187,21 @@ OnLoad('/doh_js/core', function($){
     },
     // ensure that we are the base object phase
     object_phase: function() {
-      for(var prop in this) {
-        if(prop === 'prototype' || prop === '__proto__') continue;
-        if(this[prop])if(this[prop].pattern)if(!this[prop].machine)if(!this[prop].skip_auto_build){
+      // find any properties that are ideas
+      for(var prop_name in this) {
+        if(prop_name === 'prototype' || prop_name === '__proto__') continue; // sometimes these pop up. iterating 'this' is dangerous for some reason
+        // nest the if's for speed
+        // it has to exist, have .pattern, not have .machine and not have .skip_auto_build.
+        // check existance, check for pattern, check for if we have been built already, check for wanting to be ignored
+        if(this[prop_name])if(this[prop_name].pattern)if(!this[prop_name].machine)if(!this[prop_name].skip_auto_build){
+          // only things that have auto_built should have this
           this.auto_built = this.auto_built || {};
-          this[prop]._auto_built_by = this;
-          this[prop] = New(this[prop], 'object_phase');
-          this.auto_built[prop] = this[prop];
+          // tell the thing that we are auto building it. this allows the thing to react to being auto_built if needed
+          this[prop_name]._auto_built_by = this;
+          // for instance, auto_building only runs to object phase. if further or 'final' phase is desired, run .machine_properties(phase)
+          this[prop_name] = New(this[prop_name], 'object_phase');
+          // add our new reference to auto_built
+          this.auto_built[prop_name] = this[prop_name];
         }
       }
     },
@@ -1162,7 +1214,6 @@ OnLoad('/doh_js/core', function($){
     melded:{
       log_phase:'phase'
     },
-    //phases:['log_phase'],
     log_phase: function(){
       var args = [this.log_type];
       for(var i in this.args){
@@ -1208,30 +1259,48 @@ OnLoad('/doh_js/core', function($){
     machine_children_to: 'parenting_phase',
     // extend the children array
     melded:{
-      children:'array',
+      children: 'array',
       // setup our phases for building children and controls
-      parenting_phase:'phase',
+      parenting_phase: 'phase',
     },
-    /*
-    meld_arrays: [
-      'children'
-    ],
-    // setup our phases for building children and controls
-    phases: [
-      'parenting_phase',
-    ],
-    */
     // create a phase to build children
     parenting_phase: function(){
       // loop through the children and attempt to build them
-      var i = '';
+      var i = '', child = false, prop_name = false;
+      for(i in this.children) {
+        if(i === 'length') continue;
+        child = this.children[i];
+        // if the child is a string then check if a property with that name is an idea that wants to be auto-built
+        if(typeof child === 'string')if(this.auto_built[child]){
+          // if the child string points to a valid auto-built property, then suck it up here and keep it from being auto-built more
+          this.auto_built[child] = null;
+          delete this.auto_built[child];
+          // store a copy of our property name from our parent
+          this[child].parental_name = child;
+          // make the thing we are working on the parent property that our string points to
+          child = this[child];
+        }
+        // build the new object up to the phase indicated
+        this.children[i] = Doh.meld_objects({parent:this}, child);
+      }
+      if(SeeIf.NotEmptyObject(this.auto_built)){
+        prop_name = '';
+        for(prop_name in this.auto_built) {
+          // auto build remaining property ideas at the end
+          this.children.push(Doh.meld_objects({parent:this}, this.auto_built[prop_name]));
+          // always remove ourself from any known system that we are replacing.
+          // object only machines through object_phase, we are required to machine our own properties
+          this.auto_built[prop_name] = null;
+          delete this.auto_built[prop_name];
+        }
+      }
+      this.machine_children(this.machine_children_to);
+    },
+    machine_children: function(phase){
+      // loop through the children and attempt to machine them
       for(var i in this.children) {
         if(i === 'length') continue;
-        this.children[i] = New(Doh.meld_objects({parent:this}, this.children[i]), this.machine_children_to);
-      }
-      i = '';
-      for(var i in this.auto_built) {
-        this.children.push(New(Doh.meld_objects({parent:this}, this.auto_built[i]), this.machine_children_to));
+        this.children[i] = New(this.children[i], phase);
       }
     },
   });
@@ -1247,13 +1316,6 @@ OnLoad('/doh_js/core', function($){
       fab_idea:'object',
       fab_phase:'phase',
     },
-    /*
-    meld_objects: ['fab', 'fab_idea'],
-    // add our own phase
-    phases: [
-      'fab_phase',
-    ],
-    */
     object_phase: function(){
       // move our phase to before parenting_phase
       // we need to populate the children ideas prior to building
@@ -1288,4 +1350,5 @@ OnLoad('/doh_js/core', function($){
       }
     },
   });
+
 }, 'glob');

@@ -88,12 +88,9 @@ OnLoad('/doh_js/html', function($){
     // advance the children machine to this phase when building
     machine_children_to: 'control_phase',
     // setup our phases for building controls
-    melded:{control_phase:'phase'},
-    /*
-    phases: [
-      'control_phase',
-    ],
-    */
+    melded:{
+      control_phase:'phase'
+    },
     control_phase: function(){
       // if we have a control name
       if(this.control){
@@ -112,7 +109,9 @@ OnLoad('/doh_js/html', function($){
         // add ourself to it
         this.controller.controls[this.control] = this;
       }
-    }
+      // make our children keep up with us in the phases
+      //if(this.machine_children_to === 'control_phase') this.machine_children(this.machine_children_to);
+    },
   });
   
   var CSSClassCache = {};
@@ -203,24 +202,10 @@ OnLoad('/doh_js/html', function($){
   Pattern('html', 'control', {
     melded:{
       classes:'array',
-      //pattern_styles:'array',
       css:'object',
       attrs:'object',
       append_phase:'phase'
     },
-    /*
-    meld_arrays: [
-      'classes',
-      'pattern_styles'
-    ],
-    meld_objects: [
-      'css',
-      'attrs',
-    ],
-    phases: [
-      'append_phase',
-    ],
-    */
     // e should be a jQuery [Element/Array]
     // or false for using a passed in selector
     e: false,
@@ -239,8 +224,8 @@ OnLoad('/doh_js/html', function($){
 
     object_phase:function(){
       // if our auto-built properties don't have a parent, make us the parent
-      if(!this.parent) {
-        if(this._auto_built_by) this.parent = this._auto_built_by;
+      if(this._auto_built_by) {
+        this.parent = this.parent || this._auto_built_by;
       }
       // ensure that the parent is a setting, already set,
       // or the body
@@ -313,7 +298,7 @@ OnLoad('/doh_js/html', function($){
     append_phase:function(){
       // as long as we haven't already appended
       if(!this.machine.append_phase) {
-
+        
         // convert the parent to a doh object if not already one
         if( typeof this.parent === 'string' || this.parent instanceof Doh.jQuery) {
           this.parent = Doh.get_dobj(this.parent);
@@ -331,12 +316,7 @@ OnLoad('/doh_js/html', function($){
       // put in parent (can be used to relocate as well)
       this.parent.e.append(this.e);
 
-      // loop through the children and attempt to place them
-      for(var i in this.children) {
-        if(i === 'length') continue;
-        // build the children up or machine them forward
-        this.children[i] = New(this.children[i], this.machine_children_to);
-      }
+      this.machine_children(this.machine_children_to);
       
       if(this.control && !this.attrs.title && ! this.e.attr('title')){
         Doh.UntitledControls = Doh.UntitledControls || {};

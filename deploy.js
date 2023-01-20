@@ -1,4 +1,4 @@
-console.group('Doh Initial Build');
+console.group('Doh Core');
 // this is a cheat, but it keeps us from messing with top here.
 let meld_objects = function(destination){
   destination = destination || {}; // this may seem unneccesary but OH IS IT EVER NECCESSARY
@@ -776,7 +776,7 @@ window.OnLoad = window.OnLoad || function(module_name, requires, callback, globa
       DohWatchUpdate('--------------- Between ' + DohWatchUpdate.PreviousName + ' and ' + module_name);
       Doh.ModuleCurrentlyRunning = module_name;
       // at this point, Doh is loaded and we are now going through the modules
-      try{
+      //try{
         if(!Doh.jQuery){
           // find our jQuery version
           Doh.jQuery = jQuery;
@@ -785,13 +785,13 @@ window.OnLoad = window.OnLoad || function(module_name, requires, callback, globa
         callback(Doh.jQuery);
         Doh.ModuleCurrentlyRunning = false;
         DohWatchUpdate(module_name);
-      } catch (err) {
+      /*} catch (err) {
         Doh.ModuleCurrentlyRunning = false;
-        console.error('OnLoad: running original callback for', module_name, 'failed with error', err);
         DohWatchUpdate(module_name);
+        throw console.error('OnLoad: running original callback for', module_name, 'failed with error', err);
         // don't carry on with callbacks for dependents because we failed to be dependable.
         return;
-      }
+      }*/
       Doh.ModuleCurrentlyRunning = false;
       //setTimeout(function(){
         //console.log('Running Doh.ModuleIsLoadedQueue for:', module_name, Doh.ModuleIsLoadedQueue[module_name]);
