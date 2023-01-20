@@ -45,6 +45,7 @@ OnLoad('/doh_js/see_if', function($){
     'IsString':(value) => `typeof ${value} === 'string'`,
     // Number refers to values that are a number datatype EXCEPT NaN (Not a Number)
     'IsNumber':(value) => `(typeof ${value} === 'number' && !isNaN(${value}))`,
+    'NotNumber':(value) => `(typeof ${value} !== 'number' || isNaN(${value}))`,
     // array refers to values that are actual array datatype
     'IsArray':(value) => `Array.isArray(${value})`,
     // boolean refers to values that are actual native boolean datatype
@@ -88,7 +89,6 @@ OnLoad('/doh_js/see_if', function($){
     'NotFalse':(value) => `${value} !== false`,
     'NotTrue':(value) => `${value} !== true`,
     'NotBoolean':(value) => `typeof ${value} !== 'boolean'`,
-    'NotNumber':(value) => `(typeof ${value} !== 'number' || isNaN(${value}))`,
     'NotString':(value) => `typeof ${value} !== 'string'`,
     'NotArray':(value) => `!Array.isArray(${value})`,
     'NotIterable':(value) => `!((typeof ${value} !== 'undefined' && ${value} !== null) && typeof value[Symbol.iterator] === 'function')`,
@@ -1872,6 +1872,7 @@ OnLoad('/doh_js/html', function($){
       control_phase:'phase'
     },
     control_phase: function(){
+      if(!this.control)if(this.parental_name) this.control = this.parental_name;
       // if we have a control name
       if(this.control){
         // find the controller
@@ -1893,6 +1894,9 @@ OnLoad('/doh_js/html', function($){
       //if(this.machine_children_to === 'control_phase') this.machine_children(this.machine_children_to);
     },
   });
+  
+  // add auto-controls
+  
   
   var CSSClassCache = {};
   let originalPatternize = Doh.pattern;
@@ -2081,8 +2085,10 @@ OnLoad('/doh_js/html', function($){
         
         // convert the parent to a doh object if not already one
         if( typeof this.parent === 'string' || this.parent instanceof Doh.jQuery) {
+          Doh.warn('html append_phase found a parent:',this.parent,'that was a string or jQuery instance');
           this.parent = Doh.get_dobj(this.parent);
         }
+        
         // if this is a string, convert it to a jQuery object
         if( typeof this.e === 'string' ) {
           this.e = $(this.e);
@@ -2090,7 +2096,10 @@ OnLoad('/doh_js/html', function($){
           this.e[0].dobj = this;
         }
       }
+      // every time append phase is called:
+      // is this even allowed?
       if(!this.parent.e){
+        Doh.warn('html append_phase found a parent:',this.parent,'that has no .e:',this.parent.e);
         this.parent = Doh.get_dobj(this.parent);
       }
       // put in parent (can be used to relocate as well)
