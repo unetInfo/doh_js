@@ -669,7 +669,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
       // we crawl the properties of idea to deprecated stuff, only do this if we have been told to:
       if(Doh.FixDeprecated){
         // just generates a bunch of warns and stuff with a few possible fixes. Should not be used in production.
-        Doh.fix_deprecated_idea_keys(idea, 'log');
+        Doh.fix_deprecated_idea_keys(idea);
       }
 
       // clean up the various ways that inherits may be passed
@@ -858,23 +858,23 @@ Doh.type_of(unet.uNetNodes['1-1'])
       // we crawl the properties of idea to deprecated stuff, only do this if we have been told to:
       if(Doh.FixDeprecated){
         // just generates a bunch of warns and stuff with a few possible fixes. Should not be used in production.
-        Doh.fix_deprecated_idea_keys(idea, 'log');
+        Doh.fix_deprecated_idea_keys(idea);
       }
 
       // attach the object machine
       object.machine = function(phase){
         
         if(Doh.FixDeprecated){
-          let depricated_phase, command, command_value;
-          for(let depricated_phase in Doh.DeprecatedIdeaPhases){
-            if(depricated_phase === phase){
+          let deprecated_phase, command, command_value;
+          for(let deprecated_phase in Doh.DeprecatedIdeaPhases){
+            if(deprecated_phase === phase){
               command = '';
               command_value = '';
-              for(command in Doh.DeprecatedIdeaPhases[depricated_phase]){
-                command_value = Doh.DeprecatedIdeaPhases[depricated_phase][command];
+              for(command in Doh.DeprecatedIdeaPhases[deprecated_phase]){
+                command_value = Doh.DeprecatedIdeaPhases[deprecated_phase][command];
                 switch(command){
                   case 'RenameTo':
-                    Doh.warn('Deprecated Idea Phase:',depricated_phase,'. It will:',command,':',command_value,idea);
+                    Doh.warn('Deprecated Idea Phase:',deprecated_phase,'. It will:',command,':',command_value,idea);
                     phase = command_value;
                     break
                 }
@@ -925,12 +925,13 @@ Doh.type_of(unet.uNetNodes['1-1'])
     },
 
     DeprecatedIdeaKeys:{},
+    DeprecatedIdeaPhases:{},
     
     /*
      *  Commands:
      *    RenameTo: move the value to a different key.
      */
-    fix_deprecated_idea_keys: function(idea, logger_method = 'log'){
+    fix_deprecated_idea_keys: function(idea, logger_method = 'warn'){
       let idea_prop, deprecated_prop, command, command_value;
       for(deprecated_prop in Doh.DeprecatedIdeaKeys){
         idea_prop = '';
