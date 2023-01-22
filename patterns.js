@@ -8,6 +8,9 @@ if(typeof global != 'undefined'){
 
 Doh = Doh || {};
 
+  // This has to be very early. 
+  Doh.FixDeprecated = true;
+
 if(typeof exports != 'undefined') {
   exports = top.Doh;
 }
@@ -15,6 +18,7 @@ if(typeof exports != 'undefined') {
 /* **** Prepare Doh **** */
 // the most important function in Doh:
 Doh.meld_objects = function(destination){
+  
   destination = destination || {}; // this may seem unneccesary but OH IS IT EVER NECCESSARY
   var obj, i;
   for(let arg in arguments){
@@ -45,7 +49,6 @@ OnLoad('/doh_js/see_if', function($){
     'IsString':(value) => `typeof ${value} === 'string'`,
     // Number refers to values that are a number datatype EXCEPT NaN (Not a Number)
     'IsNumber':(value) => `(typeof ${value} === 'number' && !isNaN(${value}))`,
-    'NotNumber':(value) => `(typeof ${value} !== 'number' || isNaN(${value}))`,
     // array refers to values that are actual array datatype
     'IsArray':(value) => `Array.isArray(${value})`,
     // boolean refers to values that are actual native boolean datatype
@@ -54,6 +57,8 @@ OnLoad('/doh_js/see_if', function($){
     'IsNull':(value) => `${value} === null`,
     // undefined refers to objects that have not been defined anywhere in code yet
     'IsUndefined':(value) => `typeof ${value} === 'undefined'`,
+    // NotNumber refers to values that are not a number OR NaN (NotaNumber object)
+    'NotNumber':(value) => `(typeof ${value} !== 'number' || isNaN(${value}))`,
     /*
      * Now the rest for type_match and regular SeeIf usage
      */
@@ -68,9 +73,12 @@ OnLoad('/doh_js/see_if', function($){
     // falsey refers to values that equal binary 0, even if represented by a different datatype. Falsey values include: Undefined, Null, False, '', 0, -1...[negative numbers]
     'IsFalsey':(value) => `!${value}`,
     // arraylike refers to values that act like arrays in every way. they can be used by native array methods
-    'IsArrayLike':(value) => `(((typeof ${value} !== 'undefined' && ${value} !== null) && typeof value[Symbol.iterator] === 'function') && typeof ${value}.length === 'number' && typeof ${value} !== 'string')`,
+    'IsArrayLike':(value) => `(Array.isArray(${value}) || ((typeof ${value} !== 'undefined' && ${value} !== null) && typeof value[Symbol.iterator] === 'function') && typeof ${value}.length === 'number' && typeof ${value} !== 'string')`,
     // iterable refers to values that define a Symbol iterator so that native methods can iterate over them
     'IsIterable':(value) => `((typeof ${value} !== 'undefined' && ${value} !== null) && typeof value[Symbol.iterator] === 'function')`,
+    // enumerable refers to values that can be iterated over in a for/in loop
+    // all objects can be iterated in a for loop and all arrays are objects too.
+    'IsEnumerable':(value) => `typeof ${value} === 'object'`,
     // literal refers to values that are static literals. Strings, booleans, numbers, etc. Basically anything that isn't an object or array. flat values.
     'IsLiteral':(value) => `typeof ${value} !== 'object'`,
     // to-be-replaced:
@@ -91,8 +99,9 @@ OnLoad('/doh_js/see_if', function($){
     'NotBoolean':(value) => `typeof ${value} !== 'boolean'`,
     'NotString':(value) => `typeof ${value} !== 'string'`,
     'NotArray':(value) => `!Array.isArray(${value})`,
-    'NotIterable':(value) => `!((typeof ${value} !== 'undefined' && ${value} !== null) && typeof value[Symbol.iterator] === 'function')`,
     'NotArrayLike':(value) => `!(((typeof ${value} !== 'undefined' && ${value} !== null) && typeof value[Symbol.iterator] === 'function') && typeof ${value}.length === 'number' && typeof ${value} !== 'string')`,
+    'NotIterable':(value) => `!((typeof ${value} !== 'undefined' && ${value} !== null) && typeof value[Symbol.iterator] === 'function')`,
+    'NotEnumerable':(value) => `typeof ${value} !== 'object'`,
     'NotFunction':(value) => `typeof ${value} !== 'function'`,
     'NotLiteral':(value) => `typeof ${value} === 'object'`,
     'NotObjectObject':(value) => `!(typeof ${value} === 'object' && toString.call(${value}) == '[object Object]')`,
@@ -146,6 +155,7 @@ OnLoad('/doh_js/core', function($){
     ModulePatterns: {},
     PatternModule: {},
 
+    //return items from the elems array that pass callback
     grep: function( elems, callback, inv ) {
       var ret = [];
       // Go through the array, only saving the items
@@ -271,8 +281,7 @@ OnLoad('/doh_js/core', function($){
     
     extend_inherits: function(inherits, skip_core = false){
       var extended = {};
-      if(SeeIf.NotObjectObject(inherits)) inherits = Doh.normalize_inherits({}, inherits);
-      //if(skip_core) Doh.log('Doh.extend_inherits is skipping core.');
+      if(SeeIf.NotObjectObject(inherits)) inherits = Doh.meld_into_objectobject(inherits);
       for(var pattern_name in inherits){
         if(!Patterns[pattern_name]) throw Doh.error('Doh.extend_inherits() did not find pattern:', pattern_name, 'in inherits list:', inherits); // CHRIS:  Andy added this error msg, is there a better way?
         if(skip_core){
@@ -287,7 +296,6 @@ OnLoad('/doh_js/core', function($){
         }
         Doh.meld_objects(extended, Doh.extend_inherits(Patterns[pattern_name].inherits, skip_core));
       }
-      //if(skip_core) console.groupEnd();
       Doh.meld_objects(extended, inherits);
       return extended;
     },
@@ -337,6 +345,50 @@ OnLoad('/doh_js/core', function($){
       return destination;
     },
 
+    /**
+     *  @brief meld all the ways we can format a list of args into a set of object keys
+     *
+     *  @param [in] aruguments  String, Array, Array-like-object, or Object to
+     *                          meld with. (See details)
+     *  @return {}
+     *
+     * 'pattern_name_1'
+     * ['pattern_name_1', 'pattern_name_2']
+     * {0:'pattern_name_1', 1:'pattern_name_2'}
+     * {'pattern_name_1':true, 'pattern_name_2':true}
+     *
+     * *RESULTS IN:* {'pattern_name_1':true, 'pattern_name_2':true}
+     * *OR* {}
+     **/
+    meld_into_objectobject: function(){
+      // we always need a new object
+      let obj = {}, list, item;
+      for(let arg in arguments){
+        // walk through all arguments
+        list = arguments[arg];
+        // allow value to be a string
+        if (typeof list === 'string')
+          //NOTE: we can expand this to accept limited depth and complexity
+          //      like, CSV or dot-notated (this.that.theother)
+          obj[list] = true;
+        // or an object (array and object, technically)
+        else if (SeeIf.IsEnumerable(list)){
+          item = '';
+          for(item in list){
+            if (item !== 'length'){
+              // allow the array structure to have the list in key (Key is not a number)
+              //NOTE .is key safe?
+              if(isNaN(item)) obj[item] = list[item];
+              // or in the list
+              else obj[list[item]] = true;
+            }
+          }
+        }
+      }
+      // send what we found, even if empty
+      return obj;
+    },
+    
     // ADD COMMENTS HERE
     // old method of nesting closures
     meld_methods: function(obj, method, extension){
@@ -551,44 +603,8 @@ Doh.type_of(unet.uNetNodes['1-1'])
       return destination;
     },
     
-    /**
-     *  @brief Normallize all the ways we can format inherits
-     *
-     *  @param [in] destination Object or Prototype to adjust .inherits on
-     *  @param [in] inherits    String, Array, Array-like-object, or Object of
-     *                          patterns to inherit from. (See details)
-     *  @return destination
-     *
-     *  @details This method modifes 'destination'
-     *
-     * 'pattern_name_1'
-     * ['pattern_name_1', 'pattern_name_2']
-     * {0:'pattern_name_1', 1:'pattern_name_2'}
-     * {'pattern_name_1':true, 'pattern_name_2':true}
-     *
-     * *RESULTS IN:* {'pattern_name_1':true, 'pattern_name_2':true}
-     * *OR* {}
-     **/
-    normalize_inherits: function(destination, inherits){
-      // allow inherits to be a string
-      if (typeof inherits === 'string')
-        destination[inherits] = true;
-      // or an array-like object
-      else if (typeof inherits !== 'undefined'){
-        for(var i in inherits){
-          if (i !== 'length'){
-            // allow the array structure to have the pattern name in key
-            if(isNaN(i)) destination[i] = true;
-            // or in the value
-            else destination[inherits[i]] = true;
-          }
-        }
-      }
-      return destination;
-    },
-    
     pattern_inherits_extended: function(pattern_name_or_inherits, skip_core = false){
-      return Object.keys(Doh.extend_inherits(Doh.normalize_inherits({}, pattern_name_or_inherits), skip_core));
+      return Object.keys( Doh.extend_inherits( Doh.meld_into_objectobject(pattern_name_or_inherits) , skip_core) );
     },
     
     PatternInheritedBy: {},
@@ -626,16 +642,16 @@ Doh.type_of(unet.uNetNodes['1-1'])
      */
     pattern: function(name, inherits, idea){
       // find the arguments
-      if(typeof name !== 'string'){
+      if(SeeIf.NotString(name)){
         // the name is the idea
         // only allow this if the idea contains its own pattern name
         idea = name;
-        if(typeof idea.pattern === 'string') name = idea.pattern;
+        if(SeeIf.IsString(idea.pattern)) name = idea.pattern;
         else throw Doh.error('Doh.pattern('+idea+') tried to make a pattern with no name');
 
         // inherits will be in the idea
         inherits = false;
-      } else if (typeof inherits !== 'string' && !(inherits instanceof Array)) {
+      } else if (SeeIf.NotString(inherits) && SeeIf.NotArray(inherits)) {
         // inherits is the idea
         idea = inherits;
         // inherits will be in the idea
@@ -650,21 +666,24 @@ Doh.type_of(unet.uNetNodes['1-1'])
       if(Patterns[name]){
         Doh.warn('(',name,') pattern is being overwritten.\nOriginal Module:',Doh.PatternModule[name],'\nNew Module:',Doh.ModuleCurrentlyRunning);
       }
+      // we crawl the properties of idea to deprecated stuff, only do this if we have been told to:
+      if(Doh.FixDeprecated){
+        // just generates a bunch of warns and stuff with a few possible fixes. Should not be used in production.
+        Doh.fix_deprecated_idea_keys(idea, 'log');
+      }
 
-      // normalize passed in inherits
-      if(inherits) inherits = Doh.normalize_inherits({}, inherits);
-      // normalize the inherits of the pattern idea
-      if(idea.inherits) idea.inherits = Doh.normalize_inherits({}, idea.inherits);
-      // extend them onto a fresh object
-      idea.inherits = Doh.meld_objects({}, inherits || {}, idea.inherits || {});
+      // clean up the various ways that inherits may be passed
+      idea.inherits = Doh.meld_into_objectobject(idea.inherits, inherits);
+      
       // if there still aren't any inherits, at least inherit object
       if(name !== 'object')if(SeeIf.IsEmptyObject(idea.inherits)) idea.inherits.object = true;
+      
       // now that we've normalized all the inherits, report our dependencies to each PatternInheritedBy
       for(var ancestor in idea.inherits){
         Doh.PatternInheritedBy[ancestor] = Doh.PatternInheritedBy[ancestor] || [];
         Doh.PatternInheritedBy[ancestor].push(name);
       }
-      // we need to fix the .melded collection here:
+      // we need to default the .melded collection here:
       let meld_type_name, meld_type_js;
       for(var prop_name in idea.melded){
         meld_type_name = idea.melded[prop_name];
@@ -691,7 +710,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
           default:
             // is it a known SeeIf type?
             if(!SeeIf[meld_type_name]){
-              throw Doh.error('Doh.pattern() tried to define unknown meld type:',meld_type_name,'for pattern:',idea.pattern,idea);
+              throw Doh.error('Doh.pattern(',idea.pattern,') tried to define unknown meld type:',meld_type_name,'for idea:',idea);
             }
             break;
         }
@@ -704,10 +723,11 @@ Doh.type_of(unet.uNetNodes['1-1'])
       // store the new pattern for the builder
       Patterns[name] = idea;
       // note the new pattern's load module, if present
-      Doh.PatternModule[name] = Doh.ModuleCurrentlyRunning;
-      Doh.ModulePatterns[Doh.ModuleCurrentlyRunning] = Doh.ModulePatterns[Doh.ModuleCurrentlyRunning] || [];
-      Doh.ModulePatterns[Doh.ModuleCurrentlyRunning].push(name);
-      
+      if(Doh.ModuleCurrentlyRunning){
+        Doh.PatternModule[name] = Doh.ModuleCurrentlyRunning;
+        Doh.ModulePatterns[Doh.ModuleCurrentlyRunning] = Doh.ModulePatterns[Doh.ModuleCurrentlyRunning] || [];
+        Doh.ModulePatterns[Doh.ModuleCurrentlyRunning].push(name);
+      }
       // return the new pattern
       return idea;
     },
@@ -748,7 +768,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
           if(SeeIf.HasValue(idea.inherits)){
             if(SeeIf.NotObjectObject(idea.inherits)){
               // convert inherits from whatever it is to an object so we can add to it.
-              idea.inherits = Doh.normalize_inherits({}, idea.inherits);
+              idea.inherits = Doh.meld_into_objectobject(idea.inherits);
             }
           } else {
             idea.inherits = idea.inherits || {};
@@ -761,8 +781,8 @@ Doh.type_of(unet.uNetNodes['1-1'])
       } else if(SeeIf.IsArray(pattern)){
         // make sure idea is an object
         idea = idea || {};
-        // normalize passed-in inherits
-        idea.inherits = Doh.normalize_inherits({}, idea.inherits);
+        // meld_into_objectobject() the passed-in inherits (string/array/object->object)
+        idea.inherits = Doh.meld_into_objectobject(idea.inherits);
         // merge pattern into idea.inherits
         i = '';
         for(i in pattern){
@@ -787,12 +807,10 @@ Doh.type_of(unet.uNetNodes['1-1'])
         idea.machine(phase);
         return idea;
       }
-      
-      //idea.pattern = something should be here, not above. 
 
       // normalize passed-in inherits
       // this should now contain all patterns defined in the many places that things can be added to objects
-      if(idea.inherits) idea.inherits = Doh.normalize_inherits({}, idea.inherits);
+      if(idea.inherits) idea.inherits = Doh.meld_into_objectobject(idea.inherits);
 
       // the builder requires at least one pattern
       if(SeeIf.IsEmptyObject(idea.inherits)){
@@ -808,7 +826,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
       var object = Doh.Prototype();
 
       object.inherited = object.inherited || {};
-
+      // now that we have all the patterns defined and passed in, get the patterns that all that stuff depend on
       // collect a list of patterns by recursively crawling the pattern .inherits
       var patterns = Doh.extend_inherits(Patterns[idea.pattern].inherits);
       // allow the idea to specify last-second inherits to at the end
@@ -823,7 +841,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
       i = '';
       for(i in patterns){
         if(!Patterns[i]){
-          Doh.warn('Doh.New: '+ idea.pattern + 'tried to inherit from "', i, '" but it was not found, skipping it entirely.');
+          Doh.warn('Doh.New('+ idea.pattern + ') tried to inherit from "', i, '" but it was not found, skipping it entirely.');
         } 
         Doh.mixin_pattern(object, i);
       }
@@ -836,9 +854,34 @@ Doh.type_of(unet.uNetNodes['1-1'])
       for(i in patterns){
         object.inherits.push(i);
       }
+      
+      // we crawl the properties of idea to deprecated stuff, only do this if we have been told to:
+      if(Doh.FixDeprecated){
+        // just generates a bunch of warns and stuff with a few possible fixes. Should not be used in production.
+        Doh.fix_deprecated_idea_keys(idea, 'log');
+      }
 
       // attach the object machine
       object.machine = function(phase){
+        
+        if(Doh.FixDeprecated){
+          let depricated_phase, command, command_value;
+          for(let depricated_phase in Doh.DeprecatedIdeaPhases){
+            if(depricated_phase === phase){
+              command = '';
+              command_value = '';
+              for(command in Doh.DeprecatedIdeaPhases[depricated_phase]){
+                command_value = Doh.DeprecatedIdeaPhases[depricated_phase][command];
+                switch(command){
+                  case 'RenameTo':
+                    Doh.warn('Deprecated Idea Phase:',depricated_phase,'. It will:',command,':',command_value,idea);
+                    phase = command_value;
+                    break
+                }
+              }
+            }
+          }
+        }
         // go through the phases to the one specified, or the last
         for(let phase_name in this.melded){
           if(this.melded[phase_name] === 'phase'){
@@ -881,6 +924,55 @@ Doh.type_of(unet.uNetNodes['1-1'])
       return object.machine(phase);
     },
 
+    DeprecatedIdeaKeys:{},
+    
+    /*
+     *  Commands:
+     *    RenameTo: move the value to a different key.
+     */
+    fix_deprecated_idea_keys: function(idea, logger_method = 'log'){
+      let idea_prop, deprecated_prop, command, command_value;
+      for(deprecated_prop in Doh.DeprecatedIdeaKeys){
+        idea_prop = '';
+        for(idea_prop in idea){
+          if(idea_prop === deprecated_prop){
+            // this idea_prop is deprecated, log it and run the list of commands to try and fix it
+            command = '';
+            command_value = '';
+            for(command in Doh.DeprecatedIdeaKeys[deprecated_prop]){
+              command_value = Doh.DeprecatedIdeaKeys[deprecated_prop][command];
+              switch(command){
+                case 'RenameTo':
+                  Doh[logger_method]('Deprecated Idea Key:',deprecated_prop,'. It will:',command,':',command_value,idea);
+                  if(idea.melded?.[deprecated_prop]){
+                    idea.melded[command_value] = idea.melded[deprecated_prop];
+                    idea.melded[deprecated_prop] = null;
+                    delete idea.melded[deprecated_prop];
+                  }
+                  // make our new reference to the contents
+                  idea[command_value] = idea[deprecated_prop];
+                  // still have to remove from idea now that it has a new reference home
+                  //idea[deprecated_prop] = function(){};
+                  //delete idea[deprecated_prop];
+                  break;
+                case 'Run':
+                  Doh[logger_method]('Deprecated Idea Key:',deprecated_prop,'. It will:',command,':',command_value,idea);
+                  command_value(idea);
+                  break;
+                case 'Throw':
+                  // throw an error so we can trace from here
+                  throw Doh[logger_method]('Deprecated Idea Key:',deprecated_prop, 'wants to be thrown. It said:',command_value,idea);
+                  break;
+              }
+            }
+            // we found the thing we were looking for, just bail to the next deprecated_prop
+            break;
+          }
+        }
+      }
+      return idea;
+    },
+    
     /*                                                 
       ,,        ,,                     ,,    ,,                  
       db      `7MM                   `7MM    db                  
@@ -949,9 +1041,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
          * this is also the order of signifigance
          * so pattern_2 will be the last pattern inherited.
          */
-         patterns = {};
-         Doh.normalize_inherits(patterns, pattern_object.inherits);
-         Doh.normalize_inherits(patterns, pattern_object.pattern);
+         patterns = Doh.meld_into_objectobject(patterns, pattern_object.inherits, pattern_object.pattern);
       }
       Doh.log('Doh.perspective() is using',patterns,'to extend inherits.');
       // default to expanding the pattern, but skip core patterns, cause we never need those
@@ -1164,6 +1254,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
         Doh.log(method_array[i],object.inherited[method_array[i].split('.')[0]][method]);
       }
     }
+    
   });
   /* **** Doh Object Ready **** */
   Patterns = Doh.Patterns;
@@ -1198,6 +1289,8 @@ Doh.type_of(unet.uNetNodes['1-1'])
           this.auto_built = this.auto_built || {};
           // tell the thing that we are auto building it. this allows the thing to react to being auto_built if needed
           this[prop_name]._auto_built_by = this;
+          // tell the thing how to reference itself from it's auto-built parent (thing._auto_built_by[thing._auto_built_by_name] = thing)
+          this[prop_name]._auto_built_by_name = prop_name;
           // for instance, auto_building only runs to object phase. if further or 'final' phase is desired, run .machine_properties(phase)
           this[prop_name] = New(this[prop_name], 'object_phase');
           // add our new reference to auto_built
@@ -1271,16 +1364,19 @@ Doh.type_of(unet.uNetNodes['1-1'])
         if(i === 'length') continue;
         child = this.children[i];
         // if the child is a string then check if a property with that name is an idea that wants to be auto-built
-        if(typeof child === 'string')if(this.auto_built[child]){
-          // if the child string points to a valid auto-built property, then suck it up here and keep it from being auto-built more
-          this.auto_built[child] = null;
-          delete this.auto_built[child];
-          // store a copy of our property name from our parent
-          this[child].parental_name = child;
-          // make the thing we are working on the parent property that our string points to
-          child = this[child];
+        if(typeof child === 'string'){
+          if(this.auto_built[child]){
+            // if the child string points to a valid auto-built property, then suck it up here and keep it from being auto-built more
+            this.auto_built[child] = null;
+            delete this.auto_built[child];
+            // store a copy of our property name from our parent
+            //NOTE: deprecate this?
+            this[child].parental_name = this[child]._auto_built_by_name;
+            // make the thing we are working on the parent property that our string points to
+            child = this[child];
+          }
         }
-        // build the new object up to the phase indicated
+        // meld ourselves as the parent for the child, unless it has a better idea
         this.children[i] = Doh.meld_objects({parent:this}, child);
       }
       if(SeeIf.NotEmptyObject(this.auto_built)){
@@ -1844,7 +1940,24 @@ OnLoad('/doh_js/html', function($){
       return DWS;
     },
   });
+  Doh.meld_objects(Doh.DeprecatedIdeaKeys, {
+    append_phase:{
+      RenameTo:'html_phase',
+      //Run:function(idea){},
+      //Throw:"Why doesn't this work??"
+    },
+    pre_append_phase:{
+      RenameTo:'pre_html_phase',
+      //Run:function(idea){},
+      //Throw:"Why doesn't this work??"
+    }
+  });
 
+  Doh.meld_objects(Doh.DeprecatedIdeaPhases, {
+    append_phase:{
+      RenameTo:'html_phase',
+    },
+  });
   // refresh the window sizes as soon as possible
   Doh.refresh_win();
 
@@ -1894,8 +2007,6 @@ OnLoad('/doh_js/html', function($){
       //if(this.machine_children_to === 'control_phase') this.machine_children(this.machine_children_to);
     },
   });
-  
-  // add auto-controls
   
   
   var CSSClassCache = {};
@@ -1988,7 +2099,7 @@ OnLoad('/doh_js/html', function($){
       classes:'array',
       css:'object',
       attrs:'object',
-      append_phase:'phase'
+      html_phase:'phase'
     },
     // e should be a jQuery [Element/Array]
     // or false for using a passed in selector
@@ -2075,17 +2186,17 @@ OnLoad('/doh_js/html', function($){
         this.machine_children_to = this._machine_children_to;
         // if this is already past then we need to be append phase
       } else {
-        // tell the append to machine children to append_phase
-        this.machine_children_to = 'append_phase';
+        // tell the append to machine children to html_phase
+        this.machine_children_to = 'html_phase';
       }
     },
-    append_phase:function(){
-      // as long as we haven't already appended
-      if(!this.machine.append_phase) {
+    html_phase:function(){
+      // as long as we haven't already appended:
+      if(!this.machine.html_phase) {
         
         // convert the parent to a doh object if not already one
         if( typeof this.parent === 'string' || this.parent instanceof Doh.jQuery) {
-          Doh.warn('html append_phase found a parent:',this.parent,'that was a string or jQuery instance');
+          Doh.warn('html_phase found a parent:',this.parent,'that was a string or jQuery instance');
           this.parent = Doh.get_dobj(this.parent);
         }
         
@@ -2096,10 +2207,9 @@ OnLoad('/doh_js/html', function($){
           this.e[0].dobj = this;
         }
       }
-      // every time append phase is called:
-      // is this even allowed?
+      // every time html phase is called:
       if(!this.parent.e){
-        Doh.warn('html append_phase found a parent:',this.parent,'that has no .e:',this.parent.e);
+        Doh.warn('html_phase found a parent:',this.parent,'that has no .e:',this.parent.e);
         this.parent = Doh.get_dobj(this.parent);
       }
       // put in parent (can be used to relocate as well)
@@ -2111,6 +2221,7 @@ OnLoad('/doh_js/html', function($){
         Doh.UntitledControls = Doh.UntitledControls || {};
         Doh.UntitledControls[this.id]=this;
       }
+      this.machine.append_phase = true;
     },
     get_style:function(){
       return this.e[0].style.cssText;
@@ -2182,7 +2293,6 @@ OnLoad('/doh_js/html', function($){
   Pattern('HTMLPosition', 'element', {
     melded:{position:'object'},
     position:{},
-    //meld_objects:['position'],
     place:function(opts){
       opts = opts || this.position;
       let newOpts = {};
@@ -2258,8 +2368,6 @@ OnLoad('/doh_js/html', function($){
       animation_phase:'phase',
       animation_options:'object'
     },
-    //meld_objects: ['animation_options'],
-    //phases:['animation_phase'],
     animation_phase: function() {
       this.queue = this.queue || 'doh';
       if(!Doh.AnimationQueues[this.queue])Doh.AnimationQueues[this.queue]=[];
@@ -2303,7 +2411,7 @@ OnLoad('/doh_js/html', function($){
   Pattern('textarea', ['input'], {
     available_properties:{'value':'string to put in the textarea'},
     tag: 'textarea',
-    append_phase: function () {
+    html_phase: function () {
       if (typeof this.value !== 'undefined')
         this.e.val(this.value);
     }
@@ -2312,7 +2420,7 @@ OnLoad('/doh_js/html', function($){
   Pattern('click', 'element', {
     wait_for_mouse_up:false,
     css:{'cursor':'default'},
-    append_phase: function(){
+    html_phase: function(){
       if(this.click){
         var that = this;
         if(this.wait_for_mouse_up) {
@@ -2328,12 +2436,11 @@ OnLoad('/doh_js/html', function($){
     tag: 'button',
     available_properties: {'value':'label of the button', 'button_options':'jQuery UI Button options object'},
     melded:{button_options:'object'},
-    //meld_objects: ['button_options'],
     button_options: {},
     pre_parenting_phase: function(){
       if (typeof this.value !== 'undefined' && typeof this.button_options.label == 'undefined') this.button_options.label = this.value;
     },
-    append_phase: function(){
+    html_phase: function(){
       this.e.button(this.button_options);
     },
     change_title: function(wut) {
@@ -2348,8 +2455,7 @@ OnLoad('/doh_js/html', function($){
     click_animation:['fadeOut',function(){if(this.next_queue)Doh.run_animation_queue(this.next_queue);}],
     next_queue:false,
     melded:{click:'method'},
-    //meld_methods:['click'],
-    append_phase:function(){
+    html_phase:function(){
       this.click_queue = this.click_queue || this.id+'_click';
       this.original_queue = this.queue;
       this.original_animation = this.animation;
@@ -2399,7 +2505,7 @@ OnLoad('/doh_js/html', function($){
         });
       }
     },
-    append_phase: function () {
+    html_phase: function () {
       if (this.value) {
         this.e.find("[value='" + this.value + "']").attr({
           selected: 'selected'
@@ -2415,7 +2521,7 @@ OnLoad('/doh_js/html', function($){
 
   Pattern('option', 'element', {
     tag: 'option',
-    append_phase: function () {
+    html_phase: function () {
       if (typeof this.value !== 'undefined') this.e.val(this.value);
     }
   });
@@ -2425,7 +2531,7 @@ OnLoad('/doh_js/html', function($){
       other_value: 'value of the option that shows "other" field when selected',
       other_selector: 'jquery selector for "other" field'
     },
-    append_phase: function () {
+    html_phase: function () {
       var that = this;
       var chg = function () {
         var form_dobj = that.e.parentsUntil('.form').parent()[0].dobj;
@@ -2452,7 +2558,7 @@ OnLoad('/doh_js/html', function($){
 
   Pattern('checkbox2', ['input', 'input_value'], {
     attrs: {type: 'checkbox'},
-    append_phase: function(){
+    html_phase: function(){
     //  this.e.button(this.button_options);
       if(this.click){
         var that = this;
@@ -2463,7 +2569,7 @@ OnLoad('/doh_js/html', function($){
 
   Pattern('date', 'text', {
     available_properties:{'value':'string of the option value that should be default selected'},
-    append_phase: function(){
+    html_phase: function(){
       var that = this;
       this.e.removeClass('hasDatepicker');
       this.date_format = this.date_format || 'yy-mm-dd';
@@ -2484,7 +2590,7 @@ OnLoad('/doh_js/html', function($){
   });
 
   Pattern('date_range_from', 'date', {
-    append_phase: function(){
+    html_phase: function(){
       var that = this;
       this.e.on('change', function(){
         $(that.date_range_to).datepicker("option", "minDate", date_range_get_date(this, that.date_format));
@@ -2493,7 +2599,7 @@ OnLoad('/doh_js/html', function($){
   });
 
   Pattern('date_range_to', 'date', {
-    append_phase: function(){
+    html_phase: function(){
       var that = this;
       this.e.on('change', function(){
         $(that.date_range_from).datepicker("option", "maxDate", date_range_get_date(this, that.date_format));
@@ -2514,9 +2620,8 @@ OnLoad('/doh_js/html', function($){
   Pattern('slider', 'element', {
     available_properties: {'slider_options':'jQuery UI Slider options object'},
     melded:{slider_options:'object'},
-    //meld_objects: ['slider_options'],
     slider_options: {},
-    append_phase: function(){
+    html_phase: function(){
       this.e.slider(this.slider_options);
     }
   });
@@ -2542,7 +2647,7 @@ OnLoad('/doh_js/html', function($){
   Pattern('html_image','span', {
     src_path: false,
     tag: 'img',
-    append_phase: function() {
+    html_phase: function() {
       if(this.src_path)
         this.set_src(this.src_path);
     },
@@ -2615,7 +2720,7 @@ OnLoad('/doh_js/html', function($){
           css: {float: 'left'},
           id: 'tab_' + i + '_button',
           name: i,
-          append_phase: function(){
+          html_phase: function(){
             var that = this;
             //var tab_labels_inner = tab_labels, tab_content_inner = tab_content;
             this.e.click(function(){
@@ -2646,9 +2751,8 @@ OnLoad('/doh_js/html', function($){
 
   Pattern('dialog', 'element', {
     melded:{dialog_options:'object'},
-    //meld_objects:['dialog_options'],
     dialog_options:{height:'auto',width:'auto'},
-    append_phase: function(){
+    html_phase: function(){
       /*
         see https://api.jqueryui.com/dialog/ 
 
@@ -2691,7 +2795,7 @@ OnLoad('/doh_js/html', function($){
 
       });
     },
-    append_phase:function(){
+    html_phase:function(){
       var aDialog = this;
       this.e.keypress(
         function(event){
@@ -2708,7 +2812,6 @@ OnLoad('/doh_js/html', function($){
 
   Pattern('drag', 'element', {
     melded:{drag_start:'method',drag_drag:'method',drag_stop:'method'},
-    //meld_methods:['drag_start','drag_drag','drag_stop'],
     css: {cursor: "move"},
     drag_start:function(event, ui){
       this._original_z_index = this.e.css("z-index");
@@ -2723,7 +2826,7 @@ OnLoad('/doh_js/html', function($){
        this.e.css({'z-index':this._original_z_index});
        this._was_gedragged = true;
     },
-    append_phase: function(){
+    html_phase: function(){
       this.e.draggable({
         start: this.drag_start.bind(this),
         drag: this.drag_drag.bind(this),
@@ -2746,14 +2849,13 @@ OnLoad('/doh_js/html', function($){
       resize:'method',
       resize_stop:'method'
     },
-    //meld_methods:['resize_start','resize','resize_stop'],
     resize_start:function(event, ui){
     },
     resize:function(event, ui) {
     },
     resize_stop:function() {
     },
-    append_phase: function(){
+    html_phase: function(){
       this.e.resizable({
         start: this.resize_start.bind(this),
         resize: this.resize.bind(this),
@@ -2770,10 +2872,9 @@ OnLoad('/doh_js/html', function($){
 
   Pattern('hover', 'element', {
     melded:{hover_over:'method',hover_out:'method'},
-    //meld_methods:['hover_over','hover_out'],
     hover_over: function(){},
     hover_out: function(){},
-    append_phase: function(){
+    html_phase: function(){
       // make us hoverable
       this.e.hover(this.hover_over.bind(this), this.hover_out.bind(this));
 
@@ -2785,7 +2886,6 @@ OnLoad('/doh_js/html', function($){
 
   Pattern('hover_delayed', 'element', {
     delay_time_ms: 600,
-    //meld_methods:['hover_over','hover_out'],
     melded:{hover_over:'method',hover_out:'method'},
     _timer: null,
     delays_hover_over: function() {
@@ -2800,7 +2900,7 @@ OnLoad('/doh_js/html', function($){
     hover_out: function(){
       clearTimeout(this._timer);
     },
-    append_phase: function(){
+    html_phase: function(){
       // make us hoverable
       this.e.hover(this.delays_hover_over.bind(this), this.hover_out.bind(this));
       //window.setTimeout(this.delays_hover_over, 0); // this fixes a race issue at launch but means hover will get called at launch one time
@@ -2824,8 +2924,4 @@ OnLoad('/doh_js/element', function($){
 
 });
 
-OnLoad('/doh_js/patterns', function($){
-
-
-
-});
+OnLoad('/doh_js/patterns', function($){});

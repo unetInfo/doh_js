@@ -1163,7 +1163,9 @@ Doh.type_of(unet.uNetNodes['1-1'])
       for (i in method_array){
         Doh.log(method_array[i],object.inherited[method_array[i].split('.')[0]][method]);
       }
-    }
+    },
+    
+    DeprecatedObjectKeys:{},
   });
   /* **** Doh Object Ready **** */
   Patterns = Doh.Patterns;
