@@ -2866,7 +2866,7 @@ OnLoad('/doh_js/html', function($){
     enableResize: function() {
       this.e.resizable('enable');
     },
-    disableDResize: function() {
+    disableResize: function() {
       this.e.resizable('disable');
     },
   });
