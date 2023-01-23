@@ -1970,7 +1970,7 @@ OnLoad('/doh_js/html', function($){
   });
 
   Doh.meld_objects(Doh.DeprecatedIdeaPhases, {
-    append_phase:{
+    html_phase:{
       RenameTo:'html_phase',
       //Throw:"Why doesn't this work??"
     },
