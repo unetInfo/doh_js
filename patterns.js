@@ -7,6 +7,7 @@ if(typeof global != 'undefined'){
 }
 
 Doh = Doh || {};
+PatternModuleVictors = PatternModuleVictors || {};
 
   // This has to be very early. 
   Doh.FixDeprecated = true;
@@ -609,7 +610,6 @@ Doh.type_of(unet.uNetNodes['1-1'])
     
     PatternInheritedBy: {},
 
-
     /*
 
                                                                                   
@@ -664,6 +664,10 @@ Doh.type_of(unet.uNetNodes['1-1'])
       idea.pattern = name;
       
       if(Patterns[name]){
+        if(PatternModuleVictors[name] !== Doh.ModuleCurrentlyRunning){
+          Doh.warn('(',name,') pattern was going to be overwritten but was ignored.\nOriginal Module:',Doh.PatternModule[name],'\nNew Module:',Doh.ModuleCurrentlyRunning);
+          return;
+        }
         Doh.warn('(',name,') pattern is being overwritten.\nOriginal Module:',Doh.PatternModule[name],'\nNew Module:',Doh.ModuleCurrentlyRunning);
       }
       // we crawl the properties of idea to deprecated stuff, only do this if we have been told to:
@@ -876,7 +880,15 @@ Doh.type_of(unet.uNetNodes['1-1'])
                   case 'RenameTo':
                     Doh.warn('Deprecated Idea Phase:',deprecated_phase,'. It will:',command,':',command_value,idea);
                     phase = command_value;
-                    break
+                    break;
+                  case 'Throw':
+                    // throw an error so we can trace from here
+                    throw Doh.error('Deprecated Idea Phase:',deprecated_phase, 'wants to be thrown. It said:',command_value,idea);
+                    break;
+                  case 'Run':
+                    Doh.warn('Deprecated Idea Phase:',deprecated_phase,'. It will:',command,':',command_value,idea);
+                    command_value(idea);
+                    break;
                 }
               }
             }
@@ -886,15 +898,15 @@ Doh.type_of(unet.uNetNodes['1-1'])
         for(let phase_name in this.melded){
           if(this.melded[phase_name] === 'phase'){
             // as long as the phase hasn't been run
-            if(!this.machine[phase_name]){
+            if(!this.machine.completed[phase_name]){
               // update the phase we are on
               this.machine.phase = phase_name;
-              // mark it as not run
-              this.machine[phase_name] = false;
+              // mark it as false to indicate that it's running
+              this.machine.completed[phase_name] = false;
               // run the phase
               this[phase_name].apply(this);
               // mark it as run
-              this.machine[phase_name] = true;
+              this.machine.completed[phase_name] = true;
             }
             // if this is the phase we are building to, then exit here
             if(phase_name == phase) return this;
@@ -903,6 +915,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
         // always return the object. New() relies on this.
         return this;
       };
+      object.machine.completed = {};
 
       // add the idea to the object
       // now that the object has a machine, the phases and meld_methods will be added
@@ -962,7 +975,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
                   break;
                 case 'Throw':
                   // throw an error so we can trace from here
-                  throw Doh[logger_method]('Deprecated Idea Key:',deprecated_prop, 'wants to be thrown. It said:',command_value,idea);
+                  throw Doh.error('Deprecated Idea Key:',deprecated_prop, 'wants to be thrown. It said:',command_value,idea);
                   break;
               }
             }
@@ -1957,6 +1970,7 @@ OnLoad('/doh_js/html', function($){
   Doh.meld_objects(Doh.DeprecatedIdeaPhases, {
     append_phase:{
       RenameTo:'html_phase',
+      //Throw:"Why doesn't this work??"
     },
   });
   // refresh the window sizes as soon as possible
@@ -2193,7 +2207,7 @@ OnLoad('/doh_js/html', function($){
     },
     html_phase:function(){
       // as long as we haven't already appended:
-      if(!this.machine.html_phase) {
+      if(!this.machine.completed.html_phase) {
         
         // convert the parent to a doh object if not already one
         if( typeof this.parent === 'string' || this.parent instanceof Doh.jQuery) {
@@ -2222,7 +2236,10 @@ OnLoad('/doh_js/html', function($){
         Doh.UntitledControls = Doh.UntitledControls || {};
         Doh.UntitledControls[this.id]=this;
       }
-      this.machine.append_phase = true;
+      
+      if(Doh.FixDeprecated){
+        this.machine.completed.append_phase = true;
+      }
     },
     get_style:function(){
       return this.e[0].style.cssText;
