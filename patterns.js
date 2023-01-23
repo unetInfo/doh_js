@@ -664,9 +664,9 @@ Doh.type_of(unet.uNetNodes['1-1'])
       idea.pattern = name;
       
       if(Patterns[name]){
-        if(PatternModuleVictors[name] !== Doh.ModuleCurrentlyRunning){
+        if(PatternModuleVictors[name] && (PatternModuleVictors[name] !== Doh.ModuleCurrentlyRunning)){
           Doh.warn('(',name,') pattern was going to be overwritten but was ignored.\nOriginal Module:',Doh.PatternModule[name],'\nNew Module:',Doh.ModuleCurrentlyRunning);
-          return;
+          return false;
         }
         Doh.warn('(',name,') pattern is being overwritten.\nOriginal Module:',Doh.PatternModule[name],'\nNew Module:',Doh.ModuleCurrentlyRunning);
       }
@@ -675,6 +675,8 @@ Doh.type_of(unet.uNetNodes['1-1'])
         // just generates a bunch of warns and stuff with a few possible fixes. Should not be used in production.
         Doh.fix_deprecated_idea_keys(idea);
       }
+
+
 
       // clean up the various ways that inherits may be passed
       idea.inherits = Doh.meld_into_objectobject(idea.inherits, inherits);
@@ -2029,6 +2031,7 @@ OnLoad('/doh_js/html', function($){
   Pattern = Doh.pattern = function(name, inherits, idea) {
   //let off = function(name, inherits, idea) {
     var newPattern = originalPatternize(name, inherits, idea);
+    if(!newPattern) return;
     if(SeeIf.NotEmptyObject(newPattern.css) || SeeIf.HasValue(newPattern.style)){
       // build a class from .css and .style here
       // create a class name
@@ -2671,6 +2674,7 @@ OnLoad('/doh_js/html', function($){
     },
     set_src: function(src_path) {
       this.src_path =  src_path;
+      Doh.log('set_src',this.src_path);
       this.e[0].setAttribute('src',this.src_path);
     }
   });

@@ -21,6 +21,12 @@ var DohWatch = DohWatch || {top:top};
 // keyed by MyWatchedName
 var DohWatchDiffs = {};
 
+PatternModuleVictors = {
+  'left_labelled_check2_settings':'/modules/tamper/tamper_ui_core',
+  'sim_ui_select_settings':'/modules/tamper/tamper_ui_core',
+};
+
+
 // WARNING: THIS WILL BE SLOW. USE WITH CAUTION!
 // name can be any string, it is appended to the DohWatchUpdate.CacheCounter so that each Update is unique
 var DohWatchUpdate = function(name){
