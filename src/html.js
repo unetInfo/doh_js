@@ -204,7 +204,7 @@ OnLoad('/doh_js/html', function($){
       classes:'array',
       css:'object',
       attrs:'object',
-      append_phase:'phase'
+      html_phase:'phase'
     },
     // e should be a jQuery [Element/Array]
     // or false for using a passed in selector
@@ -295,7 +295,7 @@ OnLoad('/doh_js/html', function($){
         this.machine_children_to = 'append_phase';
       }
     },
-    append_phase:function(){
+    html_phase:function(){
       // as long as we haven't already appended
       if(!this.machine.append_phase) {
         
@@ -514,7 +514,7 @@ OnLoad('/doh_js/html', function($){
   Pattern('textarea', ['input'], {
     available_properties:{'value':'string to put in the textarea'},
     tag: 'textarea',
-    append_phase: function () {
+    html_phase: function () {
       if (typeof this.value !== 'undefined')
         this.e.val(this.value);
     }
@@ -523,7 +523,7 @@ OnLoad('/doh_js/html', function($){
   Pattern('click', 'element', {
     wait_for_mouse_up:false,
     css:{'cursor':'default'},
-    append_phase: function(){
+    html_phase: function(){
       if(this.click){
         var that = this;
         if(this.wait_for_mouse_up) {
@@ -544,7 +544,7 @@ OnLoad('/doh_js/html', function($){
     pre_parenting_phase: function(){
       if (typeof this.value !== 'undefined' && typeof this.button_options.label == 'undefined') this.button_options.label = this.value;
     },
-    append_phase: function(){
+    html_phase: function(){
       this.e.button(this.button_options);
     },
     change_title: function(wut) {
@@ -560,7 +560,7 @@ OnLoad('/doh_js/html', function($){
     next_queue:false,
     melded:{click:'method'},
     //meld_methods:['click'],
-    append_phase:function(){
+    html_phase:function(){
       this.click_queue = this.click_queue || this.id+'_click';
       this.original_queue = this.queue;
       this.original_animation = this.animation;
@@ -610,7 +610,7 @@ OnLoad('/doh_js/html', function($){
         });
       }
     },
-    append_phase: function () {
+    html_phase: function () {
       if (this.value) {
         this.e.find("[value='" + this.value + "']").attr({
           selected: 'selected'
@@ -626,7 +626,7 @@ OnLoad('/doh_js/html', function($){
 
   Pattern('option', 'element', {
     tag: 'option',
-    append_phase: function () {
+    html_phase: function () {
       if (typeof this.value !== 'undefined') this.e.val(this.value);
     }
   });
@@ -636,7 +636,7 @@ OnLoad('/doh_js/html', function($){
       other_value: 'value of the option that shows "other" field when selected',
       other_selector: 'jquery selector for "other" field'
     },
-    append_phase: function () {
+    html_phase: function () {
       var that = this;
       var chg = function () {
         var form_dobj = that.e.parentsUntil('.form').parent()[0].dobj;
@@ -663,7 +663,7 @@ OnLoad('/doh_js/html', function($){
 
   Pattern('checkbox2', ['input', 'input_value'], {
     attrs: {type: 'checkbox'},
-    append_phase: function(){
+    html_phase: function(){
     //  this.e.button(this.button_options);
       if(this.click){
         var that = this;
@@ -674,7 +674,7 @@ OnLoad('/doh_js/html', function($){
 
   Pattern('date', 'text', {
     available_properties:{'value':'string of the option value that should be default selected'},
-    append_phase: function(){
+    html_phase: function(){
       var that = this;
       this.e.removeClass('hasDatepicker');
       this.date_format = this.date_format || 'yy-mm-dd';
@@ -695,7 +695,7 @@ OnLoad('/doh_js/html', function($){
   });
 
   Pattern('date_range_from', 'date', {
-    append_phase: function(){
+    html_phase: function(){
       var that = this;
       this.e.on('change', function(){
         $(that.date_range_to).datepicker("option", "minDate", date_range_get_date(this, that.date_format));
@@ -704,7 +704,7 @@ OnLoad('/doh_js/html', function($){
   });
 
   Pattern('date_range_to', 'date', {
-    append_phase: function(){
+    html_phase: function(){
       var that = this;
       this.e.on('change', function(){
         $(that.date_range_from).datepicker("option", "maxDate", date_range_get_date(this, that.date_format));
@@ -727,7 +727,7 @@ OnLoad('/doh_js/html', function($){
     melded:{slider_options:'object'},
     //meld_objects: ['slider_options'],
     slider_options: {},
-    append_phase: function(){
+    html_phase: function(){
       this.e.slider(this.slider_options);
     }
   });
@@ -753,7 +753,7 @@ OnLoad('/doh_js/html', function($){
   Pattern('html_image','span', {
     src_path: false,
     tag: 'img',
-    append_phase: function() {
+    html_phase: function() {
       if(this.src_path)
         this.set_src(this.src_path);
     },
@@ -826,7 +826,7 @@ OnLoad('/doh_js/html', function($){
           css: {float: 'left'},
           id: 'tab_' + i + '_button',
           name: i,
-          append_phase: function(){
+          html_phase: function(){
             var that = this;
             //var tab_labels_inner = tab_labels, tab_content_inner = tab_content;
             this.e.click(function(){
@@ -859,7 +859,7 @@ OnLoad('/doh_js/html', function($){
     melded:{dialog_options:'object'},
     //meld_objects:['dialog_options'],
     dialog_options:{height:'auto',width:'auto'},
-    append_phase: function(){
+    html_phase: function(){
       /*
         see https://api.jqueryui.com/dialog/ 
 
@@ -902,7 +902,7 @@ OnLoad('/doh_js/html', function($){
 
       });
     },
-    append_phase:function(){
+    html_phase:function(){
       var aDialog = this;
       this.e.keypress(
         function(event){
@@ -934,7 +934,7 @@ OnLoad('/doh_js/html', function($){
        this.e.css({'z-index':this._original_z_index});
        this._was_gedragged = true;
     },
-    append_phase: function(){
+    html_phase: function(){
       this.e.draggable({
         start: this.drag_start.bind(this),
         drag: this.drag_drag.bind(this),
@@ -964,7 +964,7 @@ OnLoad('/doh_js/html', function($){
     },
     resize_stop:function() {
     },
-    append_phase: function(){
+    html_phase: function(){
       this.e.resizable({
         start: this.resize_start.bind(this),
         resize: this.resize.bind(this),
@@ -984,7 +984,7 @@ OnLoad('/doh_js/html', function($){
     //meld_methods:['hover_over','hover_out'],
     hover_over: function(){},
     hover_out: function(){},
-    append_phase: function(){
+    html_phase: function(){
       // make us hoverable
       this.e.hover(this.hover_over.bind(this), this.hover_out.bind(this));
 
@@ -1011,7 +1011,7 @@ OnLoad('/doh_js/html', function($){
     hover_out: function(){
       clearTimeout(this._timer);
     },
-    append_phase: function(){
+    html_phase: function(){
       // make us hoverable
       this.e.hover(this.delays_hover_over.bind(this), this.hover_out.bind(this));
       //window.setTimeout(this.delays_hover_over, 0); // this fixes a race issue at launch but means hover will get called at launch one time
