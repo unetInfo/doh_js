@@ -4,10 +4,10 @@ if(typeof global != 'undefined'){
   var Doh = top.Doh = {};
   var glob = top.glob = {};
   var SeeIf = top.SeeIf = {};
+  var PatternModuleVictors = top.PatternModuleVictors || {};
 }
 
 Doh = Doh || {};
-PatternModuleVictors = PatternModuleVictors || {};
 
   // This has to be very early. 
   Doh.FixDeprecated = true;
