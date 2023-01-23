@@ -673,7 +673,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
       // we crawl the properties of idea to deprecated stuff, only do this if we have been told to:
       if(Doh.FixDeprecated){
         // just generates a bunch of warns and stuff with a few possible fixes. Should not be used in production.
-        Doh.fix_deprecated_idea_keys(idea);
+        Doh.see_pattern_keys(idea);
       }
 
       // clean up the various ways that inherits may be passed
@@ -821,6 +821,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
         if(!Patterns[idea.pattern]) {
           // we could not find at least one pattern
           // default to object
+         //throw Doh.error('New idea had no inherits OR no pattern was found, default pattern to "object"',idea);
          Doh.error('New idea had no inherits OR no pattern was found, default pattern to "object"',idea);
          idea.pattern = 'object';
         }
@@ -862,7 +863,70 @@ Doh.type_of(unet.uNetNodes['1-1'])
       // we crawl the properties of idea to deprecated stuff, only do this if we have been told to:
       if(Doh.FixDeprecated){
         // just generates a bunch of warns and stuff with a few possible fixes. Should not be used in production.
-        Doh.fix_deprecated_idea_keys(idea);
+        Doh.see_pattern_keys(idea);
+      }
+      
+      // do we need to setup watches?
+      var proxy = false, setters = {}, getters = {}, keys, watcher, set_stack = [], get_stack = [];
+      for(let ancestor in object.inherited){
+        keys = Doh.WatchedKeySetters[ancestor];
+        if(keys){
+          watcher = '';
+          for(watcher in keys){
+            set_stack.push((function(keys, watcher, target, prop, value){
+              if(watcher === prop)
+                keys[watcher](target, prop, value);
+            }).bind(object.__original__, keys, watcher));
+            // someone wants us to have a proxy
+            proxy = true;
+            setters[watcher] = true;
+          }
+        }
+        
+        /*
+        keys = Doh.WatchedKeyGetters[ancestor];
+        if(keys){
+          watcher = '';
+          for(watcher in keys){
+            get_stack.push((function(keys, watcher, obj, prop, receiver){
+              if(watcher === prop)
+                keys[watcher](obj, prop, receiver);
+            }).bind(object.__original__, keys, watcher));
+            // someone wants us to have a proxy
+            proxy = true;
+            getters[watcher] = true;
+          }
+        }
+        */
+      }
+      //proxy = false;
+      if(proxy === true){
+        object.__handler__ = {};
+        //object.__handler__.has = function(target, key) {return key in target;};
+        //object.__handler__.ownKeys = function(target) {return Reflect.ownKeys(target);};
+        
+        object.__handler__.melded_set = Doh.meld_method(object, set_stack);
+        object.__handler__.set = function(target, prop, value){
+          if(prop === '__original__') return target;
+          if(setters[prop]){ 
+            //throw Doh.error('setter stuff:',object,target,prop,value);
+            target.__handler__.melded_set(...arguments);
+          }
+          return Reflect.set(...arguments);
+        };
+        /*
+        object.__handler__.melded_get = Doh.meld_method(object, get_stack);
+        object.__handler__.get = function(target, prop){
+          if(prop === '__original__') return target;
+          if(getters[prop]){ 
+            //throw Doh.error('getter stuff:',object,target,prop,receiver);
+            target.__handler__.melded_get(...arguments);
+          }
+          return Reflect.get(...arguments);
+        };
+        */
+        // we replace object here so that the rest of the system will use it in their closures
+        object = new Proxy(object, object.__handler__);
       }
 
       // attach the object machine
@@ -870,12 +934,12 @@ Doh.type_of(unet.uNetNodes['1-1'])
         
         if(Doh.FixDeprecated){
           let deprecated_phase, command, command_value;
-          for(let deprecated_phase in Doh.DeprecatedIdeaPhases){
+          for(let deprecated_phase in Doh.WatchedPhases){
             if(deprecated_phase === phase){
               command = '';
               command_value = '';
-              for(command in Doh.DeprecatedIdeaPhases[deprecated_phase]){
-                command_value = Doh.DeprecatedIdeaPhases[deprecated_phase][command];
+              for(command in Doh.WatchedPhases[deprecated_phase]){
+                command_value = Doh.WatchedPhases[deprecated_phase][command];
                 switch(command){
                   case 'RenameTo':
                     Doh.warn('Deprecated Idea Phase:',deprecated_phase,'. It will:',command,':',command_value,idea);
@@ -932,54 +996,126 @@ Doh.type_of(unet.uNetNodes['1-1'])
       
       //fix the perspective method
       object.perspective = Doh.perspective.bind(object, object);
+      
+      // if we are proxied, return that
+      if(proxy === true){
+        return object.machine(phase).__proxy__;
+      }
 
       // run the machine to the specified phase and return the object
       return object.machine(phase);
     },
 
-    DeprecatedIdeaKeys:{},
-    DeprecatedIdeaPhases:{},
+    WatchedKeys:{
+      /*'key':{
+        log:'message',
+        warn:'message',
+        error:'message',
+        throw:'message',
+        run:function(idea, prop, new_value){},
+        rename:'to_this',
+        remove:'literally anything',
+      }*/
+    },
+    WatchedPhases:{
+      /*'key':{
+        log:'message',
+        warn:'message',
+        error:'message',
+        throw:'message',
+        run:function(idea, prop, new_value){},
+        rename:'to_this',
+        remove:'literally anything',
+      }*/
+    },
+    WatchedKeySetters:{
+      uNetDevice:{
+        tag:function(obj, prop, value){
+          Doh.error('watching html tag setter:', obj, prop, value);
+        }
+      }
+      /*
+      'pattern1':{
+        'key1':function(obj, prop, value){},
+        'key2':function(obj, prop, value){},
+      },
+      'pattern8':{
+        'key1':function(obj, prop, value){},
+        'key2':function(obj, prop, value){},
+      },
+      */
+    },
+    
+    WatchedKeyGetters:{
+      /*
+      element:{
+        tag:function(obj, prop, value){
+          Doh.error('watching html tag getter:', obj, prop, value);
+        }
+      }
+      'pattern1':{
+        'key1':function(target, prop, receiver){},
+        'key1':function(target, prop, receiver){},
+      },
+      'pattern4':{
+        'key1':function(target, prop, receiver){},
+        'key1':function(target, prop, receiver){},
+      },
+      */
+    },
     
     /*
      *  Commands:
      *    RenameTo: move the value to a different key.
      */
-    fix_deprecated_idea_keys: function(idea, logger_method = 'warn'){
-      let idea_prop, deprecated_prop, command, command_value;
-      for(deprecated_prop in Doh.DeprecatedIdeaKeys){
+    see_pattern_keys: function(idea){
+      let logger_method = 'warn', idea_prop, pattern_prop, command, command_value;
+      for(pattern_prop in Doh.WatchedKeys){
         idea_prop = '';
         for(idea_prop in idea){
-          if(idea_prop === deprecated_prop){
+          if(idea_prop === pattern_prop){
             // this idea_prop is deprecated, log it and run the list of commands to try and fix it
             command = '';
             command_value = '';
-            for(command in Doh.DeprecatedIdeaKeys[deprecated_prop]){
-              command_value = Doh.DeprecatedIdeaKeys[deprecated_prop][command];
+            for(command in Doh.WatchedKeys[pattern_prop]){
+              command_value = Doh.WatchedKeys[pattern_prop][command];
               switch(command){
-                case 'RenameTo':
-                  Doh[logger_method]('Deprecated Idea Key:',deprecated_prop,'. It will:',command,':',command_value,idea);
-                  if(idea.melded?.[deprecated_prop]){
-                    idea.melded[command_value] = idea.melded[deprecated_prop];
-                    idea.melded[deprecated_prop] = null;
-                    delete idea.melded[deprecated_prop];
-                  }
-                  // make our new reference to the contents
-                  idea[command_value] = idea[deprecated_prop];
-                  // still have to remove from idea now that it has a new reference home
-                  //idea[deprecated_prop] = function(){};
-                  //delete idea[deprecated_prop];
+                case 'log':
+                case 'warn':
+                case 'error':
+                  Doh[command]('watch_pattern_keys:',pattern_prop,'wants to',command,':',command_value,idea);
                   break;
-                case 'Run':
-                  Doh[logger_method]('Deprecated Idea Key:',deprecated_prop,'. It will:',command,':',command_value,idea);
+                case 'throw':
+                  // throw an error so we can trace from here
+                  throw Doh.error('watch_pattern_keys:',pattern_prop, 'wants to be thrown. It said:',command_value,idea);
+                  break;
+                case 'run':
+                  Doh[logger_method]('watch_pattern_keys:',pattern_prop,'. It will:',command,':',command_value,idea);
                   command_value(idea);
                   break;
-                case 'Throw':
-                  // throw an error so we can trace from here
-                  throw Doh.error('Deprecated Idea Key:',deprecated_prop, 'wants to be thrown. It said:',command_value,idea);
+                case 'rename':
+                  Doh[logger_method]('watch_pattern_keys:',pattern_prop,'. It will:',command,':',command_value,idea);
+                  if(idea.melded?.[pattern_prop]){
+                    idea.melded[command_value] = idea.melded[pattern_prop];
+                    idea.melded[pattern_prop] = null;
+                    delete idea.melded[pattern_prop];
+                  }
+                  // make our new reference to the contents
+                  idea[command_value] = idea[pattern_prop];
+                  break;
+                case 'remove':
+                  Doh[logger_method]('watch_pattern_keys:',pattern_prop,'. It will:',command,':',command_value,idea);
+                  if(idea.melded?.[pattern_prop]){
+                    idea.melded[command_value] = idea.melded[pattern_prop];
+                    idea.melded[pattern_prop] = null;
+                    delete idea.melded[pattern_prop];
+                  }
+                  idea[pattern_prop] = null;
+                  delete idea[pattern_prop];
                   break;
               }
             }
-            // we found the thing we were looking for, just bail to the next deprecated_prop
+            // we found the thing we were looking for, just bail to the next pattern_prop
             break;
           }
         }
@@ -1298,7 +1434,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
         // nest the if's for speed
         // it has to exist, have .pattern, not have .machine and not have .skip_auto_build.
         // check existance, check for pattern, check for if we have been built already, check for wanting to be ignored
-        if(this[prop_name])if(this[prop_name].pattern)if(!this[prop_name].machine)if(!this[prop_name].skip_auto_build){
+        if(this[prop_name])if(this[prop_name].pattern)if(this[prop_name].pattern !== 'idea')if(!this[prop_name].machine)if(!this[prop_name].skip_auto_build){
           // only things that have auto_built should have this
           this.auto_built = this.auto_built || {};
           // tell the thing that we are auto building it. this allows the thing to react to being auto_built if needed
@@ -1954,23 +2090,23 @@ OnLoad('/doh_js/html', function($){
       return DWS;
     },
   });
-  Doh.meld_objects(Doh.DeprecatedIdeaKeys, {
+  Doh.meld_objects(Doh.WatchedKeys, {
     append_phase:{
-      RenameTo:'html_phase',
-      //Run:function(idea){},
-      //Throw:"Why doesn't this work??"
+      rename:'html_phase',
+      //run:function(idea){},
+      //throw:"Why doesn't this work??"
     },
     pre_append_phase:{
-      RenameTo:'pre_html_phase',
-      //Run:function(idea){},
-      //Throw:"Why doesn't this work??"
+      rename:'pre_html_phase',
+      //run:function(idea){},
+      //throw:"Why doesn't this work??"
     }
   });
 
-  Doh.meld_objects(Doh.DeprecatedIdeaPhases, {
+  Doh.meld_objects(Doh.WatchedPhases, {
     append_phase:{
-      RenameTo:'html_phase',
-      //Throw:"Why doesn't this work??"
+      rename:'html_phase',
+      //throw:"Why doesn't this work??"
     },
   });
   // refresh the window sizes as soon as possible
