@@ -824,7 +824,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
           // we could not find at least one pattern
           // default to object
          Doh.error('New idea had no inherits OR no pattern was found, default pattern to "object"',idea);
-         //Doh.error('New idea had no inherits OR no pattern was found, default pattern to "object"',idea);
+         
          idea.pattern = 'object';
         }
       }
@@ -871,6 +871,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
       // do we need to setup watches?
       var proxy = false, setters = {}, getters = {}, keys, watcher, set_stack = [], get_stack = [];
       for(let ancestor in object.inherited){
+        // look for setters by pattern and key
         keys = Doh.WatchedKeySetters[ancestor];
         if(keys){
           watcher = '';
@@ -884,8 +885,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
             setters[watcher] = true;
           }
         }
-        
-        
+        // look for getters by pattern and key
         keys = Doh.WatchedKeyGetters[ancestor];
         if(keys){
           watcher = '';
@@ -2020,6 +2020,49 @@ Doh.type_of(unet.uNetNodes['1-1'])
 	};
 }));
 
+OnCoreLoaded(function(){
+  // welcome to the wild west of Limbo
+  Doh.meld_objects(Doh.WatchedKeys, {
+    append_phase:{
+      rename:'html_phase',
+      //run:function(idea){},
+      //throw:"Why doesn't this work??"
+    },
+    pre_append_phase:{
+      rename:'pre_html_phase',
+      //run:function(idea){},
+      //throw:"Why doesn't this work??"
+    }
+  });
+
+  Doh.meld_objects(Doh.WatchedPhases, {
+    append_phase:{
+      rename:'html_phase',
+      //throw:"Why doesn't this work??"
+    },
+  });
+  
+  Doh.meld_objects(Doh.WatchedKeySetters, {
+    uNetDevice:{
+      tag:function(obj, prop, value){
+        Doh.error('watching html tag setter:', obj, prop, value);
+      },
+      root_address:function(obj, prop, value){
+        Doh.error('watching html root_address setter:', obj, prop, value);
+      }
+    }
+  });
+  /*
+  Doh.meld_objects(Doh.WatchedKeyGetters, {
+    uNetDevice:{
+      root_address:function(target, prop, receiver){
+        Doh.error('watching html root_address getter:', target, prop, receiver);
+      }
+    }
+  });
+  */
+  
+});
 OnLoad('/doh_js/html', function($){
   var jWin = $(window);
   Doh.meld_objects(Doh, {
@@ -2085,46 +2128,7 @@ OnLoad('/doh_js/html', function($){
       return DWS;
     },
   });
-  
-  Doh.meld_objects(Doh.WatchedKeys, {
-    append_phase:{
-      rename:'html_phase',
-      //run:function(idea){},
-      //throw:"Why doesn't this work??"
-    },
-    pre_append_phase:{
-      rename:'pre_html_phase',
-      //run:function(idea){},
-      //throw:"Why doesn't this work??"
-    }
-  });
 
-  Doh.meld_objects(Doh.WatchedPhases, {
-    append_phase:{
-      rename:'html_phase',
-      //throw:"Why doesn't this work??"
-    },
-  });
-  
-  Doh.meld_objects(Doh.WatchedKeySetters, {
-    uNetDevice:{
-      tag:function(obj, prop, value){
-        Doh.error('watching html tag setter:', obj, prop, value);
-      },
-      root_address:function(obj, prop, value){
-        Doh.error('watching html root_address setter:', obj, prop, value);
-      }
-    }
-  });
-  /*
-  Doh.meld_objects(Doh.WatchedKeyGetters, {
-    uNetDevice:{
-      root_address:function(target, prop, receiver){
-        Doh.error('watching html root_address getter:', target, prop, receiver);
-      }
-    }
-  });
-  */
   // refresh the window sizes as soon as possible
   Doh.refresh_win();
 

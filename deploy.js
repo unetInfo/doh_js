@@ -692,6 +692,11 @@ Doh = {
     
     Doh.jQuery(function($){
       DohWatchUpdate('After Doh core has loaded');
+      // run OnCoreLoadedQueue
+      for(let i in Doh.OnCoreLoadedQueue){
+        if(i === 'length') continue;
+        Doh.OnCoreLoadedQueue[i]();
+      }
       // run deferred modules, 
       for(var module_name in Doh.ModuleWasDeferred) {
         // this call is to a closure wrapper around the actual callback
@@ -728,7 +733,17 @@ Doh.load_css = Doh.load_script;
 // We always add Doh and glob to DohWatch. It was created to expose global namespace pollution.      
 DohWatch.Doh = Doh;
 
-
+Doh.OnCoreLoadedQueue = [];
+window.OnCoreLoaded = window.OnCoreLoaded || function(callback){
+  if(Doh.IsLoaded) {
+    Doh.log('OnCoreLoaded was called after Doh.IsLoaded:',callback);
+    callback();
+  }
+  else {
+    console.log('OnCoreLoaded was called before Doh.IsLoaded:',callback);
+    Doh.OnCoreLoadedQueue.push(callback);
+  }
+}
 // a method for running a named module, with requirements
 // always process requires, wait for Doh to load, then run callback
 // can be overloaded to allow skipping the load process
