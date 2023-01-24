@@ -736,7 +736,7 @@ DohWatch.Doh = Doh;
 Doh.OnCoreLoadedQueue = [];
 window.OnCoreLoaded = window.OnCoreLoaded || function(callback){
   if(Doh.IsLoaded) {
-    Doh.log('OnCoreLoaded was called after Doh.IsLoaded:',callback);
+    Doh.log('OnCoreLoaded was called after Doh.IsLoaded but before modules have finished:',callback);
     callback();
   }
   else {

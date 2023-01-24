@@ -189,16 +189,23 @@ OnLoad('/doh_js/core', function($){
     _log: function(args, log_type, logger_method, logger){
       log_type = log_type || '';
       logger_method = logger_method || 'log';
+      //if(logger_method === 'log') logger_method = 'trace';
       logger = logger || console;
       var logger_args = [log_type];
       for(var i in args){
         if(i === 'length') continue;
         logger_args.push(args[i]);
       }
-      logger[logger_method].apply(logger, logger_args);
+      if(logger_method === 'trace'){
+        logger.groupCollapsed(...logger_args);
+        logger.trace();
+        logger.groupEnd();
+      } else {
+        logger[logger_method](...logger_args);
+      }
     },
     log: function(){
-      Doh._log(arguments, 'Doh:', 'log');
+      Doh._log(arguments, 'Doh:', 'trace');
     },
     /**
      *  @brief return a custom Doh error
@@ -868,6 +875,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
         Doh.see_pattern_keys(idea);
       }
       
+      var originalObject = object;
       // do we need to setup watches?
       var proxy = false, setters = {}, getters = {}, keys, watcher, set_stack = [], get_stack = [];
       for(let ancestor in object.inherited){
@@ -879,7 +887,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
             set_stack.push((function(keys, watcher, target, prop, value){
               if(watcher === prop)
                 keys[watcher](target, prop, value);
-            }).bind(object.__original__, keys, watcher));
+            }).bind(originalObject, keys, watcher));
             // someone wants us to have a proxy
             proxy = true;
             setters[watcher] = true;
@@ -893,7 +901,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
             get_stack.push((function(keys, watcher, obj, prop, receiver){
               if(watcher === prop)
                 keys[watcher](obj, prop, receiver);
-            }).bind(object.__original__, keys, watcher));
+            }).bind(originalObject, keys, watcher));
             // someone wants us to have a proxy
             proxy = true;
             getters[watcher] = true;
@@ -923,15 +931,15 @@ Doh.type_of(unet.uNetNodes['1-1'])
                 command_value = Doh.WatchedPhases[deprecated_phase][command];
                 switch(command){
                   case 'rename':
-                    Doh.warn('Deprecated Idea Phase:',deprecated_phase,'. It will:',command,':',command_value,object);
+                    Doh.warn('Watched Phase:',deprecated_phase,' will:',command,':',command_value,object);
                     phase = command_value;
                     break;
                   case 'throw':
                     // throw an error so we can trace from here
-                    throw Doh.error('Deprecated Idea Phase:',deprecated_phase, 'wants to be thrown. It said:',command_value,object);
+                    throw Doh.error('Watched Phase:',deprecated_phase, 'wants to be thrown. It said:',command_value,object);
                     break;
                   case 'run':
-                    Doh.warn('Deprecated Idea Phase:',deprecated_phase,'. It will:',command,':',command_value,object);
+                    Doh.warn('Watched Phase:',deprecated_phase,' will:',command,':',command_value,object);
                     command_value(object);
                     break;
                 }
@@ -1078,18 +1086,18 @@ Doh.type_of(unet.uNetNodes['1-1'])
                 case 'log':
                 case 'warn':
                 case 'error':
-                  Doh[command]('watch_pattern_keys:',pattern_prop,'wants to',command,':',command_value,idea);
+                  Doh[command]('WatchedKeys:',pattern_prop,'wants to',command,':',command_value,idea);
                   break;
                 case 'throw':
                   // throw an error so we can trace from here
-                  throw Doh.error('watch_pattern_keys:',pattern_prop, 'wants to be thrown. It said:',command_value,idea);
+                  throw Doh.error('WatchedKeys:',pattern_prop, 'wants to be thrown. It said:',command_value,idea);
                   break;
                 case 'run':
-                  Doh[logger_method]('watch_pattern_keys:',pattern_prop,'. It will:',command,':',command_value,idea);
+                  Doh[logger_method]('WatchedKeys:',pattern_prop,'will:',command,':',command_value,idea);
                   command_value(idea);
                   break;
                 case 'rename':
-                  Doh[logger_method]('watch_pattern_keys:',pattern_prop,'. It will:',command,':',command_value,idea);
+                  Doh[logger_method]('WatchedKeys:',pattern_prop,'will:',command,':',command_value,idea);
                   if(idea.melded?.[pattern_prop]){
                     idea.melded[command_value] = idea.melded[pattern_prop];
                     idea.melded[pattern_prop] = null;
@@ -1099,7 +1107,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
                   idea[command_value] = idea[pattern_prop];
                   break;
                 case 'remove':
-                  Doh[logger_method]('watch_pattern_keys:',pattern_prop,'. It will:',command,':',command_value,idea);
+                  Doh[logger_method]('WatchedKeys:',pattern_prop,'will:',command,':',command_value,idea);
                   if(idea.melded?.[pattern_prop]){
                     idea.melded[command_value] = idea.melded[pattern_prop];
                     idea.melded[pattern_prop] = null;
@@ -2041,7 +2049,7 @@ OnCoreLoaded(function(){
       //throw:"Why doesn't this work??"
     },
   });
-  
+  /*
   Doh.meld_objects(Doh.WatchedKeySetters, {
     uNetDevice:{
       tag:function(obj, prop, value){

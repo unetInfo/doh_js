@@ -1,4 +1,47 @@
 
+OnCoreLoaded(function(){
+  // welcome to the wild west of Limbo
+  Doh.meld_objects(Doh.WatchedKeys, {
+    append_phase:{
+      rename:'html_phase',
+      //run:function(idea){},
+      //throw:"Why doesn't this work??"
+    },
+    pre_append_phase:{
+      rename:'pre_html_phase',
+      //run:function(idea){},
+      //throw:"Why doesn't this work??"
+    }
+  });
+
+  Doh.meld_objects(Doh.WatchedPhases, {
+    append_phase:{
+      rename:'html_phase',
+      //throw:"Why doesn't this work??"
+    },
+  });
+  /*
+  Doh.meld_objects(Doh.WatchedKeySetters, {
+    uNetDevice:{
+      tag:function(obj, prop, value){
+        Doh.error('watching html tag setter:', obj, prop, value);
+      },
+      root_address:function(obj, prop, value){
+        Doh.error('watching html root_address setter:', obj, prop, value);
+      }
+    }
+  });
+  /*
+  Doh.meld_objects(Doh.WatchedKeyGetters, {
+    uNetDevice:{
+      root_address:function(target, prop, receiver){
+        Doh.error('watching html root_address getter:', target, prop, receiver);
+      }
+    }
+  });
+  */
+  
+});
 OnLoad('/doh_js/html', function($){
   var jWin = $(window);
   Doh.meld_objects(Doh, {
@@ -92,6 +135,7 @@ OnLoad('/doh_js/html', function($){
       control_phase:'phase'
     },
     control_phase: function(){
+      if(!this.control)if(this.parental_name) this.control = this.parental_name;
       // if we have a control name
       if(this.control){
         // find the controller
@@ -119,6 +163,7 @@ OnLoad('/doh_js/html', function($){
   Pattern = Doh.pattern = function(name, inherits, idea) {
   //let off = function(name, inherits, idea) {
     var newPattern = originalPatternize(name, inherits, idea);
+    if(!newPattern) return;
     if(SeeIf.NotEmptyObject(newPattern.css) || SeeIf.HasValue(newPattern.style)){
       // build a class from .css and .style here
       // create a class name
@@ -291,18 +336,20 @@ OnLoad('/doh_js/html', function($){
         this.machine_children_to = this._machine_children_to;
         // if this is already past then we need to be append phase
       } else {
-        // tell the append to machine children to append_phase
-        this.machine_children_to = 'append_phase';
+        // tell the append to machine children to html_phase
+        this.machine_children_to = 'html_phase';
       }
     },
     html_phase:function(){
-      // as long as we haven't already appended
-      if(!this.machine.append_phase) {
+      // as long as we haven't already appended:
+      if(!this.machine.completed.html_phase) {
         
         // convert the parent to a doh object if not already one
         if( typeof this.parent === 'string' || this.parent instanceof Doh.jQuery) {
+          Doh.warn('html_phase found a parent:',this.parent,'that was a string or jQuery instance');
           this.parent = Doh.get_dobj(this.parent);
         }
+        
         // if this is a string, convert it to a jQuery object
         if( typeof this.e === 'string' ) {
           this.e = $(this.e);
@@ -310,7 +357,9 @@ OnLoad('/doh_js/html', function($){
           this.e[0].dobj = this;
         }
       }
+      // every time html phase is called:
       if(!this.parent.e){
+        Doh.warn('html_phase found a parent:',this.parent,'that has no .e:',this.parent.e);
         this.parent = Doh.get_dobj(this.parent);
       }
       // put in parent (can be used to relocate as well)
@@ -321,6 +370,10 @@ OnLoad('/doh_js/html', function($){
       if(this.control && !this.attrs.title && ! this.e.attr('title')){
         Doh.UntitledControls = Doh.UntitledControls || {};
         Doh.UntitledControls[this.id]=this;
+      }
+      
+      if(Doh.FixDeprecated){
+        this.machine.completed.append_phase = true;
       }
     },
     get_style:function(){
@@ -393,7 +446,6 @@ OnLoad('/doh_js/html', function($){
   Pattern('HTMLPosition', 'element', {
     melded:{position:'object'},
     position:{},
-    //meld_objects:['position'],
     place:function(opts){
       opts = opts || this.position;
       let newOpts = {};
@@ -469,8 +521,6 @@ OnLoad('/doh_js/html', function($){
       animation_phase:'phase',
       animation_options:'object'
     },
-    //meld_objects: ['animation_options'],
-    //phases:['animation_phase'],
     animation_phase: function() {
       this.queue = this.queue || 'doh';
       if(!Doh.AnimationQueues[this.queue])Doh.AnimationQueues[this.queue]=[];
@@ -539,7 +589,6 @@ OnLoad('/doh_js/html', function($){
     tag: 'button',
     available_properties: {'value':'label of the button', 'button_options':'jQuery UI Button options object'},
     melded:{button_options:'object'},
-    //meld_objects: ['button_options'],
     button_options: {},
     pre_parenting_phase: function(){
       if (typeof this.value !== 'undefined' && typeof this.button_options.label == 'undefined') this.button_options.label = this.value;
@@ -559,7 +608,6 @@ OnLoad('/doh_js/html', function($){
     click_animation:['fadeOut',function(){if(this.next_queue)Doh.run_animation_queue(this.next_queue);}],
     next_queue:false,
     melded:{click:'method'},
-    //meld_methods:['click'],
     html_phase:function(){
       this.click_queue = this.click_queue || this.id+'_click';
       this.original_queue = this.queue;
@@ -725,7 +773,6 @@ OnLoad('/doh_js/html', function($){
   Pattern('slider', 'element', {
     available_properties: {'slider_options':'jQuery UI Slider options object'},
     melded:{slider_options:'object'},
-    //meld_objects: ['slider_options'],
     slider_options: {},
     html_phase: function(){
       this.e.slider(this.slider_options);
@@ -759,6 +806,7 @@ OnLoad('/doh_js/html', function($){
     },
     set_src: function(src_path) {
       this.src_path =  src_path;
+      Doh.log('set_src',this.src_path);
       this.e[0].setAttribute('src',this.src_path);
     }
   });
@@ -857,7 +905,6 @@ OnLoad('/doh_js/html', function($){
 
   Pattern('dialog', 'element', {
     melded:{dialog_options:'object'},
-    //meld_objects:['dialog_options'],
     dialog_options:{height:'auto',width:'auto'},
     html_phase: function(){
       /*
@@ -919,7 +966,6 @@ OnLoad('/doh_js/html', function($){
 
   Pattern('drag', 'element', {
     melded:{drag_start:'method',drag_drag:'method',drag_stop:'method'},
-    //meld_methods:['drag_start','drag_drag','drag_stop'],
     css: {cursor: "move"},
     drag_start:function(event, ui){
       this._original_z_index = this.e.css("z-index");
@@ -957,7 +1003,6 @@ OnLoad('/doh_js/html', function($){
       resize:'method',
       resize_stop:'method'
     },
-    //meld_methods:['resize_start','resize','resize_stop'],
     resize_start:function(event, ui){
     },
     resize:function(event, ui) {
@@ -974,14 +1019,13 @@ OnLoad('/doh_js/html', function($){
     enableResize: function() {
       this.e.resizable('enable');
     },
-    disableDResize: function() {
+    disableResize: function() {
       this.e.resizable('disable');
     },
   });
 
   Pattern('hover', 'element', {
     melded:{hover_over:'method',hover_out:'method'},
-    //meld_methods:['hover_over','hover_out'],
     hover_over: function(){},
     hover_out: function(){},
     html_phase: function(){
@@ -996,7 +1040,6 @@ OnLoad('/doh_js/html', function($){
 
   Pattern('hover_delayed', 'element', {
     delay_time_ms: 600,
-    //meld_methods:['hover_over','hover_out'],
     melded:{hover_over:'method',hover_out:'method'},
     _timer: null,
     delays_hover_over: function() {
