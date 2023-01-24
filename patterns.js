@@ -1603,6 +1603,50 @@ Doh.type_of(unet.uNetNodes['1-1'])
 
 }, 'glob');
 
+/*
+ * Collection of fixes that apply to core Doh modules that aren't core itself.
+ * We cannot make the core work with old stuff. Instead, we upgrade the old stuff to work with the new core
+ */
+// fix old melders
+OnCoreLoaded(function(){
+  /*
+   * Fixes for changing meld_arrays, meld_objects, meld_methods, and phases to .melded
+   */
+  var fix_old_melders = function(old_melder, meld_type, idea){
+    // fix old meld_ melders to be new .melded style
+    idea.melded = idea.melded || {};
+    if(idea[old_melder]){
+      // if there are meld_arrays
+      if(idea[old_melder].length){
+        // walk the old meld_arrays
+        for(let i in idea[old_melder]){
+          // add them to the new melded system
+          idea.melded[idea[old_melder][i]] = meld_type;
+        }
+      }
+    }
+  }
+  Doh.meld_objects(Doh.WatchedKeys, {
+    meld_arrays:{
+      // we only get run if there is a meld_arrays key
+      run:fix_old_melders.bind(window, 'meld_arrays','array'),
+      remove:true
+    },
+    meld_objects:{
+      run:fix_old_melders.bind(window, 'meld_objects','object'),
+      remove:true
+    },
+    meld_methods:{
+      run:fix_old_melders.bind(window, 'meld_methods','method'),
+      remove:true
+    },
+    phases:{
+      run:fix_old_melders.bind(window, 'phases','phase'),
+      remove:true
+    }
+  });
+});
+
 /**
  * jQuery plugin for adding, removing and making changes to CSS rules
  * 
@@ -2029,6 +2073,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
 	};
 }));
 
+// fix append_phase
 OnCoreLoaded(function(){
   /*
    * Fixes for changing append_phase to html_phase
@@ -2040,44 +2085,6 @@ OnCoreLoaded(function(){
   Doh.meld_objects(Doh.WatchedPhases, {
     append_phase:{rename:'html_phase'},
   });
-  
-  /*
-   * Fixes for changing meld_arrays, meld_objects, meld_methods, and phases to .melded
-   */
-  var fix_old_melders = function(old_melder, meld_type, idea){
-    idea.melded = idea.melded || {};
-    if(idea[old_melder]){
-      // if there are meld_arrays
-      if(idea[old_melder].length){
-        // walk the old meld_arrays
-        for(let i in idea[old_melder]){
-          // add them to the new melded system
-          idea.melded[idea[old_melder][i]] = meld_type;
-        }
-      }
-    }
-  }
-  Doh.meld_objects(Doh.WatchedKeys, {
-    meld_arrays:{
-      // we only get run if there is a meld_arrays key
-      run:fix_old_melders.bind(window, 'meld_arrays','array'),
-      remove:true
-    },
-    meld_objects:{
-      run:fix_old_melders.bind(window, 'meld_objects','object'),
-      remove:true
-    },
-    meld_methods:{
-      run:fix_old_melders.bind(window, 'meld_methods','method'),
-      remove:true
-    },
-    phases:{
-      run:fix_old_melders.bind(window, 'phases','phase'),
-      remove:true
-    }
-  });
-
-  
 });
 
 OnLoad('/doh_js/html', function($){
