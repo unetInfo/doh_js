@@ -823,8 +823,8 @@ Doh.type_of(unet.uNetNodes['1-1'])
         if(!Patterns[idea.pattern]) {
           // we could not find at least one pattern
           // default to object
-         //throw Doh.error('New idea had no inherits OR no pattern was found, default pattern to "object"',idea);
          Doh.error('New idea had no inherits OR no pattern was found, default pattern to "object"',idea);
+         //Doh.error('New idea had no inherits OR no pattern was found, default pattern to "object"',idea);
          idea.pattern = 'object';
         }
       }
@@ -843,7 +843,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
 
       // add the pattern last
       if(idea.pattern) patterns[idea.pattern] = true;
-
+      
       // mixin each pattern
       i = '';
       for(i in patterns){
@@ -885,7 +885,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
           }
         }
         
-        /*
+        
         keys = Doh.WatchedKeyGetters[ancestor];
         if(keys){
           watcher = '';
@@ -899,36 +899,15 @@ Doh.type_of(unet.uNetNodes['1-1'])
             getters[watcher] = true;
           }
         }
-        */
       }
+      
       //proxy = false;
       if(proxy === true){
-        object.__handler__ = {};
-        //object.__handler__.has = function(target, key) {return key in target;};
-        //object.__handler__.ownKeys = function(target) {return Reflect.ownKeys(target);};
-        
-        object.__handler__.melded_set = Doh.meld_method(object, set_stack);
-        object.__handler__.set = function(target, prop, value){
-          if(prop === '__original__') return target;
-          if(setters[prop]){ 
-            //throw Doh.error('setter stuff:',object,target,prop,value);
-            target.__handler__.melded_set(...arguments);
-          }
-          return Reflect.set(...arguments);
-        };
-        /*
-        object.__handler__.melded_get = Doh.meld_method(object, get_stack);
-        object.__handler__.get = function(target, prop){
-          if(prop === '__original__') return target;
-          if(getters[prop]){ 
-            //throw Doh.error('getter stuff:',object,target,prop,receiver);
-            target.__handler__.melded_get(...arguments);
-          }
-          return Reflect.get(...arguments);
-        };
-        */
+        // we need the proxy reference early, but late-binding the handlers should be fine
+        var originalObject = object;
+        originalObject.__handler__ = {};
         // we replace object here so that the rest of the system will use it in their closures
-        object = new Proxy(object, object.__handler__);
+        object = new Proxy(originalObject, originalObject.__handler__);
       }
 
       // attach the object machine
@@ -943,17 +922,17 @@ Doh.type_of(unet.uNetNodes['1-1'])
               for(command in Doh.WatchedPhases[deprecated_phase]){
                 command_value = Doh.WatchedPhases[deprecated_phase][command];
                 switch(command){
-                  case 'RenameTo':
-                    Doh.warn('Deprecated Idea Phase:',deprecated_phase,'. It will:',command,':',command_value,idea);
+                  case 'rename':
+                    Doh.warn('Deprecated Idea Phase:',deprecated_phase,'. It will:',command,':',command_value,object);
                     phase = command_value;
                     break;
-                  case 'Throw':
+                  case 'throw':
                     // throw an error so we can trace from here
-                    throw Doh.error('Deprecated Idea Phase:',deprecated_phase, 'wants to be thrown. It said:',command_value,idea);
+                    throw Doh.error('Deprecated Idea Phase:',deprecated_phase, 'wants to be thrown. It said:',command_value,object);
                     break;
-                  case 'Run':
-                    Doh.warn('Deprecated Idea Phase:',deprecated_phase,'. It will:',command,':',command_value,idea);
-                    command_value(idea);
+                  case 'run':
+                    Doh.warn('Deprecated Idea Phase:',deprecated_phase,'. It will:',command,':',command_value,object);
+                    command_value(object);
                     break;
                 }
               }
@@ -961,26 +940,27 @@ Doh.type_of(unet.uNetNodes['1-1'])
           }
         }
         // go through the phases to the one specified, or the last
-        for(let phase_name in this.melded){
-          if(this.melded[phase_name] === 'phase'){
+        for(let phase_name in object.melded){
+          if(object.melded[phase_name] === 'phase'){
             // as long as the phase hasn't been run
-            if(!this.machine.completed[phase_name]){
+            if(!object.machine.completed[phase_name]){
               // update the phase we are on
-              this.machine.phase = phase_name;
+              object.machine.phase = phase_name;
               // mark it as false to indicate that it's running
-              this.machine.completed[phase_name] = false;
+              object.machine.completed[phase_name] = false;
               // run the phase
-              this[phase_name].apply(this);
+              object[phase_name].apply(object);
               // mark it as run
-              this.machine.completed[phase_name] = true;
+              object.machine.completed[phase_name] = true;
             }
             // if this is the phase we are building to, then exit here
-            if(phase_name == phase) return this;
+            if(phase_name == phase) return object;
           }
         }
         // always return the object. New() relies on this.
-        return this;
+        return object;
       };
+      //object.machine = object.machine.bind(object);
       object.machine.completed = {};
 
       // add the idea to the object
@@ -999,9 +979,33 @@ Doh.type_of(unet.uNetNodes['1-1'])
       //fix the perspective method
       object.perspective = Doh.perspective.bind(object, object);
       
-      // if we are proxied, return that
+      // now we can add the handlers, since the object is finished being constructed and is ready to go through phases
       if(proxy === true){
-        return object.machine(phase).__proxy__;
+        //__handler__.has = function(target, key) {return key in target;};
+        //__handler__.ownKeys = function(target) {return Reflect.ownKeys(target);};
+        
+        // use a fancy melded_method to apply our stack of methods to each set call
+        originalObject.__handler__.melded_set = Doh.meld_method(originalObject, set_stack);
+        originalObject.__handler__.set = function(target, prop, value){
+          if(prop === '__original__') return target;
+          if(setters[prop]){ 
+            //throw Doh.error('setter stuff:',object,target,prop,value);
+            // in here, the target is the 
+            target.__handler__.melded_set(...arguments);
+          }
+          return Reflect.set(...arguments);
+        };
+        
+        originalObject.__handler__.melded_get = Doh.meld_method(originalObject, get_stack);
+        originalObject.__handler__.get = function(target, prop){
+          if(prop === '__original__') return target;
+          if(getters[prop]){ 
+            //throw Doh.error('getter stuff:',object,target,prop,receiver);
+            target.__handler__.melded_get(...arguments);
+          }
+          return Reflect.get(...arguments);
+        };
+        
       }
 
       // run the machine to the specified phase and return the object
@@ -1031,11 +1035,6 @@ Doh.type_of(unet.uNetNodes['1-1'])
       }*/
     },
     WatchedKeySetters:{
-      uNetDevice:{
-        tag:function(obj, prop, value){
-          Doh.error('watching html tag setter:', obj, prop, value);
-        }
-      }
       /*
       'pattern1':{
         'key1':function(obj, prop, value){},
@@ -1047,14 +1046,8 @@ Doh.type_of(unet.uNetNodes['1-1'])
       },
       */
     },
-    
     WatchedKeyGetters:{
       /*
-      element:{
-        tag:function(obj, prop, value){
-          Doh.error('watching html tag getter:', obj, prop, value);
-        }
-      }
       'pattern1':{
         'key1':function(target, prop, receiver){},
         'key1':function(target, prop, receiver){},
@@ -2092,6 +2085,7 @@ OnLoad('/doh_js/html', function($){
       return DWS;
     },
   });
+  
   Doh.meld_objects(Doh.WatchedKeys, {
     append_phase:{
       rename:'html_phase',
@@ -2111,6 +2105,26 @@ OnLoad('/doh_js/html', function($){
       //throw:"Why doesn't this work??"
     },
   });
+  
+  Doh.meld_objects(Doh.WatchedKeySetters, {
+    uNetDevice:{
+      tag:function(obj, prop, value){
+        Doh.error('watching html tag setter:', obj, prop, value);
+      },
+      root_address:function(obj, prop, value){
+        Doh.error('watching html root_address setter:', obj, prop, value);
+      }
+    }
+  });
+  /*
+  Doh.meld_objects(Doh.WatchedKeyGetters, {
+    uNetDevice:{
+      root_address:function(target, prop, receiver){
+        Doh.error('watching html root_address getter:', target, prop, receiver);
+      }
+    }
+  });
+  */
   // refresh the window sizes as soon as possible
   Doh.refresh_win();
 
@@ -2160,7 +2174,6 @@ OnLoad('/doh_js/html', function($){
       //if(this.machine_children_to === 'control_phase') this.machine_children(this.machine_children_to);
     },
   });
-  
   
   var CSSClassCache = {};
   let originalPatternize = Doh.pattern;
