@@ -156,6 +156,9 @@ OnLoad('/doh_js/core', function($){
     ModulePatterns: {},
     PatternModule: {},
 
+    // work on pattern for watching any key setter and getter
+    
+
     //return items from the elems array that pass callback
     grep: function( elems, callback, inv ) {
       var ret = [];
@@ -445,8 +448,6 @@ OnLoad('/doh_js/core', function($){
     },
     // update meld_methods and phases of obj
     update_meld_methods: function(obj){
-      //let mms = obj.meld_methods || [], melders = [...mms, ...obj.phases], len = melders.length;
-      //for(let i=0;i<len;i++){
       for(let melded_prop in obj.melded){
         if(obj.melded[melded_prop] === 'method' || obj.melded[melded_prop] === 'phase'){
           // conditionally update only the method stack
@@ -2029,48 +2030,56 @@ Doh.type_of(unet.uNetNodes['1-1'])
 }));
 
 OnCoreLoaded(function(){
-  // welcome to the wild west of Limbo
+  /*
+   * Fixes for changing append_phase to html_phase
+   */
   Doh.meld_objects(Doh.WatchedKeys, {
-    append_phase:{
-      rename:'html_phase',
-      //run:function(idea){},
-      //throw:"Why doesn't this work??"
+    append_phase:{rename:'html_phase'},
+    pre_append_phase:{rename:'pre_html_phase'}
+  });
+  Doh.meld_objects(Doh.WatchedPhases, {
+    append_phase:{rename:'html_phase'},
+  });
+  
+  /*
+   * Fixes for changing meld_arrays, meld_objects, meld_methods, and phases to .melded
+   */
+  var fix_old_melders = function(old_melder, meld_type, idea){
+    idea.melded = idea.melded || {};
+    if(idea[old_melder]){
+      // if there are meld_arrays
+      if(idea[old_melder].length){
+        // walk the old meld_arrays
+        for(let i in idea[old_melder]){
+          // add them to the new melded system
+          idea.melded[idea[old_melder][i]] = meld_type;
+        }
+      }
+    }
+  }
+  Doh.meld_objects(Doh.WatchedKeys, {
+    meld_arrays:{
+      // we only get run if there is a meld_arrays key
+      run:fix_old_melders.bind(window, 'meld_arrays','array'),
+      remove:true
     },
-    pre_append_phase:{
-      rename:'pre_html_phase',
-      //run:function(idea){},
-      //throw:"Why doesn't this work??"
+    meld_objects:{
+      run:fix_old_melders.bind(window, 'meld_objects','object'),
+      remove:true
+    },
+    meld_methods:{
+      run:fix_old_melders.bind(window, 'meld_methods','method'),
+      remove:true
+    },
+    phases:{
+      run:fix_old_melders.bind(window, 'phases','phase'),
+      remove:true
     }
   });
 
-  Doh.meld_objects(Doh.WatchedPhases, {
-    append_phase:{
-      rename:'html_phase',
-      //throw:"Why doesn't this work??"
-    },
-  });
-  /*
-  Doh.meld_objects(Doh.WatchedKeySetters, {
-    uNetDevice:{
-      tag:function(obj, prop, value){
-        Doh.error('watching html tag setter:', obj, prop, value);
-      },
-      root_address:function(obj, prop, value){
-        Doh.error('watching html root_address setter:', obj, prop, value);
-      }
-    }
-  });
-  /*
-  Doh.meld_objects(Doh.WatchedKeyGetters, {
-    uNetDevice:{
-      root_address:function(target, prop, receiver){
-        Doh.error('watching html root_address getter:', target, prop, receiver);
-      }
-    }
-  });
-  */
   
 });
+
 OnLoad('/doh_js/html', function($){
   var jWin = $(window);
   Doh.meld_objects(Doh, {
