@@ -2593,7 +2593,8 @@ OnLoad('/doh_js/html', function($){
   Pattern('textarea', ['input'], {
     available_properties:{'value':'string to put in the textarea'},
     tag: 'textarea',
-    html_phase: function () {
+    attrs: {spellcheck: 'false'},
+   html_phase: function () {
       if (typeof this.value !== 'undefined')
         this.e.val(this.value);
     }
