@@ -1,47 +1,4 @@
 
-OnCoreLoaded(function(){
-  // welcome to the wild west of Limbo
-  Doh.meld_objects(Doh.WatchedKeys, {
-    append_phase:{
-      rename:'html_phase',
-      //run:function(idea){},
-      //throw:"Why doesn't this work??"
-    },
-    pre_append_phase:{
-      rename:'pre_html_phase',
-      //run:function(idea){},
-      //throw:"Why doesn't this work??"
-    }
-  });
-
-  Doh.meld_objects(Doh.WatchedPhases, {
-    append_phase:{
-      rename:'html_phase',
-      //throw:"Why doesn't this work??"
-    },
-  });
-  /*
-  Doh.meld_objects(Doh.WatchedKeySetters, {
-    uNetDevice:{
-      tag:function(obj, prop, value){
-        Doh.error('watching html tag setter:', obj, prop, value);
-      },
-      root_address:function(obj, prop, value){
-        Doh.error('watching html root_address setter:', obj, prop, value);
-      }
-    }
-  });
-  /*
-  Doh.meld_objects(Doh.WatchedKeyGetters, {
-    uNetDevice:{
-      root_address:function(target, prop, receiver){
-        Doh.error('watching html root_address getter:', target, prop, receiver);
-      }
-    }
-  });
-  */
-  
-});
 OnLoad('/doh_js/html', function($){
   var jWin = $(window);
   Doh.meld_objects(Doh, {
@@ -372,7 +329,7 @@ OnLoad('/doh_js/html', function($){
         Doh.UntitledControls[this.id]=this;
       }
       
-      if(Doh.FixDeprecated){
+      if(Doh.DebugMode){
         this.machine.completed.append_phase = true;
       }
     },

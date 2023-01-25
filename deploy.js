@@ -752,8 +752,8 @@ window.OnLoad = window.OnLoad || function(module_name, requires, callback, globa
   // Doh is only the object defined above, or already loaded somehow (this should not happen)
   
   // mark the module as loading with explicit false
-  if(Doh.ModuleIsLoaded[module_name]) {
-    throw console.error('FATAL: two OnLoad functions for the same module:', module_name);
+  if(Doh.ModuleIsLoaded[module_name] != undefined) {
+    console.error('FATAL: two OnLoad functions for the same module:', module_name);
     return;
   }
   else Doh.ModuleIsLoaded[module_name] = false;

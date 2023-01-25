@@ -1,5 +1,2 @@
-OnLoad('/doh_js/patterns', function($){
 
-  Doh.FixDeprecated = true;
-
-});
+OnLoad('/doh_js/patterns', function($){});

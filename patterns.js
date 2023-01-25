@@ -10,7 +10,7 @@ if(typeof global != 'undefined'){
 Doh = Doh || {};
 
   // This has to be very early. 
-  Doh.FixDeprecated = true;
+  Doh.DebugMode = true;
 
 if(typeof exports != 'undefined') {
   exports = top.Doh;
@@ -109,7 +109,8 @@ OnLoad('/doh_js/see_if', function($){
     'NotDohObject':(value) => `!InstanceOf(${value})`,
     'NotKeySafe':(value) => `!(typeof ${value} === 'string' || (typeof ${value} === 'number' && !isNaN(${value})))`,
     'NotEmptyString':(value) => `${value} !== ''`,
-    'LacksValue':(value) => `(typeof ${value} === 'undefined' || ${value} === null || ${value} === '')`
+    'LacksValue':(value) => `(typeof ${value} === 'undefined' || ${value} === null || ${value} === '')`,
+    'IsAnything':(value) => `true`,
   };
   Doh.meld_objects(SeeIf_Templates, {
     'NotDefined':SeeIf_Templates.IsUndefined,
@@ -437,6 +438,7 @@ OnLoad('/doh_js/core', function($){
         }
         return obj;
       };
+      melded_method.meld_stack = method_stack;
       melded_method.update_meld_stack = function(newStack){
         if(!newStack && method_name){
           method_stack = Doh.meld_method_stack(obj, method_name);
@@ -679,7 +681,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
         Doh.warn('(',name,') pattern is being overwritten.\nOriginal Module:',Doh.PatternModule[name],'\nNew Module:',Doh.ModuleCurrentlyRunning);
       }
       // we crawl the properties of idea to deprecated stuff, only do this if we have been told to:
-      if(Doh.FixDeprecated){
+      if(Doh.DebugMode){
         // just generates a bunch of warns and stuff with a few possible fixes. Should not be used in production.
         Doh.see_pattern_keys(idea);
       }
@@ -870,84 +872,101 @@ Doh.type_of(unet.uNetNodes['1-1'])
         object.inherits.push(i);
       }
       
+      // do we need a proxy?
+      let proxy = false,
+      // stash a reference to the original object we started making
+      originalObject = object,
+      // a way for our melded methods to tell the outer method that we care about a key
+      // keys are keys we care about, values must be true;
+      setters = {}, getters = {},
+      // local storage for loop iterators
+      keys, watcher,
+      // when we find the functions that watch an object, push to stack so the melder will pick it up
+      set_stack = [], get_stack = [];
+      
       // we crawl the properties of idea to deprecated stuff, only do this if we have been told to:
-      if(Doh.FixDeprecated){
+      if(Doh.DebugMode){
         // just generates a bunch of warns and stuff with a few possible fixes. Should not be used in production.
         Doh.see_pattern_keys(idea);
-      }
       
-      var originalObject = object;
-      // do we need to setup watches?
-      var proxy = false, setters = {}, getters = {}, keys, watcher, set_stack = [], get_stack = [];
-      for(let ancestor in object.inherited){
-        // look for setters by pattern and key
-        keys = Doh.WatchedKeySetters[ancestor];
-        if(keys){
-          watcher = '';
-          for(watcher in keys){
-            set_stack.push((function(keys, watcher, target, prop, value){
-              if(watcher === prop)
-                keys[watcher](target, prop, value);
-            }).bind(originalObject, keys, watcher));
-            // someone wants us to have a proxy
-            proxy = true;
-            setters[watcher] = true;
+        // do we need to setup watches?
+        for(let ancestor in object.inherited){
+          // look for setters by pattern and key
+          keys = Doh.WatchedKeySetters[ancestor];
+          if(keys){
+            watcher = '';
+            for(watcher in keys){
+              set_stack.push((function(keys, watcher, target, prop, value){
+                if(watcher === prop)
+                  keys[watcher](target, prop, value);
+              }).bind(originalObject, keys, watcher));
+              // someone wants us to have a proxy
+              proxy = true;
+              setters[watcher] = true;
+            }
+          }
+          // look for getters by pattern and key
+          keys = Doh.WatchedKeyGetters[ancestor];
+          if(keys){
+            watcher = '';
+            for(watcher in keys){
+              get_stack.push((function(keys, watcher, obj, prop, receiver){
+                if(watcher === prop)
+                  keys[watcher](obj, prop, receiver);
+              }).bind(originalObject, keys, watcher));
+              // someone wants us to have a proxy
+              proxy = true;
+              getters[watcher] = true;
+            }
           }
         }
-        // look for getters by pattern and key
-        keys = Doh.WatchedKeyGetters[ancestor];
-        if(keys){
-          watcher = '';
-          for(watcher in keys){
-            get_stack.push((function(keys, watcher, obj, prop, receiver){
-              if(watcher === prop)
-                keys[watcher](obj, prop, receiver);
-            }).bind(originalObject, keys, watcher));
-            // someone wants us to have a proxy
-            proxy = true;
-            getters[watcher] = true;
-          }
-        }
+      
+        //proxy = false;
+        //if(proxy === true){
+          // we need the proxy reference early, but late-binding the handlers should be fine
+          originalObject.__handler__ = {};
+          originalObject.__handler__.setters = setters;
+          originalObject.__handler__.getters = getters;
+          // we replace object here so that the rest of the system will use it in their closures
+          object = new Proxy(originalObject, originalObject.__handler__);
+        //}
       }
       
-      //proxy = false;
-      if(proxy === true){
-        // we need the proxy reference early, but late-binding the handlers should be fine
-        var originalObject = object;
-        originalObject.__handler__ = {};
-        // we replace object here so that the rest of the system will use it in their closures
-        object = new Proxy(originalObject, originalObject.__handler__);
-      }
-
       // attach the object machine
       object.machine = function(phase){
         
-        if(Doh.FixDeprecated){
-          let deprecated_phase, command, command_value;
-          for(let deprecated_phase in Doh.WatchedPhases){
-            if(deprecated_phase === phase){
+        if(Doh.DebugMode){
+          Doh.SeenPhases = Doh.SeenPhases || {};
+          let watched_phase, command, command_value;
+          for(let watched_phase in Doh.WatchedPhases){
+            if(watched_phase === phase){
+              Doh.SeenPhases[watched_phase] = Doh.SeenPhases[watched_phase] || {};
               command = '';
               command_value = '';
-              for(command in Doh.WatchedPhases[deprecated_phase]){
-                command_value = Doh.WatchedPhases[deprecated_phase][command];
+              for(command in Doh.WatchedPhases[watched_phase]){
+                command_value = Doh.WatchedPhases[watched_phase][command];
                 switch(command){
                   case 'rename':
-                    Doh.warn('Watched Phase:',deprecated_phase,' will:',command,':',command_value,object);
+                    if(!Doh.SeenPhases[watched_phase][object.pattern]) Doh.warn('Watched Phase:',watched_phase,'has been renamed to:',command_value,object);
                     phase = command_value;
                     break;
                   case 'throw':
                     // throw an error so we can trace from here
-                    throw Doh.error('Watched Phase:',deprecated_phase, 'wants to be thrown. It said:',command_value,object);
+                    throw Doh.error('Watched Phase:',watched_phase,'wants to be thrown. It said:',command_value,object);
                     break;
                   case 'run':
-                    Doh.warn('Watched Phase:',deprecated_phase,' will:',command,':',command_value,object);
-                    command_value(object);
+                    if(!Doh.SeenPhases[watched_phase][object.pattern]) Doh.warn('Watched Phase:',watched_phase,'will run:',command_value,object);
+                    command_value(object, phase);
                     break;
                 }
               }
+              // now that we've run all the commands once, we have "seen" it, so we don't need to blast the console
+              /// notify once per pattern that we have encountered watched phases
+              Doh.SeenPhases[watched_phase][object.pattern] = true;
             }
           }
         }
+        
         // go through the phases to the one specified, or the last
         for(let phase_name in object.melded){
           if(object.melded[phase_name] === 'phase'){
@@ -989,7 +1008,8 @@ Doh.type_of(unet.uNetNodes['1-1'])
       object.perspective = Doh.perspective.bind(object, object);
       
       // now we can add the handlers, since the object is finished being constructed and is ready to go through phases
-      if(proxy === true){
+      if(Doh.DebugMode){
+      //if(proxy === true){
         //__handler__.has = function(target, key) {return key in target;};
         //__handler__.ownKeys = function(target) {return Reflect.ownKeys(target);};
         
@@ -997,9 +1017,8 @@ Doh.type_of(unet.uNetNodes['1-1'])
         originalObject.__handler__.melded_set = Doh.meld_method(originalObject, set_stack);
         originalObject.__handler__.set = function(target, prop, value){
           if(prop === '__original__') return target;
-          if(setters[prop]){ 
+          if(target.__handler__.setters[prop]){ 
             //throw Doh.error('setter stuff:',object,target,prop,value);
-            // in here, the target is the 
             target.__handler__.melded_set(...arguments);
           }
           return Reflect.set(...arguments);
@@ -1008,13 +1027,56 @@ Doh.type_of(unet.uNetNodes['1-1'])
         originalObject.__handler__.melded_get = Doh.meld_method(originalObject, get_stack);
         originalObject.__handler__.get = function(target, prop){
           if(prop === '__original__') return target;
-          if(getters[prop]){ 
+          if(target.__handler__.getters[prop]){ 
             //throw Doh.error('getter stuff:',object,target,prop,receiver);
             target.__handler__.melded_get(...arguments);
           }
           return Reflect.get(...arguments);
         };
         
+        // thing.watch('a_property','set',SeeIf.IsNumber,function(target,prop,value/receiver){})
+        originalObject.watch = function(prop_name, type = 'set', value_condition = SeeIf.IsAnything, callback){
+          
+          let IsSeeIf = false;
+          if(typeof value_condition === 'function'){
+            for(let tester in SeeIf){
+              if(value_condition === SeeIf[tester]){
+                IsSeeIf = tester;
+              }
+            }
+          }
+          
+          let thrower = function(target, prop, value){
+            throw Doh.error('Watch caught "',prop,'" being',type,'to:',value,(IsSeeIf?('and it '+IsSeeIf):('which matches wated value: '+value_condition)),'on:',target);
+          };
+          
+          callback = callback || thrower;
+          
+          let outer_callback = function(target, prop, value){
+            if(type === 'get') value = target[prop];
+            if(IsSeeIf){
+              if(value_condition(value)){
+                callback(...arguments);
+              }
+            } else {
+              if(value_condition === value){
+                callback(...arguments);
+              }
+            }
+          };
+          
+          if(type === 'set'){
+            
+            originalObject.__handler__.setters[prop_name] = true;
+            originalObject.__handler__.melded_set.meld_stack.push(outer_callback);
+            
+          } else {
+            
+            originalObject.__handler__.getters[prop_name] = true;
+            originalObject.__handler__.melded_get.meld_stack.push(outer_callback);
+            
+          }
+        }
       }
 
       // run the machine to the specified phase and return the object
@@ -1094,11 +1156,11 @@ Doh.type_of(unet.uNetNodes['1-1'])
                   throw Doh.error('WatchedKeys:',pattern_prop, 'wants to be thrown. It said:',command_value,idea);
                   break;
                 case 'run':
-                  Doh[logger_method]('WatchedKeys:',pattern_prop,'will:',command,':',command_value,idea);
+                  Doh[logger_method]('WatchedKeys:',pattern_prop,'will run:',command_value,idea);
                   command_value(idea);
                   break;
                 case 'rename':
-                  Doh[logger_method]('WatchedKeys:',pattern_prop,'will:',command,':',command_value,idea);
+                  Doh[logger_method]('WatchedKeys:',pattern_prop,'has been renamed:',command_value,idea);
                   if(idea.melded?.[pattern_prop]){
                     idea.melded[command_value] = idea.melded[pattern_prop];
                     idea.melded[pattern_prop] = null;
@@ -1108,7 +1170,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
                   idea[command_value] = idea[pattern_prop];
                   break;
                 case 'remove':
-                  Doh[logger_method]('WatchedKeys:',pattern_prop,'will:',command,':',command_value,idea);
+                  Doh[logger_method]('WatchedKeys:',pattern_prop,'will be removed.',idea);
                   if(idea.melded?.[pattern_prop]){
                     idea.melded[command_value] = idea.melded[pattern_prop];
                     idea.melded[pattern_prop] = null;
@@ -1419,8 +1481,8 @@ Doh.type_of(unet.uNetNodes['1-1'])
     if(object)if(object.inherited)if(object.inherited[type]) return true;
     return false;
   }
-  Doh.Error = Doh.error;
-  Doh.Warn = Doh.warn;
+  //Doh.Error = Doh.error;
+  //Doh.Warn = Doh.warn;
 
   Pattern('idea');
 
@@ -1645,6 +1707,35 @@ OnCoreLoaded(function(){
       remove:true
     }
   });
+});
+
+// fix old Doh. references that have moved
+// NOTE: this usually stays off because we don't like it polluting Doh
+OnCoreLoaded(function(){
+  /*
+   * Fixes for changing the name of properties on Doh
+   */
+  var rename_wrapper = function(old_doh_prop, new_full_name, new_thing){
+    if(typeof new_thing === 'function'){
+      Doh[old_doh_prop] = function(){
+        Doh.warn('Using old name of Doh.'+old_doh_prop+'() for new method:',new_full_name+'()');
+        return new_thing(...arguments);
+      }
+    } else {
+      Doh[old_doh_prop] = new_thing;
+    }
+  }
+  /*
+  for(var test in SeeIf){
+    rename_wrapper(test, 'SeeIf.'+test, SeeIf[test]);
+  }
+  rename_wrapper('isEmptyObject', 'SeeIf.IsEmptyObject', SeeIf.IsEmptyObject);
+  rename_wrapper('isSet', 'SeeIf.IsSet', SeeIf.IsSet);
+  rename_wrapper('inArray', 'Doh.in_array', Doh.in_array);
+  rename_wrapper('Warn', 'Doh.warn', Doh.warn);
+  rename_wrapper('Error', 'Doh.error', Doh.error);
+  rename_wrapper('ExtendInherits', 'Doh.extend_inherits', Doh.extend_inherits);
+  */
 });
 
 /**
@@ -2417,7 +2508,7 @@ OnLoad('/doh_js/html', function($){
         Doh.UntitledControls[this.id]=this;
       }
       
-      if(Doh.FixDeprecated){
+      if(Doh.DebugMode){
         this.machine.completed.append_phase = true;
       }
     },
@@ -3117,10 +3208,6 @@ OnLoad('/doh_js/html', function($){
   Doh.body = New('html',{tag:'body',e:jBody,parent:jBody.parent()}, 'parenting_phase');                 
 });
 
-OnLoad('/doh_js/element', function($){
-
-  Pattern('element', 'html');
-
-});
+OnLoad('/doh_js/element', function($){Pattern('element', 'html');});
 
 OnLoad('/doh_js/patterns', function($){});
