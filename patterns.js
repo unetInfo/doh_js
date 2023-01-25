@@ -1034,7 +1034,9 @@ Doh.type_of(unet.uNetNodes['1-1'])
           return Reflect.get(...arguments);
         };
         
+        
         // thing.watch('a_property','set',SeeIf.IsNumber,function(target,prop,value/receiver){})
+        // thing.watch('a_property','set',37,function(target,prop,value){Doh.log('hey',prop,'on',target,'set to ',value)})
         originalObject.watch = function(prop_name, type = 'set', value_condition = SeeIf.IsAnything, callback){
           
           let IsSeeIf = false;
