@@ -112,6 +112,7 @@ OnLoad('/doh_js/see_if', function($){
     'LacksValue':(value) => `(typeof ${value} === 'undefined' || ${value} === null || ${value} === '')`,
     'IsAnything':(value) => `true`,
   };
+  // some aliases
   Doh.meld_objects(SeeIf_Templates, {
     'NotDefined':SeeIf_Templates.IsUndefined,
     'NotFalsey':SeeIf_Templates.IsTruey,
@@ -157,6 +158,8 @@ OnLoad('/doh_js/core', function($){
     ModulePatterns: {},
     PatternModule: {},
 
+    // AA: What's the elems array?  Why is this way up here in a position of honor?
+
     // work on pattern for watching any key setter and getter
     
 
@@ -189,6 +192,8 @@ OnLoad('/doh_js/core', function($){
 
       return -1;
     },
+
+    // AA: Explain the whole logging idea here
     
     _log: function(args, log_type, logger_method, logger){
       log_type = log_type || '';
@@ -240,6 +245,8 @@ OnLoad('/doh_js/core', function($){
       //  return New({pattern:'warning',args:arguments});
     },
 
+    // AA:  Explain the role of ids
+
     /**
      *  @brief Get a new id
      *
@@ -268,6 +275,9 @@ OnLoad('/doh_js/core', function($){
       return values;
     },
 
+    // AA: things like this and parse_reference above are rather general utilities (not Doh-specific), I think it would be helpful to group them all, and maybe demote them
+    // in fact, if they aren't used by core, they should move into something more like my sim_util global space
+
     array_move: function(array, from_index, to_index) {
       array.splice(to_index, 0, array.splice(from_index, 1)[0]);
       return array;
@@ -277,6 +287,7 @@ OnLoad('/doh_js/core', function($){
     Patterns: {},
     
     // This is used by the builder to a mix a pattern into a new instance of an object
+    // AA: Describe how it might be used by a developer?
     mixin_pattern: function(destination, pattern){
 
       if(Patterns[pattern]){
@@ -290,7 +301,7 @@ OnLoad('/doh_js/core', function($){
         Doh.error('Doh.mixin_pattern(',destination,',',pattern,') did not find the pattern');
       }
     },
-    
+    // AA: Surely this merits a small dissertation
     extend_inherits: function(inherits, skip_core = false){
       var extended = {};
       if(SeeIf.NotObjectObject(inherits)) inherits = Doh.meld_into_objectobject(inherits);
@@ -312,6 +323,7 @@ OnLoad('/doh_js/core', function($){
       return extended;
     },
 
+    // AA: general utility?
     array_unique: function(arr){
       // reduce the array to contain no dupes via grep/in_array
       return Doh.grep(arr,function(v,k){
@@ -319,6 +331,7 @@ OnLoad('/doh_js/core', function($){
       });
     },
 
+    // AA: general utility?
     object_keys_from_array_values: function (arr){
       var obj = {};
       arr = arr || [];
@@ -327,6 +340,8 @@ OnLoad('/doh_js/core', function($){
       }
       return obj;
     },
+
+    // AA: describe the virtues hereof
 
     meld_arrays: function(destination, arr, force_new){
 
@@ -525,7 +540,10 @@ Doh.type_of(unet.uNetNodes['1-1'])
     .JMML  JMML  JMML.`Mbmmd'.JMML.`Wbmd"MML. .JMML.`Wbmd"MML.`Mbmmd' `Moo9^Yo.M9mmmP' 
 
 
-  */                                     
+  */        
+
+
+      // AA: clearly another essay is needed here                            
 
     meld_ideas:function(destination, idea, skip_methods) {
       idea = idea || {};
@@ -614,6 +632,9 @@ Doh.type_of(unet.uNetNodes['1-1'])
       return destination;
     },
     
+
+        // AA: ?
+
     pattern_inherits_extended: function(pattern_name_or_inherits, skip_core = false){
       return Object.keys( Doh.extend_inherits( Doh.meld_into_objectobject(pattern_name_or_inherits) , skip_core) );
     },
@@ -768,7 +789,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
                                                  
     */
     /**
-     *  @brief Build a new Doh Object
+     *  @brief Build a new Doh Object.
      */
     New: function(pattern, idea, phase){
       var i = '';
@@ -1085,6 +1106,8 @@ Doh.type_of(unet.uNetNodes['1-1'])
       return object.machine(phase);
     },
 
+        // AA: Explain how to use / where you should set these things (maybe templates belong on OnCoreLoaded?) 
+
     WatchedKeys:{
       /*'key':{
         log:'message',
@@ -1205,6 +1228,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
   */                                                                                                              
                                                                                                                      
     // change param name to inherits to indicate a inherits type array
+    // AA: I dont understand
     
     idealize: function(patterns, active) {
       let j, new_idea = {}, which_idea;
@@ -1304,6 +1328,8 @@ Doh.type_of(unet.uNetNodes['1-1'])
       var ic = this.idea_to_ideacode(idea, args);
       return jsyaml.load(ic);
     },
+
+  // AA: show how this is used, what are the args?
 
     idea_to_ideacode: function(idea, args){
 
@@ -1411,9 +1437,14 @@ Doh.type_of(unet.uNetNodes['1-1'])
       return str;
     },
 
+
+    // AA: ?
     ideacode_to_source: function(ideacode){
       return 'New(' + ideacode + ');\n';
     },
+
+    // AA: This appears to be a method you can use to learn something an object you care about.   since "meld" is a verb, this isn't obvious -- this COULD be some kind of transformer / operator function.  
+    // AA:  can we develop a system for readability / discovery.   maybe things like this (that return info) should be named "get_meld_method_order" or "meld_method_order_to_array"
     
     meld_method_order: function(object, method){
       var meld_method_order = [], pre_meld_method_order = [];
@@ -1424,6 +1455,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
       return pre_meld_method_order.concat(meld_method_order);
     },
     
+    // AA: because "phases" isnt really a verb, this one isn't as confusing, but we should be consistent -- something like "get_phases_method_order" or "phases_method_order_to_array"
     phases_method_order: function(object){
       var phases_method_order = [];
       for(var melded_prop in object.melded){
@@ -1433,7 +1465,8 @@ Doh.type_of(unet.uNetNodes['1-1'])
       }
       return phases_method_order;
     },
-    
+        
+    // AA: because "phases" isnt really a verb, this one isn't as confusing, but we should be consistent -- something like "get_meld_methods_order" or "meld_methods_order_to_array"
     meld_methods_order: function(object){
       var methods_order = [], counter = 0, phase_methods = 0;
       
@@ -1466,6 +1499,8 @@ Doh.type_of(unet.uNetNodes['1-1'])
       }
     },
     
+    // AA: This sounds like it would DO something, but all it does is print a log?  wait it's identical to its better-named twin above? 
+
     link_melded_method: function(object, method){
       var method_array = Doh.meld_method_order(object, method);
       for (i in method_array){
@@ -1486,6 +1521,8 @@ Doh.type_of(unet.uNetNodes['1-1'])
   //Doh.Error = Doh.error;
   //Doh.Warn = Doh.warn;
 
+
+  // AA: It might be worth crafting a small ode to the elegance of this
   Pattern('idea');
 
   // set the prototype for the object constructor
@@ -1518,6 +1555,8 @@ Doh.type_of(unet.uNetNodes['1-1'])
     },
   });
 
+
+// AA: group this with the log stuff above?   
   Pattern('log', 'object', {
     log_type: 'Doh:',
     logger:console,
@@ -1560,6 +1599,8 @@ Doh.type_of(unet.uNetNodes['1-1'])
                                                                    OOb"                                                                                                                                                                         
 */
 
+
+// AA: talk about the relationship of this to html, the role of the children array
 
   Pattern('parenting', 'object', {
     // parent should be a Doh Object or false
@@ -2249,6 +2290,9 @@ OnLoad('/doh_js/html', function($){
   // refresh the window sizes as soon as possible
   Doh.refresh_win();
 
+  // AA: describe how this relates to the control phase
+  // Also, this is an example of a developer-facing method (as opposed to internal build machinery) -- should we have a naming convention to make that difference clear?
+
   Doh.find_controller = function(object){
     // if the object is not of doh, then return false
     //NOTE: this keeps controls from cascading past their defined parents (e.g.: into vanilla html that contaiins them)
@@ -2264,6 +2308,9 @@ OnLoad('/doh_js/html', function($){
     // we have no parent, or we found no controller
     return false;
   }
+
+
+  // AA:  A good place for an essay about the control system
   
   Pattern('control', 'parenting', {
     // advance the children machine to this phase when building
@@ -2296,6 +2343,9 @@ OnLoad('/doh_js/html', function($){
     },
   });
   
+
+  // AA: We should explain how css fits into the Doh development workflow
+  // AA:  that can mostly go in the README buy maybe some breadcrumbs here?
   var CSSClassCache = {};
   let originalPatternize = Doh.pattern;
   Pattern = Doh.pattern = function(name, inherits, idea) {
@@ -2381,6 +2431,8 @@ OnLoad('/doh_js/html', function($){
       console.groupEnd();
     }
   }
+
+  // AA:  A discussion of the interface between DOM elements and the html pattern should go here
   
   Pattern('html', 'control', {
     melded:{
@@ -2581,6 +2633,8 @@ OnLoad('/doh_js/html', function($){
     },
   });
 
+// AA:  we never use this.  is it the future or is it further entanglement with jquery?
+
   Pattern('HTMLPosition', 'element', {
     melded:{position:'object'},
     position:{},
@@ -2592,6 +2646,8 @@ OnLoad('/doh_js/html', function($){
       this.e.position({...opts, ...newOpts});
     }
   });
+
+  // AA:  This needs some explanation
 
   Doh.AnimationQueues = {doh:[]};
   Doh._AnimationQueues = {};
@@ -2670,6 +2726,8 @@ OnLoad('/doh_js/html', function($){
     machine_children_to: 'animation_phase'
   });
 
+  // AA:  It's a small thing, but I would move these html primitive upwards, so they are directly below 'html' itself.
+
   Pattern('span', 'element', {tag:'span'});
 
   Pattern('input', 'element', {
@@ -2740,6 +2798,8 @@ OnLoad('/doh_js/html', function($){
         this.e[0].innerHTML = wut;
     },
   });
+
+  // AA: As we discussed, this guy should be migrated out of core
 
   Pattern('animated_next_button', ['animated_element','button','scenario_queue_stepper'], {
     animation:['fadeIn'],
@@ -2818,6 +2878,8 @@ OnLoad('/doh_js/html', function($){
     }
   });
 
+  // AA: As we discussed, this guy should be migrated out of core
+
   Pattern('select_with_other_field', 'select', {
     required_properties:{
       other_value: 'value of the option that shows "other" field when selected',
@@ -2847,6 +2909,8 @@ OnLoad('/doh_js/html', function($){
   Pattern('checkbox', ['input', 'input_value'], {
     attrs: {type: 'checkbox'},
   });
+
+  // AA: As we discussed, this guy should be migrated out of core
 
   Pattern('checkbox2', ['input', 'input_value'], {
     attrs: {type: 'checkbox'},
@@ -3101,7 +3165,7 @@ OnLoad('/doh_js/html', function($){
     },
   });
 
-
+  // AA: because this is my favorite pattern, can we move it up closer to a place of honor near 'html'?
 
   Pattern('drag', 'element', {
     melded:{drag_start:'method',drag_drag:'method',drag_stop:'method'},
