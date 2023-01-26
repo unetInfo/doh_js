@@ -10,7 +10,7 @@ if(typeof global != 'undefined'){
 Doh = Doh || {};
 
   // This has to be very early. 
-  Doh.DebugMode = true;
+  Doh.DebugMode = false;
 
 if(typeof exports != 'undefined') {
   exports = top.Doh;
@@ -2626,7 +2626,9 @@ OnLoad('/doh_js/html', function($){
         b:o.top+s.h,
         css:{
           top:o.top,
-          left:o.left
+          left:o.left,
+          width: s.w,
+          height: s.h,
         }
       };
       return this.box;
@@ -3213,6 +3215,7 @@ OnLoad('/doh_js/html', function($){
     resize_stop:function() {
     },
     html_phase: function(){
+      if(InstanceOf(this,'html_image') || this.tag == 'img') Doh.warn('resizable behaves oddly with <img> elements, it would be better to wrap it in a generic element and let THAT do the resizing (setting width and height of the nested <img> to 100%.')
       this.e.resizable({
         start: this.resize_start.bind(this),
         resize: this.resize.bind(this),
