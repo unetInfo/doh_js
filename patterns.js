@@ -9,24 +9,37 @@ if(typeof global != 'undefined'){
 
 Doh = Doh || {};
 
-  // This has to be very early. 
-  Doh.DebugMode = true;
+// This has to be very early. 
+Doh.DebugMode = true;
 
 if(typeof exports != 'undefined') {
   exports = top.Doh;
 }
 
 /* **** Prepare Doh **** */
+
+// meld_objects is special for a few specific reasons:
+// 1. destination is both modified and returned. This means that passing a plain object 
+//    or falsey value first will make a new shallow-copy of all other paramaters
+// 2. it doesn't loop over destination. This means that meld_objects(obj, obj, obj) will
+//    have no loops and simply return obj
+// 3. it has no other special call outs or references, making it very efficient.
+
 // the most important function in Doh:
-Doh.meld_objects = function(destination){
-  
-  destination = destination || {}; // this may seem unneccesary but OH IS IT EVER NECCESSARY
+Doh.meld_objects = function(destination = {}){
+  // destination is both modified and returned, so it must be defaulted to exist
   var obj, i;
   for(let arg in arguments){
     obj = arguments[arg];
+    // ignore references that are already the same.
+    // this keeps us from processing ourself onto ourself
     if(obj === destination) continue;
+    // reset i
     i = '';
     for(i in obj){
+      // simply reference copy. This is considered 'shallow' because we don't loop over obj[i] if it's an obj or array.
+      // this is desirable for us because deep copies are hard to control and inefficient.
+      // for controlled deep-copy
       destination[i] = obj[i];
     }
   }
@@ -143,22 +156,21 @@ OnLoad('/doh_js/see_if', function($){
 
 OnLoad('/doh_js/core', function($){
   
+  // if included, we remove SeeIf. It should not be added to
   if(top.DohWatch)if(DohWatch.SeeIf){
     DohWatch.SeeIf = false;
     delete DohWatch.SeeIf;
   }
   
   Doh.meld_objects(Doh, {
-    
+    // in nodejs, the normal OnLoad is replaced with a far simpler one that needs this set for core.
     ModuleCurrentlyRunning: '/doh_js/core',
-    
+    // this remains to be updated, Doh still hasn't really grasped versioning
     Version:'2.0a',
-    
+    // keyed by module, a list of patterns it creates
     ModulePatterns: {},
+    // keyed by pattern, the name of the module that made it (or false if made after load)
     PatternModule: {},
-
-    // work on pattern for watching any key setter and getter
-    
 
     //return items from the elems array that pass callback
     grep: function( elems, callback, inv ) {
@@ -278,13 +290,22 @@ OnLoad('/doh_js/core', function($){
     
     // This is used by the builder to a mix a pattern into a new instance of an object
     mixin_pattern: function(destination, pattern){
-
+      // some checking for the pattern and double-mixing
       if(Patterns[pattern]){
         if(!InstanceOf(destination, pattern)){
           // check for invalid mixin
           Doh.meld_ideas(destination, Patterns[pattern]);
-
+          // this mixin type is 
           destination.inherited[pattern] = Patterns[pattern];
+          
+          // this section is only run if we are mixing into an already built object
+          if(destination.machine){
+            // we only want to update melds if the object is already built
+            // inherited is only present on instances, patterns don't have it
+            // and neither do plain ideas
+            Doh.update_meld_methods(destination);
+          }
+          
         }
       } else {
         Doh.error('Doh.mixin_pattern(',destination,',',pattern,') did not find the pattern');
@@ -572,8 +593,8 @@ Doh.type_of(unet.uNetNodes['1-1'])
         if(idea[prop_name] !== undefined && idea[prop_name] !== destination[prop_name]){
           if(melded[prop_name] === 'method' || melded[prop_name] === 'phase'){
             // we handle melded methods and phases later
-            // we set to null to preserve property order
-            destination[prop_name] = null;
+            // we set to the idea's property so that the meld still "melds", even though we should really update_meld_methods before using it
+            destination[prop_name] = idea[prop_name];
             continue;
           }
           if(melded[prop_name] === 'object' || (typeof idea[prop_name] == 'object' && !Array.isArray(idea[prop_name]) && SeeIf.IsEmptyObject(idea[prop_name]))){
@@ -600,15 +621,6 @@ Doh.type_of(unet.uNetNodes['1-1'])
           // non-melded property
           destination[prop_name] = idea[prop_name];
         }
-      }
-
-      // this section is only run after the origin idea was inherited
-      if(destination.inherited)if(destination.machine){
-        // we update here so it only happens once
-        // we only want to run this after the idea has been melded 
-        // inherited is only present on instances, patterns don't have it
-        // and neither do plain ideas
-        Doh.update_meld_methods(destination);
       }
 
       return destination;
@@ -1047,7 +1059,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
           }
           
           let thrower = function(target, prop, value){
-            throw Doh.error('Watch caught "',prop,'" being',type,'to:',value,(IsSeeIf?('and it '+IsSeeIf):('which matches wated value: '+value_condition)),'on:',target);
+            throw Doh.error('Watch caught "',prop,'" being',type,'to:',value,(IsSeeIf?('and it '+IsSeeIf):('which matches watched value: '+value_condition)),'on:',target);
           };
           
           callback = callback || thrower;
