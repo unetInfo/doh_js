@@ -277,6 +277,12 @@ OnLoad('/doh_js/core', function($){
       var logger_args = [log_type];
       for(var i in args){
         if(i === 'length') continue;
+        if(Doh.DebugMode){
+          if(args[i].__original__){
+            // debug makes everything a proxy, help adjust for that
+            args[i] = args[i].__original__;
+          }
+        }
         logger_args.push(args[i]);
       }
       if(logger_method === 'trace'){
