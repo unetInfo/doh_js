@@ -424,6 +424,7 @@ window.LoadDohFrom = window.LoadDohFrom || '';
 // do NOT put this directly on top, let it bubble up.
 // do NOT allow this to be overloaded, create it explicitly here.
 Doh = {
+  DebugMode: false,
   // This seems silly, but first-tier scripts (in the initial <head>) will
   // have access to Doh and OnLoad BEFORE Doh has finished loading, or
   // even before Doh has been told to load
@@ -730,18 +731,41 @@ Doh = {
 // load_script handles CSS, but we don't know that this will always be the case
 Doh.load_css = Doh.load_script;
 
+// determine from the url if we need debug
+let paramString = location.href.split('?')[1],
+queryString = new URLSearchParams(paramString),
+param_key, param_value;
+
+for (let pair of queryString.entries()) {
+  param_key = pair[0];
+  param_value = pair[1];
+  // if we send debug=false, change the value to be boolean. anything else will be true anyway
+  if(param_value === 'false') param_value = false;
+  // pass the value through to DebugMode so we can eventually set debug levels
+  if(param_key === 'debug') Doh.DebugMode = param_value;
+}
+
 // We always add Doh and glob to DohWatch. It was created to expose global namespace pollution.      
 DohWatch.Doh = Doh;
 
+// allow stuff to be conditionally loaded between core and modules
+// this is generally used to declare DebugMode stuff
 Doh.OnCoreLoadedQueue = [];
-window.OnCoreLoaded = window.OnCoreLoaded || function(callback){
-  if(Doh.IsLoaded) {
-    Doh.log('OnCoreLoaded was called after Doh.IsLoaded but before modules have finished:',callback);
-    callback();
-  }
-  else {
-    console.log('OnCoreLoaded was called before Doh.IsLoaded:',callback);
-    Doh.OnCoreLoadedQueue.push(callback);
+window.OnCoreLoaded = window.OnCoreLoaded || function(condition, callback){
+  // if we didn't send a callback, then the condition is the callback
+  // since a function as condition truey and true is the default, carry on
+  if(!callback) callback = condition;
+  // if the condition is truey
+  if(condition){
+    // determine if we should just run, or be queued
+    if(Doh.IsLoaded) {
+      Doh.log('OnCoreLoaded was called after Doh.IsLoaded but before modules have finished:',callback);
+      callback();
+    }
+    else {
+      console.log('OnCoreLoaded was called before Doh.IsLoaded:',callback);
+      Doh.OnCoreLoadedQueue.push(callback);
+    }
   }
 }
 // a method for running a named module, with requirements

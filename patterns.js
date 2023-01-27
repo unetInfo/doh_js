@@ -9,8 +9,9 @@ if(typeof global != 'undefined'){
 
 Doh = Doh || {};
 
-// This has to be very early. 
-Doh.DebugMode = true;
+// This has to be very early.
+// we try not to use this now that the url paramater is working
+//Doh.DebugMode = true;
 
 // this is for being required by a nodejs module
 if(typeof exports != 'undefined') {
@@ -29,25 +30,25 @@ if(typeof exports != 'undefined') {
  *  @details meld_objects is special for a few specific reasons:
  *           1. destination is both modified and returned. This means that passing a plain object 
  *              or falsey value first will make a new shallow-copy of all other paramaters
- *           2. it doesn't loop over destination. This means that meld_objects(obj, obj, obj) will
- *              have no loops and simply return obj
+ *           2. it doesn't loop over destination. This means that meld_objects(object, object, object) will
+ *              have no loops and simply return object
  *           3. it has no other special call outs or references, making it very efficient.
  */
 Doh.meld_objects = function(destination = {}){
   // destination is both modified and returned, so it must be defaulted to exist
-  var obj, i;
+  var object, i;
   for(let arg in arguments){
-    obj = arguments[arg];
+    object = arguments[arg];
     // ignore references that are already the same.
     // this keeps us from processing ourself onto ourself
-    if(obj === destination) continue;
+    if(object === destination) continue;
     // reset i
     i = '';
-    for(i in obj){
-      // simply reference copy. This is considered 'shallow' because we don't loop over obj[i] if it's an obj or array.
+    for(i in object){
+      // simply reference copy. This is considered 'shallow' because we don't loop over object[i] if it's an object or array.
       // this is desirable for us because deep copies are hard to control and inefficient.
       // for controlled deep-copy
-      destination[i] = obj[i];
+      destination[i] = object[i];
     }
   }
   return destination;
@@ -166,10 +167,95 @@ OnLoad('/doh_js/core', function($){
     ModuleCurrentlyRunning: '/doh_js/core',
     // this remains to be updated, Doh still hasn't really grasped versioning
     Version:'2.0a',
-    // keyed by module, a list of patterns it creates
-    ModulePatterns: {},
+    // allow storage of patterns
+    Patterns: {},
     // keyed by pattern, the name of the module that made it (or false if made after load)
     PatternModule: {},
+    // keyed by pattern, a list of things that inherit from it
+    PatternInheritedBy: {},
+    // keyed by module, a list of patterns it creates
+    ModulePatterns: {},
+    /**
+     *  a collection of functions to validate compatibility of a melded property
+     *  with it's contents
+     */
+    MeldedTypeMatch: {
+      'method':SeeIf.IsFunction,
+        'phase':SeeIf.IsFunction,
+        'exclusive':SeeIf.IsAnything,
+      'object':SeeIf.IsObjectObject,
+        'idea':SeeIf.IsObjectObject,
+      'array':SeeIf.IsArray,
+    },
+    /**
+     *  Default values used by New to provide automatic defaults for melded properties
+     */
+    MeldedTypeDefault:{
+      'method':function(){},
+        'phase':function(){},
+      'object':{},
+        'idea':{},
+      'array':[],
+    },
+    
+    /**
+     *  @brief return the SeeIf primative for value
+     *  
+     *  @param [in] value [any] thing to find the type of
+     *  @return the string name of a SeeIf method that describes the primative for this type of value
+     *  
+     *  @details Attempts to provide a consistent typeof for javascript primatives
+     *  
+     *    Doh.type_of()
+     *                'IsUndefined'
+     *    Doh.type_of('')
+     *                'IsString'
+     *    Doh.type_of(0)
+     *                'IsNumber'
+     *    Doh.type_of(false)
+     *                'IsBoolean'
+     *    Doh.type_of(null)
+     *                'IsNull'
+     *    Doh.type_of([])
+     *                'IsArray'
+     *    Doh.type_of({})
+     *                'IsObjectObject'
+     *    Doh.type_of(function(){})
+     *                'IsFunction'
+     *    Doh.type_of(unet.uNetNodes['1-1'])
+     *                'IsDohObject'
+     */
+    type_of: function(value){
+      let type;
+      for(type in SeeIf){
+        if(SeeIf[type](value)){
+          return type;
+        }
+      }
+      // SeeIf can't see it, so it's not defined
+      // this should never be possible
+      throw Doh.error("SeeIf couldn't find a type for:'",value,"'");
+      return undefined;
+    },
+    
+    /**
+     *  @brief Match value against melded types and SeeIf to find out if it matches
+     *         a melded type or SeeIf method
+     *  
+     *  @param [in] value [any] thing to match against
+     *  @param [in] is    [string] name of melded type or SeeIf method
+     *  @return true if value == is()
+     *  
+     *  @details 
+     */
+    type_match: function(value, is){
+      if(typeof Doh.MeldedTypeMatch[is] === 'function')
+        return Doh.MeldedTypeMatch[is](value);
+      else if(typeof SeeIf[is] === 'function')
+        return SeeIf[is](value);
+
+      return false;
+    },
 
     // AA: Explain the whole logging idea here
     /**
@@ -182,7 +268,6 @@ OnLoad('/doh_js/core', function($){
      *  @return nothing
      *  
      *  @details this is usually called by a main logging function below
-
      */
     _log: function(args, log_type, logger_method, logger){
       log_type = log_type || '';
@@ -202,6 +287,7 @@ OnLoad('/doh_js/core', function($){
         logger[logger_method](...logger_args);
       }
     },
+
     /**
      *  @brief Log a message to Doh, defaults to 'trace' type log
      *  
@@ -215,6 +301,20 @@ OnLoad('/doh_js/core', function($){
     log: function(){
       Doh._log(arguments, 'Doh:', 'trace');
     },
+
+    /**
+     *  @brief log a custom warning to Doh
+     *
+     *  @param [in] context, context, ...   object(s) of relevence to the warning
+     *  @return nothing
+     *
+     *  @details
+     *  Doh.warn('error message', object1, 'some string', objectN, ...);
+     */
+    warn: function(){
+      Doh._log(arguments, 'Doh Warning:', 'warn');
+    },
+
     /**
      *  @brief log a custom error to Doh
      *
@@ -227,105 +327,21 @@ OnLoad('/doh_js/core', function($){
     error: function(){
       Doh._log(arguments, 'Doh ERROR:', 'error');
     },
+
     /**
-     *  @brief log a custom warning to Doh
+     *  @brief log a debug error to Doh
      *
      *  @param [in] context, context, ...   object(s) of relevence to the error
      *  @return nothing
      *
-     *  @details
-     *  Doh.warn('error message', object1, 'some string', objectN, ...);
+     *  @details A debug error throws automatically in DebugMode, but otherwise does not.
+     *           Used by core features that want to degrade more gracefully in production.
+     *  
+     *  Doh.debug('error message', object1, 'some string', objectN, ...);
      */
-    warn: function(){
-      Doh._log(arguments, 'Doh Warning:', 'warn');
-    },
-
-    // AA:  Explain the role of ids
-    /**
-     *  @brief Get a new id
-     *
-     *  @return A new unique id
-     *  
-     *  @details IDs are a simple way to get ephemeral indexes that reset on each page load
-     */
-    NewIdCounter:0,
-    new_id: function () {
-      return this.NewIdCounter += 1;
-    },
-
-    array_move: function(array, from_index, to_index) {
-      array.splice(to_index, 0, array.splice(from_index, 1)[0]);
-      return array;
-    },
-
-    // allow storage of patterns
-    Patterns: {},
-    
-    // This is used by the builder to a mix a pattern into a new instance of an object
-    // AA: Describe how it might be used by a developer?
-    /**
-     *  @brief Mix a pattern from Patterns into destination
-     *  
-     *  @param [in] destination [object] the object to copy onto
-     *  @param [in] pattern     [string] the name of a pattern to mixin
-     *  @return destination
-     *  
-     *  @details Will also update_meld_methods for destination if it was previously built by New()
-     */
-    mixin_pattern: function(destination, pattern){
-      // some checking for the pattern and double-mixing
-      if(Patterns[pattern]){
-        if(!InstanceOf(destination, pattern)){
-          // check for invalid mixin
-          Doh.meld_ideas(destination, Patterns[pattern]);
-          // this mixin type is 
-          destination.inherited[pattern] = Patterns[pattern];
-          
-          // this section is only run if we are mixing into an already built object
-          if(destination.machine){
-            // we only want to update melds if the object is already built
-            // inherited is only present on instances, patterns don't have it
-            // and neither do plain ideas
-            Doh.update_meld_methods(destination);
-          }
-        }
-      } else {
-        Doh.error('Doh.mixin_pattern(',destination,',',pattern,') did not find the pattern');
-      }
-      return destination;
-    },
-    
-    // AA: Surely this merits a small dissertation
-    /**
-     *  @brief Return a collection of all ancestor dependencies
-     *  
-     *  @param [in] inherits  [string/array/object] a name, list of names, or object whose keys are a list of things to inherit
-     *  @param [in] skip_core [bool] remove core dependencies from the list? Default to false.
-     *  @return object-list where keys are inherited patterns
-     *  
-     *  @details core dependencies refers to modules that come from core modules and are therefore
-     *           considered universally available. In some cases it may be useful to know how dependant
-     *           a given pattern is on external patterns, rather than core ones.
-     */
-    extend_inherits: function(inherits, skip_core = false){
-      var extended = {};
-      if(SeeIf.NotObjectObject(inherits)) inherits = Doh.meld_into_objectobject(inherits);
-      for(var pattern_name in inherits){
-        if(!Patterns[pattern_name]) throw Doh.error('Doh.extend_inherits() did not find pattern:', pattern_name, 'in inherits list:', inherits); // CHRIS:  Andy added this error msg, is there a better way?
-        if(skip_core){
-          //Doh.log(Doh.PatternModule[pattern_name],'spawns',pattern_name,'from',inherits);
-          if(pattern_name !== 'idea')if(Doh.PatternModule[pattern_name].indexOf('/doh_js/') == 0){
-            //Doh.log('Doh.extend_inherits() is skipping core and found a core pattern:', pattern_name, 'from module:', Doh.PatternModule[pattern_name]);
-            // this is a core module because the string starts with /doh_js/
-            inherits[pattern_name] = null;
-            delete inherits[pattern_name]
-            continue;
-          }
-        }
-        Doh.meld_objects(extended, Doh.extend_inherits(Patterns[pattern_name].inherits, skip_core));
-      }
-      Doh.meld_objects(extended, inherits);
-      return extended;
+    debug: function(){
+      if(Doh.DebugMode) throw Doh._log(arguments, 'Doh DEBUG:', 'error');
+      Doh._log(arguments, 'Doh DEBUG:', 'error');
     },
 
     /**
@@ -354,54 +370,7 @@ OnLoad('/doh_js/core', function($){
 
       return -1;
     },
-    // AA: describe the virtues hereof
-    /**
-     *  @brief Concatenate array onto destination, removing duplicates from array.
-     *  
-     *  @param [in] destination [array] to be melded onto
-     *  @param [in] array       [array] to meld onto destination
-     *  @param [in] force_new   [bool] if true, meld both destination AND array onto a new [] and pass that back instead
-     *  @return destination or the new array from being force_new'd
-     *  
-     *  @details Primarilly used by html for ordering classes.
-     *           Used to be used by the core to manage meld_ system until being replaced by .melded.
-     */
-    meld_arrays: function(destination, array = [], force_new){
-      if(force_new) return Doh._meld_arrays(destination, array);
-
-      destination = destination || [];
-      // loop over array
-      for(var i=0; i<array.length; i++){
-        // if the value is not in destination
-        if(Doh.in_array(array[i], destination) == -1){
-          // add it
-          destination.push(array[i]);
-        }
-      }
-      return destination;
-    },
-    /**
-     *  @brief similar to meld_arrays but always melds onto a fresh array.
-     *  
-     *  @param [in] arr1 [array] first array to meld from
-     *  @param [in] arr2 [array] second array to meld from
-     *  @return new melded array
-     *  
-     *  @details specifically differs from regular meld_arrays because it doesn't modify either argument
-     */
-    _meld_arrays: function(arr1, arr2){
-      var destination = Doh.meld_objects([], arr1);
-      // loop over arr
-      for(var i=0; i<arr2.length; i++){
-        // if the value is not in arr1
-        if(Doh.in_array(arr2[i], arr1) == -1){
-          // add it to the destination
-          destination.push(arr2[i]);
-        }
-      }
-      return destination;
-    },
-
+    
     /**
      *  @brief meld all the ways we can format a list of args into a set of object keys
      *            NOTE: always melds into a new {}. No argument is altered.
@@ -422,7 +391,7 @@ OnLoad('/doh_js/core', function($){
      **/
     meld_into_objectobject: function(){
       // we always need a new object
-      let obj = {}, list, item;
+      let object = {}, list, item;
       for(let arg in arguments){
         // walk through all arguments
         list = arguments[arg];
@@ -430,7 +399,7 @@ OnLoad('/doh_js/core', function($){
         if (typeof list === 'string')
           //NOTE: we can expand this to accept limited depth and complexity
           //      like, CSV or dot-notated (this.that.theother)
-          obj[list] = true;
+          object[list] = true;
         // or an object (array and object, technically)
         else if (SeeIf.IsEnumerable(list)){
           item = '';
@@ -438,15 +407,64 @@ OnLoad('/doh_js/core', function($){
             if (item !== 'length'){
               // allow the array structure to have the list in key (Key is not a number)
               //NOTE .is key safe?
-              if(isNaN(item)) obj[item] = list[item];
+              if(isNaN(item)) object[item] = list[item];
               // or in the list
-              else obj[list[item]] = true;
+              else object[list[item]] = true;
             }
           }
         }
       }
       // send what we found, even if empty
-      return obj;
+      return object;
+    },
+
+    /**
+     *  @brief Concatenate array onto destination, removing duplicates from array.
+     *  
+     *  @param [in] destination [array] to be melded onto
+     *  @param [in] array       [array] to meld onto destination
+     *  @param [in] force_new   [bool] if true, meld both destination AND array onto a new [] and pass that back instead
+     *  @return destination or the new array from being force_new'd
+     *  
+     *  @details Primarilly used by html for ordering classes.
+     *           Used to be used by the core to manage meld_ system until being replaced by .melded.
+     */
+    meld_arrays: function(destination, array = [], force_new){
+      if(force_new) return Doh.meld_into_array(destination, array);
+
+      destination = destination || [];
+      // loop over array
+      for(var i=0; i<array.length; i++){
+        // if the value is not in destination
+        if(Doh.in_array(array[i], destination) == -1){
+          // add it
+          destination.push(array[i]);
+        }
+      }
+      return destination;
+    },
+    
+    /**
+     *  @brief similar to meld_arrays but always melds onto a fresh array.
+     *  
+     *  @param [in] arr1 [array] first array to meld from
+     *  @param [in] arr2 [array] second array to meld from
+     *  @return new melded array
+     *  
+     *  @details specifically differs from regular meld_arrays because it doesn't modify either argument
+     */
+     //NOTE update this to accept infinite aguments
+    meld_into_array: function(arr1, arr2){
+      var destination = Doh.meld_objects([], arr1);
+      // loop over arr
+      for(var i=0; i<arr2.length; i++){
+        // if the value is not in arr1
+        if(Doh.in_array(arr2[i], arr1) == -1){
+          // add it to the destination
+          destination.push(arr2[i]);
+        }
+      }
+      return destination;
     },
 
     /**
@@ -458,9 +476,8 @@ OnLoad('/doh_js/core', function($){
      *  @return an array of function references from .inherited in order of .inherits when extended
      *  
      *  @details NOTE: also prepares and prepends the list of pre_{method} functions
-
      */
-    meld_method_stack: function(object, method_name){
+    find_meld_method_stack: function(object, method_name){
       let meld_method_order = [], pre_meld_method_order = [], ilist = object.inherited;
       for(let i in ilist){
         if(object.inherited[i]['pre_'+method_name]) pre_meld_method_order.push(object.inherited[i]['pre_'+method_name]);
@@ -470,30 +487,30 @@ OnLoad('/doh_js/core', function($){
     },
     
     /**
-     *  @brief return a closure for obj[method_name] that will call each function in method_stack
+     *  @brief return a closure for object[method_name] that will call each function in method_stack
      *  
-     *  @param [in] obj          Description for obj
-     *  @param [in] method_stack Description for method_stack
-     *  @return Return description
+     *  @param [in] object       [any] thing to use as 'this'
+     *  @param [in] method_stack [array] of functions to run as this method
+     *  @return a closure function that will call each function in method_stack
      *  
-     *  @details 
-
+     *  @details object[method_name].update_meld_stack() will automatically recalculate
+     *           melds based on current .inherited
      */
-    meld_method: function(obj, method_stack){
+    meld_method: function(object, method_stack){
       // if the stack is a string, then we are trying to meld a method from object.inherited
       let method_name = false;
       if(typeof method_stack === 'string'){
         method_name = method_stack;
-        method_stack = Doh.meld_method_stack(obj, method_name);
+        method_stack = Doh.find_meld_method_stack(object, method_name);
       }
       let melded_method = function(){
         // this melder always does the same thing:
         //  walk the method stack and apply each method to the bound object
         let len = method_stack.length;
         for(let i=0;i<len;i++){
-          method_stack[i].apply(obj, arguments);
+          method_stack[i].apply(object, arguments);
         }
-        return obj;
+        return object;
       };
       // track the meld_stack so we can manipulate it
       melded_method.meld_stack = method_stack;
@@ -502,7 +519,7 @@ OnLoad('/doh_js/core', function($){
         // if we didn't pass a stack in but we remember our own name
         if(!newStack && method_name){
           // get the stack from Doh
-          method_stack = Doh.meld_method_stack(obj, method_name);
+          method_stack = Doh.find_meld_method_stack(object, method_name);
           return;
         }
         // otherwise, apply the stack we sent in
@@ -510,114 +527,28 @@ OnLoad('/doh_js/core', function($){
       };
       return melded_method;
     },
-    // update meld_methods and phases of obj
+    
     /**
-     *  @brief Shallow-meld multiple objects (arguments) into destination
+     *  @brief Update meld_methods and phases of object
      *  
-     *  @param [in] obj Description for obj
-     *  @return Return description
+     *  @param [in] object [object] to look for melded methods on
+     *  @return nothing
      *  
-     *  @details 
-
+     *  @details operates on object, replaces melded method keys with actual method melders
      */
-    update_meld_methods: function(obj){
-      for(let melded_prop in obj.melded){
-        // look for melded methods and phases on obj
-        if(obj.melded[melded_prop] === 'method' || obj.melded[melded_prop] === 'phase'){
+    update_meld_methods: function(object){
+      for(let melded_prop in object.melded){
+        // look for melded methods and phases on object
+        if(object.melded[melded_prop] === 'method' || object.melded[melded_prop] === 'phase'){
           // conditionally update only the method stack if the method was melded before
-          if(typeof obj[melded_prop] === 'function')if(typeof obj[melded_prop].update_meld_stack === 'function'){
-            obj[melded_prop].update_meld_stack();
+          if(typeof object[melded_prop] === 'function')if(typeof object[melded_prop].update_meld_stack === 'function'){
+            object[melded_prop].update_meld_stack();
             continue;
           }
           // otherwise, do a fresh meld
-          obj[melded_prop] = Doh.meld_method(obj, melded_prop);
+          object[melded_prop] = Doh.meld_method(object, melded_prop);
         }
       }
-    },
-
-/*
-Doh.type_of()
-'IsUndefined'
-Doh.type_of('')
-'IsString'
-Doh.type_of(0)
-'IsNumber'
-Doh.type_of(false)
-'IsBoolean'
-Doh.type_of(null)
-'IsNull'
-Doh.type_of([])
-'IsArray'
-Doh.type_of({})
-'IsObjectObject'
-Doh.type_of(function(){})
-'IsFunction'
-Doh.type_of(unet.uNetNodes['1-1'])
-'IsDohObject'
-*/
-    /**
-     *  @brief Shallow-meld multiple objects (arguments) into destination
-     *  
-     *  @param [in] value Description for value
-     *  @return Return description
-     *  
-     *  @details 
-
-     */
-    type_of: function(value){
-      let type;
-      for(type in SeeIf){
-        if(SeeIf[type](value)){
-          return type;
-        }
-      }
-      // SeeIf can't see it, so it's not defined
-      // this should never be possible
-      throw Doh.error("SeeIf couldn't find a type for:'",value,"'");
-      return undefined;
-    },
-    /**
-     *  
-     */
-    MeldedTypeMatch: {
-      // currently implemented meldable types
-      'method':SeeIf.IsFunction,
-        'phase':SeeIf.IsFunction,
-      'object':SeeIf.IsObjectObject,
-        'idea':SeeIf.IsObjectObject,
-      'array':SeeIf.IsArray,
-    },
-    /**
-     *  
-     */
-    MeldedTypeDefault:{
-      // currently implemented meldable types
-      'method':function(){},
-        'phase':function(){},
-      'object':{},
-        'idea':{},
-      'array':[],
-    },
-    /**
-     *  @brief Brief description
-     *  
-     *  @param [in] value Description for value
-     *  @param [in] is    Description for is
-     *  @return Return description
-     *  
-     *  @details 
-
-     */
-    type_match: function(value, is){
-      //if(Doh.type_of(Doh.MeldedTypeMatch[is]) === 'IsFunction')
-      //if(SeeIf.IsFunction(Doh.MeldedTypeMatch[is]))
-      //if(SeeIf['IsFunction'](Doh.MeldedTypeMatch[is]))
-      if(typeof Doh.MeldedTypeMatch[is] === 'function')
-        return Doh.MeldedTypeMatch[is](value);
-      else if(typeof SeeIf[is] === 'function')
-        return SeeIf[is](value);
-
-      return false;
     },
 
     /*
@@ -633,18 +564,15 @@ Doh.type_of(unet.uNetNodes['1-1'])
 
 
   */        
-
-
-      // AA: clearly another essay is needed here  
-      
-    // 
+    
+    // AA: clearly another essay is needed here  
     /**
      *  @brief Allow meld_ideas to be called with multiple ideas: _meld_ideas(dest, idea1, idea2, idea3, ...)
      *  
      *  @param [in] destination [object/falsey] an object to modify, or falsey/{} to create a new object and return it
-     *  @return Return description
+     *  @return destination
      *  
-     *  @details More details
+     *  @details 
      */
     _meld_ideas: function(destination){
       for(let i in arguments){
@@ -658,45 +586,54 @@ Doh.type_of(unet.uNetNodes['1-1'])
      *  @brief Use Doh's meld_ functions to meld two ideas together.
      *    Uses destination.melded and idea.melded to define meld and data types for each property.
      *  
-     *  @param [in] destination Description for idea
-     *  @param [in] idea Description for idea
-     *  @return Return description
+     *  @param [in] destination [object] to meld into
+     *  @param [in] idea        [object] to meld from
+     *  @return destination
      *  
      *  @details 
-
      */
     meld_ideas:function(destination = {}, idea) {
-      let prop_name = '';
+      let prop_name = '', melded_type, idea_prop, idea_melded_type;
       
       //test melded stuff and make sure it is what we expect
       if(idea.melded){
         // we only want to know if the destination is going to be overwritten by the idea
         for(prop_name in idea.melded){
+          idea_melded_type = idea.melded[prop_name];
+          idea_prop = idea[prop_name];
           if(destination.melded){
             // deal with destination defines a meld type that is different from idea
-            if(destination.melded[prop_name])if(destination.melded[prop_name] != idea.melded[prop_name]){
-              throw Doh.error('Doh.meld_ideas(',destination,',',idea,'). destination.melded[',prop_name,']:',destination.melded[prop_name],'will be overwritten by idea.melded[',prop_name,']:',idea.melded[prop_name]);
+            if(destination.melded[prop_name]){
+              if(destination.melded[prop_name] != idea_melded_type){
+                Doh.debug('Doh.meld_ideas(',destination,',',idea,'). destination.melded[',prop_name,']:',destination.melded[prop_name],'will be overwritten by idea.melded[',prop_name,']:',idea_melded_type);
+              }
+              if(idea_melded_type === 'exclusive'){
+                // if we made it here then the check above has ensured we agree on the melded type.
+                // However!! destination already reserved it, this is an error.
+                Doh.debug('Doh.meld_ideas(',destination,',',idea,') found that a destination and idea both want the same property:',prop_name,'to be exclusive.');
+              }
             }
           }
           // deal with destination already has a property of type that is incompatible with idea.melded type
           if(SeeIf.IsDefined(destination[prop_name])){
-            if(!Doh.type_match(destination[prop_name], idea.melded[prop_name])){
-              throw Doh.error('Doh.meld_ideas(',destination,',',idea,'). destination[',prop_name,']:',destination[prop_name],'is an incompatible type with idea.melded[',prop_name,']:',idea.melded[prop_name]);
+            if(!Doh.type_match(destination[prop_name], idea_melded_type)){
+              Doh.debug('Doh.meld_ideas(',destination,',',idea,'). destination[',prop_name,']:',destination[prop_name],'is an incompatible type with idea.melded[',prop_name,']:',idea_melded_type);
             }
           }
           // deal with idea has a property of type that is incompatible with idea.melded type
-          if(SeeIf.IsDefined(idea[prop_name])){
-            if(!Doh.type_match(idea[prop_name], idea.melded[prop_name])){
-              throw Doh.error('Doh.meld_ideas(',destination,',',idea,'). idea[',prop_name,']:',idea[prop_name],'is an incompatible type with idea.melded[',prop_name,']:',idea.melded[prop_name]);
+          if(SeeIf.IsDefined(idea_prop)){
+            if(!Doh.type_match(idea_prop, idea_melded_type)){
+              Doh.debug('Doh.meld_ideas(',destination,',',idea,'). idea[',prop_name,']:',idea_prop,'is an incompatible type with idea.melded[',prop_name,']:',idea_melded_type);
             }
           }
         }
       }
       prop_name = '';
       for(prop_name in destination.melded){
+          idea_prop = idea[prop_name];
         // deal with idea has a property of type that is incompatible with destination melded type
-        if(SeeIf.IsDefined(idea[prop_name]))if(destination.melded[prop_name])if(!Doh.type_match(idea[prop_name], destination.melded[prop_name])){
-          throw Doh.error('Doh.meld_ideas(',destination,',',idea,'). idea[',prop_name,']:',idea[prop_name],'is an incompatible type with destination.melded[',prop_name,']:',destination.melded[prop_name]);
+        if(SeeIf.IsDefined(idea_prop))if(destination.melded[prop_name])if(!Doh.type_match(idea_prop, destination.melded[prop_name])){
+          Doh.debug('Doh.meld_ideas(',destination,',',idea,'). idea[',prop_name,']:',idea_prop,'is an incompatible type with destination.melded[',prop_name,']:',destination.melded[prop_name]);
         }
       }
       
@@ -705,44 +642,43 @@ Doh.type_of(unet.uNetNodes['1-1'])
       // loop over the idea and decide what to do with the properties
       prop_name = '';
       for(prop_name in idea){
-        if(idea[prop_name] !== undefined && idea[prop_name] !== destination[prop_name]){
-          if(melded[prop_name] === 'method' || melded[prop_name] === 'phase'){
-            // we handle melded methods and phases later
-            // we set to the idea's property so that the meld still "melds", even though we should really update_meld_methods before using it
-            destination[prop_name] = idea[prop_name];
+        idea_prop = idea[prop_name];
+        melded_type = melded[prop_name];
+        if(idea_prop !== undefined && idea_prop !== destination[prop_name]){
+          if(melded_type === 'method' || melded_type === 'phase' || melded_type === 'exclusive'){
+            // melded methods and phases will be updated outside of meld. our job is just to copy idea onto destination.
+            // exclusive properties only come from first idea that claims it, this 'ownership' is resolved with thrown errors above, so we always copy.
+            destination[prop_name] = idea_prop;
             continue;
           }
-          if(melded[prop_name] === 'object' || (typeof idea[prop_name] == 'object' && !Array.isArray(idea[prop_name]) && SeeIf.IsEmptyObject(idea[prop_name]))){
+          if(melded_type === 'object' || (typeof idea_prop == 'object' && !Array.isArray(idea_prop) && SeeIf.IsEmptyObject(idea_prop))){
             // it's a melded object or an empty default
-            destination[prop_name] = Doh.meld_objects(destination[prop_name], idea[prop_name]);
+            destination[prop_name] = Doh.meld_objects(destination[prop_name], idea_prop);
             continue;
           }
-          if(melded[prop_name] === 'array' || (Array.isArray(idea[prop_name]) && !idea[prop_name].length)){
+          if(melded_type === 'array' || (Array.isArray(idea_prop) && !idea_prop.length)){
             // it's a melded array or an empty default
-            destination[prop_name] = Doh.meld_arrays(destination[prop_name], idea[prop_name]);
+            destination[prop_name] = Doh.meld_arrays(destination[prop_name], idea_prop);
             continue;
           }
           // stack the ifs for speed
-          if(idea[prop_name].pattern)if(!idea[prop_name].machine)if(!idea[prop_name].skip_auto_build){
+          if(idea_prop.pattern)if(!idea_prop.machine)if(!idea_prop.skip_auto_build){
             // it's an auto-build property, auto-meld it below
             destination.melded[prop_name] = melded[prop_name] = 'idea';
           }
-          if(melded[prop_name] === 'idea'){
+          if(melded_type === 'idea'){
             destination[prop_name] = destination[prop_name] || {};
-            destination[prop_name] = Doh.meld_ideas(destination[prop_name], idea[prop_name]);
+            destination[prop_name] = Doh.meld_ideas(destination[prop_name], idea_prop);
             continue;
           }
           
           // non-melded property
-          destination[prop_name] = idea[prop_name];
+          destination[prop_name] = idea_prop;
         }
       }
 
       return destination;
     },
-    
-    // keyed by pattern, a list of things that inherit from it
-    PatternInheritedBy: {},
 
     /*
 
@@ -781,7 +717,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
         // only allow this if the idea contains its own pattern name
         idea = name;
         if(SeeIf.IsString(idea.pattern)) name = idea.pattern;
-        else throw Doh.error('Doh.pattern('+idea+') tried to make a pattern with no name');
+        else Doh.debug('Doh.pattern('+idea+') tried to make a pattern with no name');
 
         // inherits will be in the idea.inherits
         inherits = false;
@@ -809,7 +745,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
       // DebugMode tells us to look at pattern creation
       if(Doh.DebugMode){
         // just generates a bunch of warns and stuff with a few possible fixes. Should not be used in production.
-        Doh.see_pattern_keys(idea);
+        Doh.watch_pattern_keys(idea);
       }
 
       // clean up the various ways that inherits may be passed
@@ -832,13 +768,13 @@ Doh.type_of(unet.uNetNodes['1-1'])
         meld_type_name = idea.melded[prop_name];
         // find out if there is a type mismatch between what .melded thinks the property SHOULD be and what IT IS.
         if(SeeIf.IsDefined(idea[prop_name]))if(!Doh.type_match(idea[prop_name], meld_type_name)){
-          throw Doh.error('Doh.patterns(',idea.pattern,').',prop_name,' was defined as a melded',meld_type_name,' but is not a',meld_type_name,'.',idea[prop_name],idea);
+          Doh.debug('Doh.patterns(',idea.pattern,').',prop_name,' was defined as a melded',meld_type_name,' but is not a',meld_type_name,'.',idea[prop_name],idea);
         }
         // find out if we have defined a default for this melded type
         if(Doh.MeldedTypeDefault[meld_type_name]) meld_type_js = Doh.MeldedTypeDefault[meld_type_name];
         // otherwise, find out if the melded type is unknown
-        else if(!SeeIf[meld_type_name]) {
-          throw Doh.error('Doh.pattern(',idea.pattern,') tried to define unknown meld type:',meld_type_name,'for idea:',idea);
+        else if(!Doh.MeldedTypeMatch[meld_type_name] && !SeeIf[meld_type_name]) {
+          Doh.debug('Doh.pattern(',idea.pattern,') tried to define unknown meld type:',meld_type_name,'for idea:',idea);
         }
         // default the property if needed.
         if(meld_type_js){
@@ -857,6 +793,73 @@ Doh.type_of(unet.uNetNodes['1-1'])
       }
       // return the new pattern
       return idea;
+    },
+    
+    // This is used by the builder to a mix a pattern into a new instance of an object
+    // AA: Describe how it might be used by a developer?
+    /**
+     *  @brief Mix a pattern from Patterns into destination
+     *  
+     *  @param [in] destination [object] the object to copy onto
+     *  @param [in] pattern     [string] the name of a pattern to mixin
+     *  @return destination
+     *  
+     *  @details Will also update_meld_methods for destination if it was previously built by New()
+     */
+    mixin_pattern: function(destination, pattern){
+      // some checking for the pattern and double-mixing
+      if(Patterns[pattern]){
+        if(!InstanceOf(destination, pattern)){
+          // check for invalid mixin
+          Doh.meld_ideas(destination, Patterns[pattern]);
+          // this mixin type is 
+          destination.inherited[pattern] = Patterns[pattern];
+          
+          // this section is only run if we are mixing into an already built object
+          if(destination.machine){
+            // we only want to update melds if the object is already built
+            // inherited is only present on instances, patterns don't have it
+            // and neither do plain ideas
+            Doh.update_meld_methods(destination);
+          }
+        }
+      } else {
+        Doh.debug('Doh.mixin_pattern(',destination,',',pattern,') did not find the pattern');
+      }
+      return destination;
+    },
+        
+    // AA: Surely this merits a small dissertation
+    /**
+     *  @brief Return a collection of all ancestor dependencies
+     *  
+     *  @param [in] inherits  [string/array/object] a name, list of names, or object whose keys are a list of things to inherit
+     *  @param [in] skip_core [bool] remove core dependencies from the list? Default to false.
+     *  @return object-list where keys are inherited patterns
+     *  
+     *  @details core dependencies refers to modules that come from core modules and are therefore
+     *           considered universally available. In some cases it may be useful to know how dependant
+     *           a given pattern is on external patterns, rather than core ones.
+     */
+    extend_inherits: function(inherits, skip_core = false){
+      var extended = {};
+      if(SeeIf.NotObjectObject(inherits)) inherits = Doh.meld_into_objectobject(inherits);
+      for(var pattern_name in inherits){
+        if(!Patterns[pattern_name]) Doh.debug('Doh.extend_inherits() did not find pattern:', pattern_name, 'in inherits list:', inherits); // CHRIS:  Andy added this error msg, is there a better way?
+        if(skip_core){
+          //Doh.log(Doh.PatternModule[pattern_name],'spawns',pattern_name,'from',inherits);
+          if(pattern_name !== 'idea')if(Doh.PatternModule[pattern_name].indexOf('/doh_js/') == 0){
+            //Doh.log('Doh.extend_inherits() is skipping core and found a core pattern:', pattern_name, 'from module:', Doh.PatternModule[pattern_name]);
+            // this is a core module because the string starts with /doh_js/
+            inherits[pattern_name] = null;
+            delete inherits[pattern_name]
+            continue;
+          }
+        }
+        Doh.meld_objects(extended, Doh.extend_inherits(Patterns[pattern_name].inherits, skip_core));
+      }
+      Doh.meld_objects(extended, inherits);
+      return extended;
     },
     
     // MANDATORY FOR OBJECTS TO BE SINGLETON CLASSES
@@ -892,6 +895,8 @@ Doh.type_of(unet.uNetNodes['1-1'])
      *
      *  @details
      *  Can be called as follows:
+     *   New(DohObject, *optional* 'phase');    *[DohObject], [string] sending an already built object through New will move it through the phases
+     *                                                                 to 'phase' or 'final' if none is specified.
      *   New(idea);                             *[object] requires the idea to define .pattern, machine to 'final' phase
      *   New('somepattern', idea);              *[string/array], [object] create a DohObject from 'somepattern' then meld idea to it, machine to 'final' phase
      *   New(['pattern1', 'pattern2'], idea);                                                     (OR 'pattern1' THEN 'pattern2')
@@ -960,6 +965,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
       // even if you add more phases after phase-time and run machine again.
       phase = phase || 'final';
       // if the idea already has a machine, just run it to the specified or final phase
+      
       if(idea.machine){
         idea.machine(phase);
         return idea;
@@ -974,7 +980,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
         if(!Patterns[idea.pattern]) {
           // we could not find at least one pattern
           // default to object
-         Doh.error('New idea had no inherits OR no pattern was found, default pattern to "object"',idea);
+         Doh.debug('New idea had no inherits OR no pattern was found, default pattern to "object"',idea);
          
          idea.pattern = 'object';
         }
@@ -987,13 +993,6 @@ Doh.type_of(unet.uNetNodes['1-1'])
       // now that we have all the patterns defined and passed in, get the patterns that all that stuff depend on
       // collect a list of patterns by recursively crawling the pattern .inherits
       var patterns = Doh.meld_objects(Doh.extend_inherits(Patterns[idea.pattern].inherits), Doh.extend_inherits(idea.inherits));
-      /*
-      var patterns = Doh.extend_inherits(Patterns[idea.pattern].inherits);
-      // allow the idea to specify last-second inherits to at the end
-      var idea_patterns = Doh.extend_inherits(idea.inherits);
-      // add inherited patterns from the idea if missing from patterns
-      patterns = Doh.meld_objects(patterns, idea_patterns);
-      */
 
       // add the pattern last
       if(idea.pattern) patterns[idea.pattern] = true;
@@ -1002,7 +1001,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
       i = '';
       for(i in patterns){
         if(!Patterns[i]){
-          Doh.warn('Doh.New('+ idea.pattern + ') tried to inherit from "', i, '" but it was not found, skipping it entirely.');
+          Doh.debug('Doh.New('+ idea.pattern + ') tried to inherit from "', i, '" but it was not found, skipping it entirely.');
         }
         Doh.mixin_pattern(object, i);
       }
@@ -1033,7 +1032,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
       // Do stuff that only happens in DebugMode
       if(Doh.DebugMode){
         // just generates a bunch of warns and stuff with a few possible fixes. Should not be used in production.
-        Doh.see_pattern_keys(idea);
+        Doh.watch_pattern_keys(idea);
       
         // do we need to setup watches?
         for(let ancestor in object.inherited){
@@ -1063,11 +1062,11 @@ Doh.type_of(unet.uNetNodes['1-1'])
             watcher = '';
             for(watcher in keys){
               // each watcher needs a wrapper on the get trap that only looks for it's key
-              get_stack.push((function(keys, watcher, obj, prop, receiver){
+              get_stack.push((function(keys, watcher, object, prop, receiver){
                 // if we are the key, do a thing
                 if(watcher === prop)
                   // the thing we need to do should be a function that is the value of the watcher
-                  keys[watcher](obj, prop, receiver);
+                  keys[watcher](object, prop, receiver);
                   // we bind to this function so that the originalObject, keys, and watcher can pass through the closure
               }).bind(originalObject, keys, watcher));
               // tell the getter that we are watching this key
@@ -1160,12 +1159,6 @@ Doh.type_of(unet.uNetNodes['1-1'])
       
       // update the meld methods to include the inherited idea we just added
       Doh.update_meld_methods(object);
-
-      //fix the idealize method
-      object.idealize = Doh.idealize;
-      
-      //fix the perspective method
-      object.perspective = Doh.perspective.bind(object, object);
       
       // now we can add the handlers, since the object is finished being constructed and is ready to go through phases
       if(Doh.DebugMode){
@@ -1286,7 +1279,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
       return object.machine(phase);
     },
 
-        // AA: Explain how to use / where you should set these things (maybe templates belong on OnCoreLoaded?) 
+    // AA: Explain how to use / where you should set these things (maybe templates belong on OnCoreLoaded?) 
     /**
      *  
      */
@@ -1315,12 +1308,12 @@ Doh.type_of(unet.uNetNodes['1-1'])
     WatchedKeySetters:{
       /*
       'pattern1':{
-        'key1':function(obj, prop, value){},
-        'key2':function(obj, prop, value){},
+        'key1':function(object, prop, value){},
+        'key2':function(object, prop, value){},
       },
       'pattern8':{
-        'key1':function(obj, prop, value){},
-        'key2':function(obj, prop, value){},
+        'key1':function(object, prop, value){},
+        'key2':function(object, prop, value){},
       },
       */
     },
@@ -1337,20 +1330,15 @@ Doh.type_of(unet.uNetNodes['1-1'])
       */
     },
     
-    /*
-     *  Commands:
-     *    RenameTo: move the value to a different key.
-     */
     /**
-     *  @brief Shallow-meld multiple objects (arguments) into destination
+     *  @brief inspect and alter keys of patterns and New ideas
      *  
-     *  @param [in] idea Description for idea
-     *  @return Return description
+     *  @param [in] idea [object] to inspect for keys that need changes
+     *  @return nothing
      *  
-     *  @details 
-
+     *  @details Used by Doh.pattern and Doh.New to watch for changed or deprecated keys
      */
-    see_pattern_keys: function(idea){
+    watch_pattern_keys: function(idea){
       let logger_method = 'warn', idea_prop, pattern_prop, command, command_value;
       for(pattern_prop in Doh.WatchedKeys){
         idea_prop = '';
@@ -1404,294 +1392,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
       }
       return idea;
     },
-    
-    /*                                                 
-      ,,        ,,                     ,,    ,,                  
-      db      `7MM                   `7MM    db                  
-                MM                     MM                        
-    `7MM   ,M""bMM  .gP"Ya   ,6"Yb.    MM  `7MM  M"""MMV .gP"Ya  
-      MM ,AP    MM ,M'   Yb 8)   MM    MM    MM  '  AMV ,M'   Yb 
-      MM 8MI    MM 8M""""""  ,pm9MM    MM    MM    AMV  8M"""""" 
-      MM `Mb    MM YM.    , 8M   MM    MM    MM   AMV  ,YM.    , 
-    .JMML.`Wbmd"MML.`Mbmmd' `Moo9^Yo..JMML..JMML.AMMmmmM `Mbmmd' 
-                                                                 
-                                                             
-  */                                                                                                              
-                                                                                                                     
-    // change param name to inherits to indicate a inherits type array
-    // AA: I dont understand
-    /**
-     *  @brief Shallow-meld multiple objects (arguments) into destination
-     *  
-     *  @param [in] patterns Description for patterns
-     *  @param [in] active   Description for active
-     *  @return Return description
-     *  
-     *  @details 
 
-     */
-    idealize: function(patterns, active) {
-      let j, new_idea = {}, which_idea;
-      // default to finding the original idea
-      patterns = patterns || 'idea';
-      // make sure that patterns is an array
-      if(!Array.isArray(patterns)) patterns = [patterns];
-      // for each filter idea
-      for(let i=0; i<patterns.length; i++){
-        which_idea = patterns[i];
-        j = '';
-        // loop over the idea and use it to add properties from the inherited.idea
-        for(j in this.inherited[which_idea]){
-          // functions should only come from the inherited.idea
-          if(typeof this.inherited[which_idea][j] === 'function'){
-            if(which_idea === 'idea'){
-              new_idea[j] = this.inherited.idea[j];
-            }
-            continue;
-          }
-          // if we are getting active values, get them from this
-          if(which_idea === 'idea' || j !== 'inherits'){
-            if(active){
-              new_idea[j] = this[j];
-            } else if(this.inherited[which_idea][j] !== undefined) {
-              
-              new_idea[j] = this.inherited[which_idea][j];
-            }
-          }
-        }
-        // if the idea has a funtion for it's "ideal" state, run it
-        if(Patterns[which_idea])
-         if(typeof Patterns[which_idea].idealize === 'function'){
-            Patterns[which_idea].idealize.call(this, patterns, active, new_idea);
-        }
-      }
-      return new_idea;
-    },
-    
-    // show me properties/methods/both of a doh object filtered by [patterns]
-    /**
-     *  @brief Shallow-meld multiple objects (arguments) into destination
-     *  
-     *  @param [in] obj      Description for obj
-     *  @param [in] patterns Description for patterns
-     *  @param [in] methods  Description for methods
-     *  @return Return description
-     *  
-     *  @details 
-
-     */
-    perspective: function(obj, patterns, methods = false){
-      if(!obj) return false;
-      let prop, new_idea = {}, which_idea, pattern_object, original_patterns = patterns;
-      
-      Doh.log('Doh.perspective() was sent patterns:',patterns,'and methods:',methods);
-      // default to finding the original idea
-      patterns = patterns || 'idea';
-      if(patterns === 'idea'){
-        pattern_object = obj.inherited.idea;
-        /*
-         * ideas can introduce patterns for inheritance in: .inherits, New('pattern_name', ...), and New(['pattern_1', 'pattern_2'], ...)
-         * this is also the order of signifigance
-         * so pattern_2 will be the last pattern inherited.
-         */
-         patterns = Doh.meld_into_objectobject(patterns, pattern_object.inherits, pattern_object.pattern);
-      }
-      Doh.log('Doh.perspective() is using',patterns,'to extend inherits.');
-      // default to expanding the pattern, but skip core patterns, cause we never need those
-      patterns = Object.keys(Doh.extend_inherits(patterns, true));
-      Doh.log('Doh.perspective() found:',patterns);
-      // for each filter idea
-      for(let i=0; i<patterns.length; i++){
-        which_idea = patterns[i];
-        if(which_idea === 'idea'){
-          pattern_object = obj.inherited.idea;
-        } else {
-          pattern_object = Patterns[which_idea];
-        }
-        prop = '';
-        // loop over the pattern or idea and use it to add properties to new_idea
-        for(prop in pattern_object){
-          //if(which_idea !== 'object' /*|| i != 'html'*/){
-            if(!methods){
-              if(typeof obj[prop] !== 'function'){
-                new_idea[prop] = obj[prop];
-              }
-            } else {
-              if(methods === 'both'){
-                new_idea[prop] = obj[prop];
-              } else if(typeof obj[prop] === 'function'){
-                new_idea[prop] = obj[prop];
-              }
-            }
-          //}
-        }
-        // if it's a pattern or the idea that has a function for it's "perspective" state, then run it
-        if(pattern_object)
-          if(typeof pattern_object.perspective === 'function'){
-            pattern_object.perspective.call(this, obj, patterns, methods, which_idea, pattern_object, new_idea);
-          }
-      }
-      return new_idea;
-    },
-
-    // args.exclude_methods, args.truncate_methods, args.exclude_children
-    /**
-     *  @brief Shallow-meld multiple objects (arguments) into destination
-     *  
-     *  @param [in] idea Description for idea
-     *  @param [in] args Description for args
-     *  @return Return description
-     *  
-     *  @details 
-
-     */
-    idea_to_yaml: function(idea, args){
-      var ic = this.idea_to_ideacode(idea, args);
-      return jsyaml.load(ic);
-    },
-
-  // AA: show how this is used, what are the args?
-    /**
-     *  @brief Shallow-meld multiple objects (arguments) into destination
-     *  
-     *  @param [in] idea Description for idea
-     *  @param [in] args Description for args
-     *  @return Return description
-     *  
-     *  @details 
-
-     */
-    idea_to_ideacode: function(idea, args){
-
-      var trailing_comma = '';
-
-      var str = (Array.isArray(idea)? '[':'{');
-
-      for(var i in idea){
-        if(i == 'prototype' || i == '__proto__') {continue;}
-        if(idea[i] instanceof Doh.jQuery) {continue;}
-        if(InstanceOf(idea[i])){ continue;}
-        if(args){
-          if(args.exclude_methods){if(typeof idea[i] == 'function') continue;}
-          if(args.exclude_children){if(i == 'children') continue;}
-        }
-
-        str = str + trailing_comma;
-        trailing_comma = ',';
-
-        if(!Array.isArray(idea)) str = str + '"' + i + '":';
-
-        switch(typeof idea[i]){
-          case 'function':
-            if(args)if(args.truncate_methods){
-              str = str + 'Function';
-              break;
-            }
-          case 'number':
-          case 'boolean': // ANDY added 11.30.19
-            str = str + ''+idea[i];
-            break;
-          case 'object':
-          case 'array':
-            str = str + Doh.idea_to_ideacode(idea[i]);
-            break;
-          case 'string':
-            if(i == 'children'){
-              str = str + ''+idea[i];
-              break;
-            }
-          default:
-            str = str + '"' + idea[i] + '"';
-            break;
-        }
-      }
-
-      str = str + (Array.isArray(idea)? ']':'}');
-
-      return str;
-    },
-    /**
-     *  @brief Shallow-meld multiple objects (arguments) into destination
-     *  
-     *  @param [in] idea   Description for idea
-     *  @param [in] indent Description for indent
-     *  @return Return description
-     *  
-     *  @details 
-
-     */
-    idea_to_pretty_ideacode: function(idea, indent){
-      var args = false;
-      if(typeof indent == 'object'){
-        args = indent;
-        indent = args.indent || 1;
-      } else indent = indent || 1;
-      var indent_type = '  ', indent_str = indent_type.repeat(indent);
-
-      var trailing_comma = '';
-
-      var str = (Array.isArray(idea)? '[\n':'{\n');
-
-      for(var i in idea){
-        if(i == 'prototype' || i == '__proto__') {continue;}
-        if(idea[i] instanceof Doh.jQuery) {continue;}
-        if(InstanceOf(idea[i])){ continue;}
-        if(args){
-          if(args.exclude_methods){if(typeof idea[i] == 'function') continue;}
-          if(args.exclude_children){if(i == 'children') continue;}
-        }
-
-        str = str + trailing_comma;
-        trailing_comma = ',\n';
-
-        if(!Array.isArray(idea)) str = str + indent_str + i + ':';
-        else str = str + indent_str;
-
-        switch(typeof idea[i]){
-          case 'function':
-            if(args)if(args.truncate_methods){
-              str = str + 'Function';
-              break;
-            }
-          case 'number':
-            str = str + ''+idea[i];
-            break;
-          case 'object':
-          case 'array':
-            str = str + Doh.idea_to_ideacode(idea[i], indent + 1);
-            break;
-          case 'string':
-            if(i == 'children'){
-              str = str + ''+idea[i];
-              break;
-            }
-          default:
-            str = str + '"' + idea[i] + '"';
-            break;
-        }
-      }
-
-      str = str + indent_type.repeat(indent - 1 || 0) + (Array.isArray(idea)? ']':'}');
-
-      return str;
-    },
-
-
-    // AA: ?
-    /**
-     *  @brief Shallow-meld multiple objects (arguments) into destination
-     *  
-     *  @param [in] ideacode Description for ideacode
-     *  @return Return description
-     *  
-     *  @details 
-
-     */
-    ideacode_to_source: function(ideacode){
-      return 'New(' + ideacode + ');\n';
-    },
-
-    // AA: This appears to be a method you can use to learn something an object you care about.   since "meld" is a verb, this isn't obvious -- this COULD be some kind of transformer / operator function.  
     // AA:  can we develop a system for readability / discovery.   maybe things like this (that return info) should be named "get_meld_method_order" or "meld_method_order_to_array"
     /**
      *  @brief Shallow-meld multiple objects (arguments) into destination
@@ -1701,9 +1402,8 @@ Doh.type_of(unet.uNetNodes['1-1'])
      *  @return Return description
      *  
      *  @details 
-
      */
-    meld_method_order: function(object, method){
+    get_melded_method_order: function(object, method){
       var meld_method_order = [], pre_meld_method_order = [];
       for(var i in object.inherited){
         if(object.inherited[i]['pre_'+method]) pre_meld_method_order.push(i+'.pre_'+method);
@@ -1712,7 +1412,6 @@ Doh.type_of(unet.uNetNodes['1-1'])
       return pre_meld_method_order.concat(meld_method_order);
     },
     
-    // AA: because "phases" isnt really a verb, this one isn't as confusing, but we should be consistent -- something like "get_phases_method_order" or "phases_method_order_to_array"
     /**
      *  @brief Shallow-meld multiple objects (arguments) into destination
      *  
@@ -1720,19 +1419,17 @@ Doh.type_of(unet.uNetNodes['1-1'])
      *  @return Return description
      *  
      *  @details 
-
      */
-    phases_method_order: function(object){
+    get_phase_method_order: function(object){
       var phases_method_order = [];
       for(var melded_prop in object.melded){
         if(object.melded[melded_prop] === 'phase'){
-          phases_method_order.push(Doh.meld_method_order(object, melded_prop));
+          phases_method_order.push(Doh.get_melded_method_order(object, melded_prop));
         }
       }
       return phases_method_order;
     },
         
-    // AA: because "phases" isnt really a verb, this one isn't as confusing, but we should be consistent -- something like "get_meld_methods_order" or "meld_methods_order_to_array"
     /**
      *  @brief Shallow-meld multiple objects (arguments) into destination
      *  
@@ -1740,26 +1437,25 @@ Doh.type_of(unet.uNetNodes['1-1'])
      *  @return Return description
      *  
      *  @details 
-
      */
-    meld_methods_order: function(object){
+    get_all_melded_method_order: function(object){
       var methods_order = [], counter = 0, phase_methods = 0;
       
       for(var melded_prop in object.melded){
         if(object.melded[melded_prop] === 'method' || object.melded[melded_prop] === 'phase'){
-          methods_order.push(Doh.meld_method_order(object, melded_prop));
+          methods_order.push(Doh.get_melded_method_order(object, melded_prop));
           counter += methods_order[methods_order.length-1].length
         }
       }
       /*
       for(let i in object.phases){
-        methods_order.push(Doh.meld_method_order(object, object.phases[i]));
+        methods_order.push(Doh.get_melded_method_order(object, object.phases[i]));
         counter += methods_order[methods_order.length-1].length
       }
       phase_methods = counter;
       Doh.log('has:', phase_methods, ' phase methods.');
       for(let i in object.meld_methods){
-        methods_order.push(Doh.meld_method_order(object, object.meld_methods[i]));
+        methods_order.push(Doh.get_melded_method_order(object, object.meld_methods[i]));
         counter += methods_order[methods_order.length-1].length
       }
       Doh.log('and:', counter - phase_methods, ' melded methods.');
@@ -1776,16 +1472,14 @@ Doh.type_of(unet.uNetNodes['1-1'])
      *  @return Return description
      *  
      *  @details 
-
      */
-    log_melded_method: function(object, method){
-      var method_array = Doh.meld_method_order(object, method);
+    log_melded_method_string: function(object, method){
+      var method_array = Doh.get_melded_method_order(object, method);
       for (i in method_array){
         Doh.log(method_array[i],object.inherited[method_array[i].split('.')[0]][method].toString());
       }
     },
     
-    // AA: This sounds like it would DO something, but all it does is print a log?  wait it's identical to its better-named twin above? 
     // send a clickable list of the melded methods to the Doh log
     /**
      *  @brief Shallow-meld multiple objects (arguments) into destination
@@ -1795,10 +1489,9 @@ Doh.type_of(unet.uNetNodes['1-1'])
      *  @return Return description
      *  
      *  @details 
-
      */
-    link_melded_method: function(object, method){
-      var method_array = Doh.meld_method_order(object, method);
+    log_melded_method_source: function(object, method){
+      var method_array = Doh.get_melded_method_order(object, method);
       for (i in method_array){
         Doh.log(method_array[i],object.inherited[method_array[i].split('.')[0]][method]);
       }
@@ -1824,9 +1517,6 @@ Doh.type_of(unet.uNetNodes['1-1'])
     if(object)if(object.inherited)if(object.inherited[type]) return true;
     return false;
   }
-  //Doh.Error = Doh.error;
-  //Doh.Warn = Doh.warn;
-
 
   // AA: It might be worth crafting a small ode to the elegance of this
   /**
@@ -1839,9 +1529,16 @@ Doh.type_of(unet.uNetNodes['1-1'])
    *  
    */
   Pattern('object', {
+    // define the melded types of all objects of Doh
     melded:{
+      // always meld this collection so our patterns can extend this
       melded:'object',
+      // mark object_phase as a phase
       object_phase:'phase',
+      // mark idealize and perspective as exclusive
+      // this will indicate that we want the builder to ignore anyone setting it except us
+      idealize:'exclusive',
+      perspective:'exclusive',
     },
     // ensure that we are the base object phase
     object_phase: function() {
@@ -1865,8 +1562,133 @@ Doh.type_of(unet.uNetNodes['1-1'])
         }
       }
     },
+    /*                                                 
+      ,,        ,,                     ,,    ,,                  
+      db      `7MM                   `7MM    db                  
+                MM                     MM                        
+    `7MM   ,M""bMM  .gP"Ya   ,6"Yb.    MM  `7MM  M"""MMV .gP"Ya  
+      MM ,AP    MM ,M'   Yb 8)   MM    MM    MM  '  AMV ,M'   Yb 
+      MM 8MI    MM 8M""""""  ,pm9MM    MM    MM    AMV  8M"""""" 
+      MM `Mb    MM YM.    , 8M   MM    MM    MM   AMV  ,YM.    , 
+    .JMML.`Wbmd"MML.`Mbmmd' `Moo9^Yo..JMML..JMML.AMMmmmM `Mbmmd' 
+                                                                 
+                                                             
+    */                                                                                                          
+    // change param name to inherits to indicate a inherits type array
+    /**
+     *  @brief reduce an object to it's 'ideal' state based on a list of
+     *         patterns it inherits from
+     *  
+     *  @param [in] inherits [string/array/object] string or list of inherits to filter for
+     *  @param [in] active   [bool] default to false to get the initial values of each key for each pattern in inherits
+     *  @return a new idea containing the filtered set of keys from this
+     *  
+     *  @details Differs from .perspective because the list of patterns MUST be in .inherited,
+     *           functions will always be ignored, and values can be retrieved from the .inherited defaults or that active object
+     */
+    idealize: function(inherits, active) {
+      let j, new_idea = {}, which_idea;
+      // default to finding the original idea
+      inherits = inherits || 'idea';
+      // make sure that inherits is an array
+      inherits = Object.keys(Doh.meld_into_objectobject(inherits));
+      // for each filter idea
+      for(let i=0; i<inherits.length; i++){
+        which_idea = inherits[i];
+        j = '';
+        // loop over the idea and use it to add properties from the inherited.idea
+        for(j in this.inherited[which_idea]){
+          // functions should only come from the inherited.idea
+          if(typeof this.inherited[which_idea][j] === 'function'){
+            if(which_idea === 'idea'){
+              new_idea[j] = this.inherited.idea[j];
+            }
+            continue;
+          }
+          // if we are getting active values, get them from this
+          if(which_idea === 'idea' || j !== 'inherits'){
+            if(active){
+              new_idea[j] = this[j];
+            } else if(this.inherited[which_idea][j] !== undefined) {
+              
+              new_idea[j] = this.inherited[which_idea][j];
+            }
+          }
+        }
+        // if the idea has a funtion for it's "ideal" state, run it
+        if(Patterns[which_idea])
+         if(typeof Patterns[which_idea].idealize === 'function'){
+            Patterns[which_idea].idealize.call(this, inherits, active, new_idea);
+        }
+      }
+      return new_idea;
+    },
+    
+    /**
+     *  @brief Show properties/methods/both of a doh object filtered by 
+     *         an arbitrary list of patterns
+     *  
+     *  @param [in] patterns [string/array/object] list of patterns to filter for
+     *  @param [in] methods  Description for methods
+     *  @return a new idea containing the filtered set of keys from this
+     *  
+     *  @details Differs from .idealize because the list of patterns does not have to be from .inherited,
+     *           values retrieved are always from this rather than .inherited,
+     *           and methods can be optionally included, or selected exclusively
+     */
+    perspective: function(patterns, methods = false){
+      let prop, new_idea = {}, which_idea, pattern_object, original_patterns = patterns;
+      
+      Doh.log('Doh.perspective() was sent patterns:',patterns,'and methods:',methods);
+      // default to finding the original idea
+      patterns = patterns || 'idea';
+      if(patterns === 'idea'){
+        pattern_object = this.inherited.idea;
+        /*
+         * ideas can introduce patterns for inheritance in: .inherits, New('pattern_name', ...), and New(['pattern_1', 'pattern_2'], ...)
+         * this is also the order of signifigance
+         * so pattern_2 will be the last pattern inherited.
+         */
+         patterns = Doh.meld_into_objectobject(patterns, pattern_object.inherits, pattern_object.pattern);
+      }
+      Doh.log('Doh.perspective() is using',patterns,'to extend inherits.');
+      // default to expanding the pattern, but skip core patterns, cause we never need those
+      patterns = Object.keys(Doh.extend_inherits(patterns, true));
+      Doh.log('Doh.perspective() found:',patterns);
+      // for each filter idea
+      for(let i=0; i<patterns.length; i++){
+        which_idea = patterns[i];
+        if(which_idea === 'idea'){
+          pattern_object = this.inherited.idea;
+        } else {
+          pattern_object = Patterns[which_idea];
+        }
+        prop = '';
+        // loop over the pattern or idea and use it to add properties to new_idea
+        for(prop in pattern_object){
+          //if(which_idea !== 'object' /*|| i != 'html'*/){
+            if(!methods){
+              if(typeof this[prop] !== 'function'){
+                new_idea[prop] = this[prop];
+              }
+            } else {
+              if(methods === 'both'){
+                new_idea[prop] = this[prop];
+              } else if(typeof this[prop] === 'function'){
+                new_idea[prop] = this[prop];
+              }
+            }
+          //}
+        }
+        // if it's a pattern or the idea that has a function for it's "perspective" state, then run it
+        if(pattern_object)
+          if(typeof pattern_object.perspective === 'function'){
+            pattern_object.perspective.call(this, patterns, methods, which_idea, pattern_object, new_idea);
+          }
+      }
+      return new_idea;
+    },
   });
-
 
 // AA: group this with the log stuff above?   
   Pattern('log', 'object', {
@@ -1911,8 +1733,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
                                                                    OOb"                                                                                                                                                                         
 */
 
-
-// AA: talk about the relationship of this to html, the role of the children array
+  // AA: talk about the relationship of this to html, the role of the children array
 
   Pattern('parenting', 'object', {
     // parent should be a Doh Object or false
@@ -2024,8 +1845,46 @@ Doh.type_of(unet.uNetNodes['1-1'])
  * Collection of fixes that apply to core Doh modules that aren't core itself.
  * We cannot make the core work with old stuff. Instead, we upgrade the old stuff to work with the new core
  */
+// fix old Doh. references that have moved
+// NOTE: we aggressively comment these out as soon they are no longer needed
+OnCoreLoaded(Doh.DebugMode, function(){
+  /*
+   * Fixes for changing the name of properties on Doh
+   */
+  var rename_wrapper = function(old_doh_prop, new_full_name, new_thing){
+    if(typeof new_thing === 'function'){
+      Doh[old_doh_prop] = function(){
+        Doh.warn('Using old name of Doh.'+old_doh_prop+'() for new method:',new_full_name+'()');
+        return new_thing(...arguments);
+      }
+    } else {
+      Doh[old_doh_prop] = new_thing;
+    }
+  }
+  
+  // these renames are fresh, and need to be run always
+  rename_wrapper('meld_method_stack', 'Doh.find_meld_method_stack', Doh.find_meld_method_stack);
+  rename_wrapper('meld_method_order', 'Doh.get_melded_method_order', Doh.get_melded_method_order);
+  rename_wrapper('phases_method_order', 'Doh.get_phase_method_order', Doh.get_phase_method_order);
+  rename_wrapper('meld_methods_order', 'Doh.get_all_melded_method_order', Doh.get_all_melded_method_order);
+  rename_wrapper('log_melded_method', 'Doh.log_melded_method_string', Doh.log_melded_method_string);
+  rename_wrapper('link_melded_method', 'Doh.log_melded_method_source', Doh.log_melded_method_source);
+  
+  //* these renames may still plague old code, but usually are not needed
+  for(var test in SeeIf){
+    rename_wrapper(test, 'SeeIf.'+test, SeeIf[test]);
+  }
+  rename_wrapper('isEmptyObject', 'SeeIf.IsEmptyObject', SeeIf.IsEmptyObject);
+  rename_wrapper('isSet', 'SeeIf.IsSet', SeeIf.IsSet);
+  rename_wrapper('inArray', 'Doh.in_array', Doh.in_array);
+  rename_wrapper('Warn', 'Doh.warn', Doh.warn);
+  rename_wrapper('Error', 'Doh.error', Doh.error);
+  rename_wrapper('ExtendInherits', 'Doh.extend_inherits', Doh.extend_inherits);
+  //*/
+});
+
 // fix old melders
-OnCoreLoaded(function(){
+OnCoreLoaded(Doh.DebugMode, function(){
   /*
    * Fixes for changing meld_arrays, meld_objects, meld_methods, and phases to .melded
    */
@@ -2064,42 +1923,33 @@ OnCoreLoaded(function(){
   });
 });
 
-// fix old Doh. references that have moved
-// NOTE: this usually stays off because we don't like it polluting Doh
-OnCoreLoaded(function(){
-  /*
-   * Fixes for changing the name of properties on Doh
-   */
-  var rename_wrapper = function(old_doh_prop, new_full_name, new_thing){
-    if(typeof new_thing === 'function'){
-      Doh[old_doh_prop] = function(){
-        Doh.warn('Using old name of Doh.'+old_doh_prop+'() for new method:',new_full_name+'()');
-        return new_thing(...arguments);
-      }
-    } else {
-      Doh[old_doh_prop] = new_thing;
-    }
-  }
-  /*
-  for(var test in SeeIf){
-    rename_wrapper(test, 'SeeIf.'+test, SeeIf[test]);
-  }
-  rename_wrapper('isEmptyObject', 'SeeIf.IsEmptyObject', SeeIf.IsEmptyObject);
-  rename_wrapper('isSet', 'SeeIf.IsSet', SeeIf.IsSet);
-  rename_wrapper('inArray', 'Doh.in_array', Doh.in_array);
-  rename_wrapper('Warn', 'Doh.warn', Doh.warn);
-  rename_wrapper('Error', 'Doh.error', Doh.error);
-  rename_wrapper('ExtendInherits', 'Doh.extend_inherits', Doh.extend_inherits);
-  */
-});
-
 OnLoad('/doh_js/utils', function($){
-    // AA: general utility?
+  /**
+   *  A place to house things that we no longer want in core, but don't yet have another home
+   */
   Doh.meld_objects(Doh, {
+    // AA:  Explain the role of ids
+    /**
+     *  @brief Get a new id
+     *
+     *  @return A new ephemeral id
+     *  
+     *  @details IDs are a simple way to get ephemeral indexes that reset on each page load
+     */
+    NewIdCounter:0,
+    new_id: function () {
+      return this.NewIdCounter += 1;
+    },
+
+    // AA: general utility?
+    array_move: function(array, from_index, to_index) {
+      array.splice(to_index, 0, array.splice(from_index, 1)[0]);
+      return array;
+    },
     /**
      *  @brief old closure melder for methods that bound them in a wrapper
      *  
-     *  @param [in] obj       [object/literal] to use for 'this'
+     *  @param [in] object    [object/literal] to use for 'this'
      *  @param [in] method    [function] to extend
      *  @param [in] extension [function] to run after method. (could be another wrapper)
      *  @return the new function
@@ -2108,11 +1958,11 @@ OnLoad('/doh_js/utils', function($){
      *           it's use is unknown. The new melders are so much better in ever way that it is
      *           not known if this method has any advantages at all.
      */
-    meld_methods: function(obj, method, extension){
+    meld_methods: function(object, method, extension){
         return function(){
-          method.apply(obj, arguments);
-          extension.apply(obj, arguments);
-          return obj;
+          method.apply(object, arguments);
+          extension.apply(object, arguments);
+          return object;
         }
     },
     /**
@@ -2182,12 +2032,164 @@ OnLoad('/doh_js/utils', function($){
      *  @details Very handy transposition tool, but currently unused in core
      */
     object_keys_from_array_values: function (array = []){
-      var obj = {};
+      var object = {};
       for(var i=0; i<array.length; i++){
-        obj[array[i]] = true
+        object[array[i]] = true
       }
-      return obj;
+      return object;
     },
+    
+    // args.exclude_methods, args.truncate_methods, args.exclude_children
+    /**
+     *  @brief Shallow-meld multiple objects (arguments) into destination
+     *  
+     *  @param [in] idea Description for idea
+     *  @param [in] args Description for args
+     *  @return Return description
+     *  
+     *  @details 
+     */
+    idea_to_yaml: function(idea, args){
+      var ic = this.idea_to_ideacode(idea, args);
+      return jsyaml.load(ic);
+    },
+
+  // AA: show how this is used, what are the args?
+    /**
+     *  @brief Shallow-meld multiple objects (arguments) into destination
+     *  
+     *  @param [in] idea Description for idea
+     *  @param [in] args Description for args
+     *  @return Return description
+     *  
+     *  @details 
+     */
+    idea_to_ideacode: function(idea, args){
+
+      var trailing_comma = '';
+
+      var str = (Array.isArray(idea)? '[':'{');
+
+      for(var i in idea){
+        if(i == 'prototype' || i == '__proto__') {continue;}
+        if(idea[i] instanceof Doh.jQuery) {continue;}
+        if(InstanceOf(idea[i])){ continue;}
+        if(args){
+          if(args.exclude_methods){if(typeof idea[i] == 'function') continue;}
+          if(args.exclude_children){if(i == 'children') continue;}
+        }
+
+        str = str + trailing_comma;
+        trailing_comma = ',';
+
+        if(!Array.isArray(idea)) str = str + '"' + i + '":';
+
+        switch(typeof idea[i]){
+          case 'function':
+            if(args)if(args.truncate_methods){
+              str = str + 'Function';
+              break;
+            }
+          case 'number':
+          case 'boolean': // ANDY added 11.30.19
+            str = str + ''+idea[i];
+            break;
+          case 'object':
+          case 'array':
+            str = str + Doh.idea_to_ideacode(idea[i]);
+            break;
+          case 'string':
+            if(i == 'children'){
+              str = str + ''+idea[i];
+              break;
+            }
+          default:
+            str = str + '"' + idea[i] + '"';
+            break;
+        }
+      }
+
+      str = str + (Array.isArray(idea)? ']':'}');
+
+      return str;
+    },
+    /**
+     *  @brief Shallow-meld multiple objects (arguments) into destination
+     *  
+     *  @param [in] idea   Description for idea
+     *  @param [in] indent Description for indent
+     *  @return Return description
+     *  
+     *  @details 
+     */
+    idea_to_pretty_ideacode: function(idea, indent){
+      var args = false;
+      if(typeof indent == 'object'){
+        args = indent;
+        indent = args.indent || 1;
+      } else indent = indent || 1;
+      var indent_type = '  ', indent_str = indent_type.repeat(indent);
+
+      var trailing_comma = '';
+
+      var str = (Array.isArray(idea)? '[\n':'{\n');
+
+      for(var i in idea){
+        if(i == 'prototype' || i == '__proto__') {continue;}
+        if(idea[i] instanceof Doh.jQuery) {continue;}
+        if(InstanceOf(idea[i])){ continue;}
+        if(args){
+          if(args.exclude_methods){if(typeof idea[i] == 'function') continue;}
+          if(args.exclude_children){if(i == 'children') continue;}
+        }
+
+        str = str + trailing_comma;
+        trailing_comma = ',\n';
+
+        if(!Array.isArray(idea)) str = str + indent_str + i + ':';
+        else str = str + indent_str;
+
+        switch(typeof idea[i]){
+          case 'function':
+            if(args)if(args.truncate_methods){
+              str = str + 'Function';
+              break;
+            }
+          case 'number':
+            str = str + ''+idea[i];
+            break;
+          case 'object':
+          case 'array':
+            str = str + Doh.idea_to_ideacode(idea[i], indent + 1);
+            break;
+          case 'string':
+            if(i == 'children'){
+              str = str + ''+idea[i];
+              break;
+            }
+          default:
+            str = str + '"' + idea[i] + '"';
+            break;
+        }
+      }
+
+      str = str + indent_type.repeat(indent - 1 || 0) + (Array.isArray(idea)? ']':'}');
+
+      return str;
+    },
+    // AA: ?
+    /**
+     *  @brief Shallow-meld multiple objects (arguments) into destination
+     *  
+     *  @param [in] ideacode Description for ideacode
+     *  @return Return description
+     *  
+     *  @details 
+     */
+    ideacode_to_source: function(ideacode){
+      return 'New(' + ideacode + ');\n';
+    },
+
   });
 
 });
@@ -2619,7 +2621,7 @@ OnLoad('/doh_js/utils', function($){
 }));
 
 // fix append_phase
-OnCoreLoaded(function(){
+OnCoreLoaded(Doh.DebugMode, function(){
   /*
    * Fixes for changing append_phase to html_phase
    */
@@ -2643,31 +2645,31 @@ OnLoad('/doh_js/html', function($){
      *  @return Doh Object or empty jQuery Selector Object
      */
     get_dobj: function( e ) {
-      var obj = e;
+      var object = e;
       if( typeof e == 'string' ) {
         // if it's a string, then it's a jquery selector
-        obj = Doh.jQuery(e);
+        object = Doh.jQuery(e);
       }
-      if( obj instanceof Doh.jQuery ) {
+      if( object instanceof Doh.jQuery ) {
         // if it's a jquery object, find the dobj that built it
-        if( obj[0] ){
-          if( obj[0].dobj ) obj = obj[0].dobj;
+        if( object[0] ){
+          if( object[0].dobj ) object = object[0].dobj;
           // or make a new one for it
           // TO ANDY: I don't think we use this and I don't really like it.
           // test raising warning
           else{
             Doh.warn('Doh.get_dobj(',e,") found a jQuery object that we didn't build.");
-            obj = New({pattern:'element', e:obj, parent:obj.parent()}, 'parenting_phase');
+            object = New({pattern:'element', e:object, parent:object.parent()}, 'parenting_phase');
           }
         }
         // the jQuery selector object is empty, we didn't find an actual element
-        else obj = false;
+        else object = false;
       }
-      if(!InstanceOf(obj)){
+      if(!InstanceOf(object)){
         Doh.warn('Doh.get_dobj could not find a doh object with:', e);
       }
       // in any case, at least return e
-      return obj || e;
+      return object || e;
     },
     /**
      *  @brief Refresh this window's cached sizes and boxes
@@ -2706,7 +2708,7 @@ OnLoad('/doh_js/html', function($){
 
   // AA: describe how this relates to the control phase
   // Also, this is an example of a developer-facing method (as opposed to internal build machinery) -- should we have a naming convention to make that difference clear?
-
+  // NOTE: get_controller_from_parents
   Doh.find_controller = function(object){
     // if the object is not of doh, then return false
     //NOTE: this keeps controls from cascading past their defined parents (e.g.: into vanilla html that contaiins them)
