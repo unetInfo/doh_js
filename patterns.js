@@ -1059,6 +1059,8 @@ OnLoad('/doh_js/core', function($){
               }).bind(originalObject, keys, watcher));
               // tell the setter that we are watching this key
               setters[watcher] = true;
+              // tell our checks below that we want a proxy
+              proxy = true;
             }
           }
           // look for getters by pattern and key
@@ -1077,16 +1079,21 @@ OnLoad('/doh_js/core', function($){
               }).bind(originalObject, keys, watcher));
               // tell the getter that we are watching this key
               getters[watcher] = true;
+              // tell our checks below that we want a proxy
+              proxy = true;
             }
           }
         }
-      
-        // we need the proxy reference early, but late-binding the handlers should be fine
-        originalObject.__handler__ = {};
-        originalObject.__handler__.setters = setters;
-        originalObject.__handler__.getters = getters;
-        // we replace object here so that the rest of the system will use it in their closures
-        object = new Proxy(originalObject, originalObject.__handler__);
+        // if already true, fine, otherwise only true if DebugMode is set to 'proxy'
+        proxy = proxy || (Doh.DebugMode==='proxy'?true:false);
+        if(proxy){
+          // we need the proxy reference early, but late-binding the handlers should be fine
+          originalObject.__handler__ = {};
+          originalObject.__handler__.setters = setters;
+          originalObject.__handler__.getters = getters;
+          // we replace object here so that the rest of the system will use it in their closures
+          object = new Proxy(originalObject, originalObject.__handler__);
+        }
       }
       
       // attach the object machine
@@ -1168,115 +1175,116 @@ OnLoad('/doh_js/core', function($){
       
       // now we can add the handlers, since the object is finished being constructed and is ready to go through phases
       if(Doh.DebugMode){
-        // use a fancy melded_method to apply our stack of setters to each set call
-        originalObject.__handler__.melded_set = Doh.meld_method(originalObject, set_stack);
-        // define the main set trap
-        originalObject.__handler__.set = function(target, prop, value){
-          // if we try and set __original__, just return target to keep us from having circular loops when looking in from the proxy
-          if(prop === '__original__') return target;
-          // if we have been told that there is a setter for this property
-          if(target.__handler__.setters[prop]){ 
-            //throw Doh.error('setter stuff:',object,target,prop,value);
-            // run the melded_set. Each setter will check if this is the prop it cares about
-            target.__handler__.melded_set(...arguments);
-          }
-          // no matter what happens, run the reflected set so that the object's behavior is unaltered.
-          return Reflect.set(...arguments);
-        };
-        
-        // use a fancy melded_method to apply our stack of setters to each set call
-        originalObject.__handler__.melded_get = Doh.meld_method(originalObject, get_stack);
-        // define the main get trap
-        originalObject.__handler__.get = function(target, prop){
-          // if we try and get __original__, just return target to keep us from having circular loops when looking in from the proxy
-          if(prop === '__original__') return target;
-          // if we have been told that there is a getter for this property
-          if(target.__handler__.getters[prop]){ 
-            //throw Doh.error('getter stuff:',object,target,prop,receiver);
-            // run the melded_get. Each getter will check if this is the prop it cares about
-            target.__handler__.melded_get(...arguments);
-          }
-          // no matter what happens, run the reflected set so that the object's behavior is unaltered.
-          return Reflect.get(...arguments);
-        };
-        
-        /*
-         * throw a generic error if a_property is being set
-         * thing.watch( 'a_property' )
-         *
-         * throw a generic error if a_property is being retrieved
-         * thing.watch( 'a_property', 'get')
-         *
-         * throw a generic error if a_property is being set to a number
-         * thing.watch( 'a_property', 'set', SeeIf.IsNumber )
-         *
-         * throw a generic error if a_property is a number when retrieved
-         * thing.watch( 'a_property', 'get', SeeIf.IsNumber )
-         *
-         * call the callback provided a_property is being set to a number
-         * thing.watch( 'a_property', 'set', SeeIf.IsNumber, function(target,prop,value){} )
-         *
-         * call the callback provided if a_property is being set to exactly 37
-         * thing.watch( 'a_property', 'set', 37,             function(target,prop,value){Doh.log('hey,',prop,'on',target,'set to:',value,';')} )
-         *
-         * call the callback provided if a_property is exactly 37 when retrieved
-         * thing.watch( 'a_property', 'get', 37,             function(target,prop,receiver){Doh.log('hey, got',prop,'=',target[prop],'; on',target)} )
-         *
-         */
-        /**
-         *  @brief Shallow-meld multiple objects (arguments) into destination
-         *  
-         *  @param [in] prop_name       Description for prop_name
-         *  @param [in] type            Description for type
-         *  @param [in] value_condition Description for value_condition
-         *  @param [in] callback        Description for callback
-         *  @return Return description
-         *  
-         *  @details 
-
-         */
-        originalObject.watch = function(prop_name, type = 'set', value_condition = SeeIf.IsAnything, callback){
-          // false if the value_condition is a value, otherwise IsSeeIf will be 
-          //   the string name of the SeeIf property that we should check
-          let IsSeeIf = false;
-          if(typeof value_condition === 'function'){
-            // we only want to know about functions that are the actual SeeIf properties
-            for(let tester in SeeIf){
-              if(value_condition === SeeIf[tester]){
-                IsSeeIf = tester;
-              }
+        if(proxy){
+          // use a fancy melded_method to apply our stack of setters to each set call
+          originalObject.__handler__.melded_set = Doh.meld_method(originalObject, set_stack);
+          // define the main set trap
+          originalObject.__handler__.set = function(target, prop, value){
+            // if we try and set __original__, just return target to keep us from having circular loops when looking in from the proxy
+            if(prop === '__original__') return target;
+            // if we have been told that there is a setter for this property
+            if(target.__handler__.setters[prop]){ 
+              //throw Doh.error('setter stuff:',object,target,prop,value);
+              // run the melded_set. Each setter will check if this is the prop it cares about
+              target.__handler__.melded_set(...arguments);
             }
-          }
-          
-          let thrower = function(target, prop, value){
-            throw Doh.error('Watch caught "',prop,'" being',type,'to:',value,(IsSeeIf?('and it '+IsSeeIf):('which matches watched value: '+value_condition)),'on:',target);
+            // no matter what happens, run the reflected set so that the object's behavior is unaltered.
+            return Reflect.set(...arguments);
           };
           
-          callback = callback || thrower;
+          // use a fancy melded_method to apply our stack of setters to each set call
+          originalObject.__handler__.melded_get = Doh.meld_method(originalObject, get_stack);
+          // define the main get trap
+          originalObject.__handler__.get = function(target, prop){
+            // if we try and get __original__, just return target to keep us from having circular loops when looking in from the proxy
+            if(prop === '__original__') return target;
+            // if we have been told that there is a getter for this property
+            if(target.__handler__.getters[prop]){ 
+              //throw Doh.error('getter stuff:',object,target,prop,receiver);
+              // run the melded_get. Each getter will check if this is the prop it cares about
+              target.__handler__.melded_get(...arguments);
+            }
+            // no matter what happens, run the reflected set so that the object's behavior is unaltered.
+            return Reflect.get(...arguments);
+          };
           
-          let outer_callback = function(target, prop, value){
-            if(type === 'get') value = target[prop];
-            if(IsSeeIf){
-              if(value_condition(value)){
-                callback(...arguments);
+          /*
+           * throw a generic error if a_property is being set
+           * thing.watch( 'a_property' )
+           *
+           * throw a generic error if a_property is being retrieved
+           * thing.watch( 'a_property', 'get')
+           *
+           * throw a generic error if a_property is being set to a number
+           * thing.watch( 'a_property', 'set', SeeIf.IsNumber )
+           *
+           * throw a generic error if a_property is a number when retrieved
+           * thing.watch( 'a_property', 'get', SeeIf.IsNumber )
+           *
+           * call the callback provided a_property is being set to a number
+           * thing.watch( 'a_property', 'set', SeeIf.IsNumber, function(target,prop,value){} )
+           *
+           * call the callback provided if a_property is being set to exactly 37
+           * thing.watch( 'a_property', 'set', 37,             function(target,prop,value){Doh.log('hey,',prop,'on',target,'set to:',value,';')} )
+           *
+           * call the callback provided if a_property is exactly 37 when retrieved
+           * thing.watch( 'a_property', 'get', 37,             function(target,prop,receiver){Doh.log('hey, got',prop,'=',target[prop],'; on',target)} )
+           *
+           */
+          /**
+           *  @brief allow proxied objects to watch their own properties
+           *  
+           *  @param [in] prop_name       Description for prop_name
+           *  @param [in] type            Description for type
+           *  @param [in] value_condition Description for value_condition
+           *  @param [in] callback        Description for callback
+           *  @return Return description
+           *  
+           *  @details
+           */
+          originalObject.watch = function(prop_name, type = 'set', value_condition = SeeIf.IsAnything, callback){
+            // false if the value_condition is a value, otherwise IsSeeIf will be 
+            //   the string name of the SeeIf property that we should check
+            let IsSeeIf = false;
+            if(typeof value_condition === 'function'){
+              // we only want to know about functions that are the actual SeeIf properties
+              for(let tester in SeeIf){
+                if(value_condition === SeeIf[tester]){
+                  IsSeeIf = tester;
+                }
               }
+            }
+            
+            let thrower = function(target, prop, value){
+              throw Doh.error('Watch caught "',prop,'" being',type,'to:',value,(IsSeeIf?('and it '+IsSeeIf):('which matches watched value: '+value_condition)),'on:',target);
+            };
+            
+            callback = callback || thrower;
+            
+            let outer_callback = function(target, prop, value){
+              if(type === 'get') value = target[prop];
+              if(IsSeeIf){
+                if(value_condition(value)){
+                  callback(...arguments);
+                }
+              } else {
+                if(value_condition === value){
+                  callback(...arguments);
+                }
+              }
+            };
+            
+            if(type === 'set'){
+              
+              originalObject.__handler__.setters[prop_name] = true;
+              originalObject.__handler__.melded_set.meld_stack.push(outer_callback);
+              
             } else {
-              if(value_condition === value){
-                callback(...arguments);
-              }
+              
+              originalObject.__handler__.getters[prop_name] = true;
+              originalObject.__handler__.melded_get.meld_stack.push(outer_callback);
+              
             }
-          };
-          
-          if(type === 'set'){
-            
-            originalObject.__handler__.setters[prop_name] = true;
-            originalObject.__handler__.melded_set.meld_stack.push(outer_callback);
-            
-          } else {
-            
-            originalObject.__handler__.getters[prop_name] = true;
-            originalObject.__handler__.melded_get.meld_stack.push(outer_callback);
-            
           }
         }
       }

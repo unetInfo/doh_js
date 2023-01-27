@@ -424,6 +424,8 @@ window.LoadDohFrom = window.LoadDohFrom || '';
 // do NOT put this directly on top, let it bubble up.
 // do NOT allow this to be overloaded, create it explicitly here.
 Doh = {
+  // show more errors and warnings, allow debug logs to throw breakpoints and most importantly...
+  // Proxy ALL DohObjects.
   DebugMode: false,
   // This seems silly, but first-tier scripts (in the initial <head>) will
   // have access to Doh and OnLoad BEFORE Doh has finished loading, or
