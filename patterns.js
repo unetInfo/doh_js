@@ -735,9 +735,18 @@ OnLoad('/doh_js/core', function($){
       }
       if(!idea) idea = {};
       // otherwise the arguments are as indicated
-
-      // every pattern must know it's own key on the Patterns object
-      idea.pattern = name;
+      
+      if(Doh.DebugMode){
+        if(Doh.WatchedPatternNames[name]){
+          idea.pattern = name = Doh.look_at_pattern_name(name);
+        }
+        else idea.pattern = name
+      } else {
+        // every pattern must know it's own key on the Patterns object
+        idea.pattern = name;
+      }
+      //*/
+        //idea.pattern = name;
       
       if(Patterns[name]){
         // allow the new PatternModuleVictors system to dictate which pattern gets to stay and which gets overwritten
@@ -751,7 +760,7 @@ OnLoad('/doh_js/core', function($){
       // DebugMode tells us to look at pattern creation
       if(Doh.DebugMode){
         // just generates a bunch of warns and stuff with a few possible fixes. Should not be used in production.
-        Doh.watch_pattern_keys(idea);
+        Doh.look_at_pattern_keys(idea);
       }
 
       // clean up the various ways that inherits may be passed
@@ -814,6 +823,9 @@ OnLoad('/doh_js/core', function($){
      */
     mixin_pattern: function(destination, pattern){
       // some checking for the pattern and double-mixing
+      if(Doh.DebugMode){
+        pattern = Doh.look_at_pattern_name(pattern);
+      }
       if(Patterns[pattern]){
         if(!InstanceOf(destination, pattern)){
           // check for invalid mixin
@@ -851,6 +863,9 @@ OnLoad('/doh_js/core', function($){
       var extended = {};
       if(SeeIf.NotObjectObject(inherits)) inherits = Doh.meld_into_objectobject(inherits);
       for(var pattern_name in inherits){
+        
+        //Doh.look_at_pattern_name(pattern_name);
+        
         if(!Patterns[pattern_name]) Doh.debug('Doh.extend_inherits() did not find pattern:', pattern_name, 'in inherits list:', inherits); // CHRIS:  Andy added this error msg, is there a better way?
         if(skip_core){
           //Doh.log(Doh.PatternModule[pattern_name],'spawns',pattern_name,'from',inherits);
@@ -1009,7 +1024,12 @@ OnLoad('/doh_js/core', function($){
         if(!Patterns[i]){
           Doh.debug('Doh.New('+ idea.pattern + ') tried to inherit from "', i, '" but it was not found, skipping it entirely.');
         }
-        Doh.mixin_pattern(object, i);
+        if(Doh.DebugMode) {
+          if(Doh.WatchedPatternNames[i]) Doh.mixin_pattern(object, Doh.look_at_pattern_name(i));
+          else Doh.mixin_pattern(object, i);
+        } else {
+          Doh.mixin_pattern(object, i);
+        }
       }
 
       // reset the inherits property
@@ -1038,7 +1058,7 @@ OnLoad('/doh_js/core', function($){
       // Do stuff that only happens in DebugMode
       if(Doh.DebugMode){
         // just generates a bunch of warns and stuff with a few possible fixes. Should not be used in production.
-        Doh.watch_pattern_keys(idea);
+        Doh.look_at_pattern_keys(idea);
         
         /*
          * throw a generic error if a_property is being set
@@ -1053,8 +1073,18 @@ OnLoad('/doh_js/core', function($){
          * throw a generic error if a_property is a number when retrieved
          * thing.watch( 'a_property', 'get', SeeIf.IsNumber )
          *
-         * call the callback provided a_property is being set to a number
+         * print a generic error if a_property is being set
+         * if the callback is a Bool, use it to decide if we throw. true for throw, false for print only
+         * thing.watch( 'a_property', 'set', SeeIf.IsNumber, false )
+         *
+         * call the callback provided if a_property is being set to a number
          * thing.watch( 'a_property', 'set', SeeIf.IsNumber, function(target,prop,value){} )
+         *
+         * call the callback provided THEN throw an error if a_property is being set to a number
+         * thing.watch( 'a_property', 'set', SeeIf.IsNumber, function(target,prop,value){}, true )
+         *
+         * call the callback provided THEN print an error BUT DON'T THROW, if a_property is being set to a number
+         * thing.watch( 'a_property', 'set', SeeIf.IsNumber, function(target,prop,value){}, false )
          *
          * call the callback provided if a_property is being set to exactly 37
          * thing.watch( 'a_property', 'set', 37,             function(target,prop,value){Doh.log('hey,',prop,'on',target,'set to:',value,';')} )
@@ -1075,6 +1105,11 @@ OnLoad('/doh_js/core', function($){
          *  @details
          */
         watch = function(prop_name, type = 'set', value_condition = SeeIf.IsAnything, callback){
+          // figure out the last variable situation
+          var throw_error = false;
+          if(SeeIf.IsTrue(callback)){
+            throw_error = true;
+          }
           // false if the value_condition is a value, otherwise IsSeeIf will be 
           //   the string name of the SeeIf property that we should check
           let IsSeeIf = false;
@@ -1088,12 +1123,14 @@ OnLoad('/doh_js/core', function($){
           }
           
           let thrower = function(target, prop, value){
-            throw Doh.error('Watch caught "',prop,'" being',type,'to:',value,(IsSeeIf?('and it '+IsSeeIf):('which matches watched value: '+value_condition)),'on:',target);
+            let args = ['Watch caught "',prop,'" being',type,'to:',value,(IsSeeIf?('and it '+IsSeeIf):('which matches watched value: '+value_condition)),'on:',target];
+            if(throw_error) throw Doh.error(...args);
+            else                  Doh.warn(...args);
           };
-          
           callback = callback || thrower;
           
           let outer_callback = function(target, prop, value){
+            if(prop !== prop_name) return;
             if(type === 'get') value = target[prop];
             if(IsSeeIf){
               if(value_condition(value)){
@@ -1105,20 +1142,22 @@ OnLoad('/doh_js/core', function($){
               }
             }
           };
-          if(originalObject.__handler__){
-            if(type === 'set'){
-              
+          if(type === 'set'){
+            if(originalObject.__handler__){
               originalObject.__handler__.setters[prop_name] = true;
               originalObject.__handler__.melded_set.meld_stack.push(outer_callback);
-              
             } else {
-              
-              originalObject.__handler__.getters[prop_name] = true;
-              originalObject.__handler__.melded_get.meld_stack.push(outer_callback);
-              
+              setters[prop_name] = true;              
+              return outer_callback;
             }
           } else {
-            return outer_callback;
+            if(originalObject.__handler__){
+              originalObject.__handler__.getters[prop_name] = true;
+              originalObject.__handler__.melded_get.meld_stack.push(outer_callback);
+            } else {
+              getters[prop_name] = true;     
+              return outer_callback;
+            }
           }
         };
         
@@ -1218,14 +1257,16 @@ OnLoad('/doh_js/core', function($){
                     if(!Doh.SeenPhases[watched_phase][object.pattern]) Doh.warn('Watched Phase:',watched_phase,'has been renamed to:',command_value,object);
                     phase = command_value;
                     break;
-                  case 'throw':
-                    // throw an error so we can trace from here
-                    throw Doh.error('Watched Phase:',watched_phase,'wants to be thrown. It said:',command_value,object);
-                    break;
                   case 'run':
                     // run a function if we see the phase, change phase to the return of the function, notify once per pattern
                     if(!Doh.SeenPhases[watched_phase][object.pattern]) Doh.warn('Watched Phase:',watched_phase,'will run:',command_value,object);
                     phase = command_value(object, phase);
+                    break;
+                  case 'log':
+                  case 'warn':
+                  case 'error':
+                  case 'throw':
+                    Doh[command]('Watched Phase:',watched_phase,'wants to',command,':',command_value,object);
                     break;
                 }
               }
@@ -1319,7 +1360,7 @@ OnLoad('/doh_js/core', function($){
      *  
      */
     WatchedKeys:{
-      /*'key':{
+    /*'key':{
         log:'message',
         warn:'message',
         error:'message',
@@ -1330,14 +1371,13 @@ OnLoad('/doh_js/core', function($){
       }*/
     },
     WatchedPhases:{
-      /*'key':{
+    /*'phase_name':{
         log:'message',
         warn:'message',
         error:'message',
         throw:'message',
         run:function(idea, prop, new_value){},
         rename:'to_this',
-        remove:'literally anything',
       }*/
     },
     WatchedKeySetters:{
@@ -1366,6 +1406,16 @@ OnLoad('/doh_js/core', function($){
       },
       */
     },
+    WatchedPatternNames:{
+    /*'pattern_name':{
+        log:'message',
+        warn:'message',
+        error:'message',
+        throw:'message',
+        run:function(idea, prop, new_value){},
+        rename:'to_this',
+      }*/
+    },
     
     /**
      *  @brief inspect and alter keys of patterns and New ideas
@@ -1375,7 +1425,7 @@ OnLoad('/doh_js/core', function($){
      *  
      *  @details Used by Doh.pattern and Doh.New to watch for changed or deprecated keys
      */
-    watch_pattern_keys: function(idea){
+    look_at_pattern_keys: function(idea){
       let logger_method = 'warn', idea_prop, pattern_prop, command, command_value;
       for(pattern_prop in Doh.WatchedKeys){
         idea_prop = '';
@@ -1390,11 +1440,8 @@ OnLoad('/doh_js/core', function($){
                 case 'log':
                 case 'warn':
                 case 'error':
-                  Doh[command]('WatchedKeys:',pattern_prop,'wants to',command,':',command_value,idea);
-                  break;
                 case 'throw':
-                  // throw an error so we can trace from here
-                  throw Doh.error('WatchedKeys:',pattern_prop, 'wants to be thrown. It said:',command_value,idea);
+                  Doh[command]('WatchedKeys:',pattern_prop,'wants to',command,':',command_value,idea);
                   break;
                 case 'run':
                   Doh[logger_method]('WatchedKeys:',pattern_prop,'will run:',command_value,idea);
@@ -1430,6 +1477,43 @@ OnLoad('/doh_js/core', function($){
       return idea;
     },
 
+    look_at_pattern_name: function(pattern_name){
+      //return pattern_name;
+      let rtn = pattern_name, logger_method = 'warn', watched_pattern_name, command, command_value;
+      
+      for(watched_pattern_name in Doh.WatchedPatternNames){
+        if(pattern_name === watched_pattern_name){
+          // this pattern_name is watched, log it and run the list of commands to try and fix it
+          command = '';
+          command_value = '';
+          for(command in Doh.WatchedPatternNames[pattern_name]){
+            command_value = Doh.WatchedPatternNames[pattern_name][command];
+            switch(command){
+              case 'log':
+              case 'warn':
+              case 'error':
+              case 'throw':
+                Doh[command]('WatchedPatternNames:',pattern_name,'wants to',command,':',command_value);
+                break;
+              case 'run':
+                Doh[logger_method]('WatchedPatternNames:',pattern_name,'will run:',command_value);
+                rtn = command_value(pattern_or_name, pattern_name, pattern);
+                break;
+              case 'rename':
+                Doh[logger_method]('WatchedPatternNames:',pattern_name,'has been renamed:',command_value);
+                // make our new reference to the contents
+                rtn = command_value;
+                break;
+            }
+          }
+          // we found the thing we were looking for, just bail to the next pattern_name
+          break;
+        }
+      }
+      return rtn;
+      //*/
+    },
+    
     // AA:  can we develop a system for readability / discovery.   maybe things like this (that return info) should be named "get_meld_method_order" or "meld_method_order_to_array"
     /**
      *  @brief Shallow-meld multiple objects (arguments) into destination
@@ -2671,7 +2755,18 @@ OnCoreLoaded(Doh.DebugMode, function(){
   });
 });
 
+// fix old pattern names
+//OnCoreLoaded(Doh.DebugMode, function(){
+//});
+
 OnLoad('/doh_js/html', function($){
+  /*
+   * Fixes for old pattern names that live in /doh_js/html
+   */
+  Doh.meld_objects(Doh.WatchedPatternNames, {
+    html_image:{rename:'image'},
+  });
+  
   var jWin = $(window);
   Doh.meld_objects(Doh, {
     OnWindowResizeListeners:{},
