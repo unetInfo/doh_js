@@ -1024,7 +1024,7 @@ OnLoad('/doh_js/core', function($){
       // setup some stuff for DebugMode
       // (we need these to exist, even if we don't do debug mode)
       // do we need a proxy?
-      let proxy = false,
+      var proxy = false, watch,
       // stash a reference to the original object we started making
       originalObject = object,
       // a way for our us to tell the outer set and get traps that we care about a key
@@ -1039,7 +1039,89 @@ OnLoad('/doh_js/core', function($){
       if(Doh.DebugMode){
         // just generates a bunch of warns and stuff with a few possible fixes. Should not be used in production.
         Doh.watch_pattern_keys(idea);
-      
+        
+        /*
+         * throw a generic error if a_property is being set
+         * thing.watch( 'a_property' )
+         *
+         * throw a generic error if a_property is being retrieved
+         * thing.watch( 'a_property', 'get')
+         *
+         * throw a generic error if a_property is being set to a number
+         * thing.watch( 'a_property', 'set', SeeIf.IsNumber )
+         *
+         * throw a generic error if a_property is a number when retrieved
+         * thing.watch( 'a_property', 'get', SeeIf.IsNumber )
+         *
+         * call the callback provided a_property is being set to a number
+         * thing.watch( 'a_property', 'set', SeeIf.IsNumber, function(target,prop,value){} )
+         *
+         * call the callback provided if a_property is being set to exactly 37
+         * thing.watch( 'a_property', 'set', 37,             function(target,prop,value){Doh.log('hey,',prop,'on',target,'set to:',value,';')} )
+         *
+         * call the callback provided if a_property is exactly 37 when retrieved
+         * thing.watch( 'a_property', 'get', 37,             function(target,prop,receiver){Doh.log('hey, got',prop,'=',target[prop],'; on',target)} )
+         *
+         */
+        /**
+         *  @brief allow proxied objects to watch their own properties
+         *  
+         *  @param [in] prop_name       Description for prop_name
+         *  @param [in] type            Description for type
+         *  @param [in] value_condition Description for value_condition
+         *  @param [in] callback        Description for callback
+         *  @return Return description
+         *  
+         *  @details
+         */
+        watch = function(prop_name, type = 'set', value_condition = SeeIf.IsAnything, callback){
+          // false if the value_condition is a value, otherwise IsSeeIf will be 
+          //   the string name of the SeeIf property that we should check
+          let IsSeeIf = false;
+          if(typeof value_condition === 'function'){
+            // we only want to know about functions that are the actual SeeIf properties
+            for(let tester in SeeIf){
+              if(value_condition === SeeIf[tester]){
+                IsSeeIf = tester;
+              }
+            }
+          }
+          
+          let thrower = function(target, prop, value){
+            throw Doh.error('Watch caught "',prop,'" being',type,'to:',value,(IsSeeIf?('and it '+IsSeeIf):('which matches watched value: '+value_condition)),'on:',target);
+          };
+          
+          callback = callback || thrower;
+          
+          let outer_callback = function(target, prop, value){
+            if(type === 'get') value = target[prop];
+            if(IsSeeIf){
+              if(value_condition(value)){
+                callback(...arguments);
+              }
+            } else {
+              if(value_condition === value){
+                callback(...arguments);
+              }
+            }
+          };
+          if(originalObject.__handler__){
+            if(type === 'set'){
+              
+              originalObject.__handler__.setters[prop_name] = true;
+              originalObject.__handler__.melded_set.meld_stack.push(outer_callback);
+              
+            } else {
+              
+              originalObject.__handler__.getters[prop_name] = true;
+              originalObject.__handler__.melded_get.meld_stack.push(outer_callback);
+              
+            }
+          } else {
+            return outer_callback;
+          }
+        };
+        
         // do we need to setup watches?
         for(let ancestor in object.inherited){
           // look for setters by pattern and key
@@ -1049,13 +1131,21 @@ OnLoad('/doh_js/core', function($){
             watcher = '';
             // go through the watchers and set them up for each key
             for(watcher in keys){
+              // is the watcher just a param list for .watch?
+              if(SeeIf.IsArray(keys[watcher])){
+                // if so, use as intended and continue because that system handles everything
+                set_stack.push(watch(...keys[watcher]));
+                continue;
+              }
+              // otherwise, we need to make a little wrapper to look for our key
               // each watcher needs a wrapper on the set trap that only looks for it's key
               set_stack.push((function(keys, watcher, target, prop, value){
                 // if we are the key, do a thing
-                if(watcher === prop)
+                if(watcher === prop){
                   // the thing we need to do should be a function that is the value of the watcher
                   keys[watcher](target, prop, value);
-                  // we bind to this function so that the originalObject, keys, and watcher can pass through the closure
+                }
+                // we bind to this function so that the originalObject, keys, and watcher can pass through the closure
               }).bind(originalObject, keys, watcher));
               // tell the setter that we are watching this key
               setters[watcher] = true;
@@ -1069,13 +1159,21 @@ OnLoad('/doh_js/core', function($){
           if(keys){
             watcher = '';
             for(watcher in keys){
+              // is the watcher just a param list for .watch?
+              if(SeeIf.IsArray(keys[watcher])){
+                // if so, use as intended and continue because that system handles everything
+                set_stack.push(watch(...keys[watcher]));
+                continue;
+              }
+              // otherwise, we need to make a little wrapper to look for our key
               // each watcher needs a wrapper on the get trap that only looks for it's key
               get_stack.push((function(keys, watcher, object, prop, receiver){
                 // if we are the key, do a thing
-                if(watcher === prop)
+                if(watcher === prop){
                   // the thing we need to do should be a function that is the value of the watcher
                   keys[watcher](object, prop, receiver);
-                  // we bind to this function so that the originalObject, keys, and watcher can pass through the closure
+                }
+                // we bind to this function so that the originalObject, keys, and watcher can pass through the closure
               }).bind(originalObject, keys, watcher));
               // tell the getter that we are watching this key
               getters[watcher] = true;
@@ -1091,6 +1189,8 @@ OnLoad('/doh_js/core', function($){
           originalObject.__handler__ = {};
           originalObject.__handler__.setters = setters;
           originalObject.__handler__.getters = getters;
+          // since we are proxying, add the ability to watch new things here
+          originalObject.watch = watch;
           // we replace object here so that the rest of the system will use it in their closures
           object = new Proxy(originalObject, originalObject.__handler__);
         }
@@ -1207,85 +1307,6 @@ OnLoad('/doh_js/core', function($){
             // no matter what happens, run the reflected set so that the object's behavior is unaltered.
             return Reflect.get(...arguments);
           };
-          
-          /*
-           * throw a generic error if a_property is being set
-           * thing.watch( 'a_property' )
-           *
-           * throw a generic error if a_property is being retrieved
-           * thing.watch( 'a_property', 'get')
-           *
-           * throw a generic error if a_property is being set to a number
-           * thing.watch( 'a_property', 'set', SeeIf.IsNumber )
-           *
-           * throw a generic error if a_property is a number when retrieved
-           * thing.watch( 'a_property', 'get', SeeIf.IsNumber )
-           *
-           * call the callback provided a_property is being set to a number
-           * thing.watch( 'a_property', 'set', SeeIf.IsNumber, function(target,prop,value){} )
-           *
-           * call the callback provided if a_property is being set to exactly 37
-           * thing.watch( 'a_property', 'set', 37,             function(target,prop,value){Doh.log('hey,',prop,'on',target,'set to:',value,';')} )
-           *
-           * call the callback provided if a_property is exactly 37 when retrieved
-           * thing.watch( 'a_property', 'get', 37,             function(target,prop,receiver){Doh.log('hey, got',prop,'=',target[prop],'; on',target)} )
-           *
-           */
-          /**
-           *  @brief allow proxied objects to watch their own properties
-           *  
-           *  @param [in] prop_name       Description for prop_name
-           *  @param [in] type            Description for type
-           *  @param [in] value_condition Description for value_condition
-           *  @param [in] callback        Description for callback
-           *  @return Return description
-           *  
-           *  @details
-           */
-          originalObject.watch = function(prop_name, type = 'set', value_condition = SeeIf.IsAnything, callback){
-            // false if the value_condition is a value, otherwise IsSeeIf will be 
-            //   the string name of the SeeIf property that we should check
-            let IsSeeIf = false;
-            if(typeof value_condition === 'function'){
-              // we only want to know about functions that are the actual SeeIf properties
-              for(let tester in SeeIf){
-                if(value_condition === SeeIf[tester]){
-                  IsSeeIf = tester;
-                }
-              }
-            }
-            
-            let thrower = function(target, prop, value){
-              throw Doh.error('Watch caught "',prop,'" being',type,'to:',value,(IsSeeIf?('and it '+IsSeeIf):('which matches watched value: '+value_condition)),'on:',target);
-            };
-            
-            callback = callback || thrower;
-            
-            let outer_callback = function(target, prop, value){
-              if(type === 'get') value = target[prop];
-              if(IsSeeIf){
-                if(value_condition(value)){
-                  callback(...arguments);
-                }
-              } else {
-                if(value_condition === value){
-                  callback(...arguments);
-                }
-              }
-            };
-            
-            if(type === 'set'){
-              
-              originalObject.__handler__.setters[prop_name] = true;
-              originalObject.__handler__.melded_set.meld_stack.push(outer_callback);
-              
-            } else {
-              
-              originalObject.__handler__.getters[prop_name] = true;
-              originalObject.__handler__.melded_get.meld_stack.push(outer_callback);
-              
-            }
-          }
         }
       }
 
@@ -1323,7 +1344,8 @@ OnLoad('/doh_js/core', function($){
       /*
       'pattern1':{
         'key1':function(object, prop, value){},
-        'key2':function(object, prop, value){},
+        // accept a .watch argument set for this system so there is parity between the watchers
+        'key2':[prop_name, type = 'set', value_condition = SeeIf.IsAnything, callback],
       },
       'pattern8':{
         'key1':function(object, prop, value){},
@@ -1335,7 +1357,8 @@ OnLoad('/doh_js/core', function($){
       /*
       'pattern1':{
         'key1':function(target, prop, receiver){},
-        'key1':function(target, prop, receiver){},
+        // accept a .watch argument set for this system so there is parity between the watchers
+        'key1':[prop_name, type = 'get', value_condition = SeeIf.IsAnything, callback],
       },
       'pattern4':{
         'key1':function(target, prop, receiver){},
