@@ -22,8 +22,8 @@ if(typeof exports != 'undefined') {
 /**
  *  @brief Shallow-meld multiple objects (arguments) into destination
  *  
- *  @param [in] destination [object/falsey] the thing to add everrthing else onto. If falsey, a default of {} will be used.
- *  @param [in] ...arguments [object] all additional paramaters will be added in the order they are passed so that the last passed will override everyone else.
+ *  @param [in] destination   [object/falsey] the thing to add everrthing else onto. If falsey, a default of {} will be used.
+ *  @param [in] ...arguments  [object]        all additional paramaters will be added in the order they are passed so that the last passed will override everyone else.
  *  @return destination
  *  
  *  @details meld_objects is special for a few specific reasons:
@@ -173,7 +173,7 @@ OnLoad('/doh_js/core', function($){
 
     // AA: Explain the whole logging idea here
     /**
-     *  @brief Shallow-meld multiple objects (arguments) into destination
+     *  @brief Log a message to Doh (usually the console, but maybe a remote logger)
      *  
      *  @param [in] args          [array] captured args from a main logging function
      *  @param [in] log_type      [string] a string appended to the front of the log
@@ -181,7 +181,7 @@ OnLoad('/doh_js/core', function($){
      *  @param [in] logger        [object] the actual logger to run these commands on
      *  @return nothing
      *  
-     *  @details 
+     *  @details this is usually called by a main logging function below
 
      */
     _log: function(args, log_type, logger_method, logger){
@@ -203,77 +203,55 @@ OnLoad('/doh_js/core', function($){
       }
     },
     /**
-     *  @brief Shallow-meld multiple objects (arguments) into destination
+     *  @brief Log a message to Doh, defaults to 'trace' type log
      *  
-     *  @return Return description
+     *  @param [in] ...arguments [any] values to send to the logger
      *  
-     *  @details 
-
+     *  @return nothing
+     *  
+     *  @details Creates a collapsed stack trace for each log entry
+     *  Doh.log('error message', object1, 'some string', objectN, ...);
      */
     log: function(){
       Doh._log(arguments, 'Doh:', 'trace');
     },
     /**
-     *  @brief return a custom Doh error
+     *  @brief log a custom error to Doh
      *
      *  @param [in] context, context, ...   object(s) of relevence to the error
-     *  @return Patterns.error object
+     *  @return nothing
      *
      *  @details
      *  Doh.error('error message', object1, 'some string', objectN, ...);
      */
     error: function(){
       Doh._log(arguments, 'Doh ERROR:', 'error');
-      // build and return the custom error
-      //return New({pattern:'error',args:arguments});
     },
     /**
-     *  @brief return a custom Doh warning
+     *  @brief log a custom warning to Doh
      *
      *  @param [in] context, context, ...   object(s) of relevence to the error
-     *  @return Patterns.error object
+     *  @return nothing
      *
      *  @details
-     *  Doh.error('error message', object1, 'some string', objectN, ...);
+     *  Doh.warn('error message', object1, 'some string', objectN, ...);
      */
     warn: function(){
       Doh._log(arguments, 'Doh Warning:', 'warn');
-      //if(Patterns.warning)
-      //  return New({pattern:'warning',args:arguments});
     },
 
     // AA:  Explain the role of ids
-
     /**
      *  @brief Get a new id
      *
      *  @return A new unique id
+     *  
+     *  @details IDs are a simple way to get ephemeral indexes that reset on each page load
      */
     NewIdCounter:0,
     new_id: function () {
       return this.NewIdCounter += 1;
     },
-    /**
-     *  @brief Turn a dot delimited name into a deep reference on 'base'
-     *
-     *  @param [in] base    The object to get a deep reference to
-     *                      pass TRUE to 'base' and it will return the last key of the split
-     *  @param [in] var_str A dot-delimited string
-     *  @return A deep reference into 'base' or the last key of the split
-     */
-    parse_reference: function(base, var_str){
-      var values = base;
-      var var_arr = new String(var_str).split('.');
-      // pass TRUE to 'base' and it will return the last key of the split
-      if(base===true) return var_arr[var_arr.length-1];
-      for(var i=0; i < var_arr.length; i++)
-      values = values[var_arr[i]];
-
-      return values;
-    },
-
-    // AA: things like this and parse_reference above are rather general utilities (not Doh-specific), I think it would be helpful to group them all, and maybe demote them
-    // in fact, if they aren't used by core, they should move into something more like my sim_util global space
 
     array_move: function(array, from_index, to_index) {
       array.splice(to_index, 0, array.splice(from_index, 1)[0]);
@@ -286,14 +264,13 @@ OnLoad('/doh_js/core', function($){
     // This is used by the builder to a mix a pattern into a new instance of an object
     // AA: Describe how it might be used by a developer?
     /**
-     *  @brief Shallow-meld multiple objects (arguments) into destination
+     *  @brief Mix a pattern from Patterns into destination
      *  
-     *  @param [in] destination [object/falsey] if falsey, a default of {} will be used.
-     *  @param [in] pattern     Description for pattern
-     *  @return Return description
+     *  @param [in] destination [object] the object to copy onto
+     *  @param [in] pattern     [string] the name of a pattern to mixin
+     *  @return destination
      *  
-     *  @details 
-
+     *  @details Will also update_meld_methods for destination if it was previously built by New()
      */
     mixin_pattern: function(destination, pattern){
       // some checking for the pattern and double-mixing
@@ -311,22 +288,24 @@ OnLoad('/doh_js/core', function($){
             // and neither do plain ideas
             Doh.update_meld_methods(destination);
           }
-          
         }
       } else {
         Doh.error('Doh.mixin_pattern(',destination,',',pattern,') did not find the pattern');
       }
+      return destination;
     },
+    
     // AA: Surely this merits a small dissertation
     /**
-     *  @brief Shallow-meld multiple objects (arguments) into destination
+     *  @brief Return a collection of all ancestor dependencies
      *  
-     *  @param [in] inherits  Description for inherits
-     *  @param [in] skip_core Description for skip_core
-     *  @return Return description
+     *  @param [in] inherits  [string/array/object] a name, list of names, or object whose keys are a list of things to inherit
+     *  @param [in] skip_core [bool] remove core dependencies from the list? Default to false.
+     *  @return object-list where keys are inherited patterns
      *  
-     *  @details 
-
+     *  @details core dependencies refers to modules that come from core modules and are therefore
+     *           considered universally available. In some cases it may be useful to know how dependant
+     *           a given pattern is on external patterns, rather than core ones.
      */
     extend_inherits: function(inherits, skip_core = false){
       var extended = {};
@@ -349,36 +328,15 @@ OnLoad('/doh_js/core', function($){
       return extended;
     },
 
-    //return items from an array that pass callback
     /**
-     *  @brief Brief description
+     *  @brief return true if item is in array
      *  
-     *  @param [in] array    Description for array
-     *  @param [in] callback Description for callback
-     *  @param [in] inv      Description for inv
-     *  @return Return description
+     *  @param [in] item  [any] thing to search for
+     *  @param [in] array [array] to search
+     *  @return true if item is in array
      *  
-     *  @details More details
-     */
-    grep: function( array, callback, inv ) {
-      var ret = [];
-      // Go through the array, only saving the items
-      // that pass the validator function
-      for ( var i = 0, length = array.length; i < length; i++ ) {
-        if ( !inv !== !callback( array[ i ], i ) ) {
-          ret.push( array[ i ] );
-        }
-      }
-      return ret;
-    },
-    /**
-     *  @brief Brief description
-     *  
-     *  @param [in] item  Description for item
-     *  @param [in] array Description for array
-     *  @return Return description
-     *  
-     *  @details More details
+     *  @details Used by Doh.array_unique to filter arrays of duplicates
+     *           NOTE: array_unique is required by meld_arrays
      */
     in_array: function( item, array ) {
       
@@ -396,79 +354,40 @@ OnLoad('/doh_js/core', function($){
 
       return -1;
     },
-    // AA: general utility?
-    /**
-     *  @brief Shallow-meld multiple objects (arguments) into destination
-     *  
-     *  @param [in] arr Description for arr
-     *  @return Return description
-     *  
-     *  @details 
-
-     */
-    array_unique: function(arr){
-      // reduce the array to contain no dupes via grep/in_array
-      return Doh.grep(arr,function(v,k){
-          return Doh.in_array(v,arr) === k;
-      });
-    },
-
-    // AA: general utility?
-    /**
-     *  @brief Shallow-meld multiple objects (arguments) into destination
-     *  
-     *  @param [in] arr Description for arr
-     *  @return Return description
-     *  
-     *  @details 
-
-     */
-    object_keys_from_array_values: function (arr){
-      var obj = {};
-      arr = arr || [];
-      for(var i=0; i<arr.length; i++){
-        obj[arr[i]] = true
-      }
-      return obj;
-    },
-
     // AA: describe the virtues hereof
     /**
-     *  @brief Shallow-meld multiple objects (arguments) into destination
+     *  @brief Concatenate array onto destination, removing duplicates from array.
      *  
-     *  @param [in] destination [object/falsey] if falsey, a default of {} will be used.
-     *  @param [in] arr         Description for arr
-     *  @param [in] force_new   Description for force_new
-     *  @return Return description
+     *  @param [in] destination [array] to be melded onto
+     *  @param [in] array       [array] to meld onto destination
+     *  @param [in] force_new   [bool] if true, meld both destination AND array onto a new [] and pass that back instead
+     *  @return destination or the new array from being force_new'd
      *  
-     *  @details 
-
+     *  @details Primarilly used by html for ordering classes.
+     *           Used to be used by the core to manage meld_ system until being replaced by .melded.
      */
-    meld_arrays: function(destination, arr, force_new){
-
-      arr = arr || [];
-      if(force_new) return Doh._meld_arrays(destination, arr);
+    meld_arrays: function(destination, array = [], force_new){
+      if(force_new) return Doh._meld_arrays(destination, array);
 
       destination = destination || [];
-      // loop over arr
-      for(var i=0; i<arr.length; i++){
+      // loop over array
+      for(var i=0; i<array.length; i++){
         // if the value is not in destination
-        if(Doh.in_array(arr[i], destination) == -1){
+        if(Doh.in_array(array[i], destination) == -1){
           // add it
-          destination.push(arr[i]);
+          destination.push(array[i]);
         }
       }
       return destination;
     },
     /**
-     *  @brief Shallow-meld multiple objects (arguments) into destination
+     *  @brief similar to meld_arrays but always melds onto a fresh array.
      *  
-     *  @param [in] arr1 Description for arr1
-     *  @param [in] arr2 Description for arr2
-     *  @return Return description
+     *  @param [in] arr1 [array] first array to meld from
+     *  @param [in] arr2 [array] second array to meld from
+     *  @return new melded array
      *  
-     *  @details 
-
+     *  @details specifically differs from regular meld_arrays because it doesn't modify either argument
      */
     _meld_arrays: function(arr1, arr2){
       var destination = Doh.meld_objects([], arr1);
@@ -490,15 +409,16 @@ OnLoad('/doh_js/core', function($){
      *
      *  @param [in] aruguments  String, Array, Array-like-object, or Object to
      *                          meld with. (See details)
-     *  @return {}
-     *
-     * 'pattern_name_1'
-     * ['pattern_name_1', 'pattern_name_2']
-     * {0:'pattern_name_1', 1:'pattern_name_2'}
-     * {'pattern_name_1':true, 'pattern_name_2':true}
-     *
-     * *RESULTS IN:* {'pattern_name_1':true, 'pattern_name_2':true}
-     * *OR* {}
+     *  @return objectobject with keys from the strings and arrays and keys of arguments
+     *  
+     *  @details
+     *  'pattern_name_1'
+     *  ['pattern_name_1', 'pattern_name_2']
+     *  {0:'pattern_name_1', 1:'pattern_name_2'}
+     *  {'pattern_name_1':true, 'pattern_name_2':true}
+     *  
+     *  *RESULTS IN:* {'pattern_name_1':true, 'pattern_name_2':true}
+     *  *OR* {}
      **/
     meld_into_objectobject: function(){
       // we always need a new object
@@ -528,38 +448,16 @@ OnLoad('/doh_js/core', function($){
       // send what we found, even if empty
       return obj;
     },
-    
-    // ADD COMMENTS HERE
-    // old method of nesting closures
-    /**
-     *  @brief Shallow-meld multiple objects (arguments) into destination
-     *  
-     *  @param [in] obj       Description for obj
-     *  @param [in] method    Description for method
-     *  @param [in] extension Description for extension
-     *  @return Return description
-     *  
-     *  @details 
 
-     */
-    meld_methods: function(obj, method, extension){
-        return function(){
-          method.apply(obj, arguments);
-          extension.apply(obj, arguments);
-          return obj;
-        }
-    },
-
-    // given an object and method name, return an array of function references for
-    // inherited patterns that implement the named method
     /**
-     *  @brief Shallow-meld multiple objects (arguments) into destination
+     *  @brief Given an object and method name, return an array of function references
+     *         for inherited patterns that implement the named method
      *  
-     *  @param [in] object      Description for object
-     *  @param [in] method_name Description for method_name
-     *  @return Return description
+     *  @param [in] object      [object] to search .inherited
+     *  @param [in] method_name [string] name of method to search for
+     *  @return an array of function references from .inherited in order of .inherits when extended
      *  
-     *  @details 
+     *  @details NOTE: also prepares and prepends the list of pre_{method} functions
 
      */
     meld_method_stack: function(object, method_name){
@@ -570,9 +468,9 @@ OnLoad('/doh_js/core', function($){
       }
       return pre_meld_method_order.concat(meld_method_order);
     },
-    // return a closure for obj[method_name] that will call each function in method_stack
+    
     /**
-     *  @brief Shallow-meld multiple objects (arguments) into destination
+     *  @brief return a closure for obj[method_name] that will call each function in method_stack
      *  
      *  @param [in] obj          Description for obj
      *  @param [in] method_stack Description for method_stack
@@ -2193,6 +2091,105 @@ OnCoreLoaded(function(){
   rename_wrapper('Error', 'Doh.error', Doh.error);
   rename_wrapper('ExtendInherits', 'Doh.extend_inherits', Doh.extend_inherits);
   */
+});
+
+OnLoad('/doh_js/utils', function($){
+    // AA: general utility?
+  Doh.meld_objects(Doh, {
+    /**
+     *  @brief old closure melder for methods that bound them in a wrapper
+     *  
+     *  @param [in] obj       [object/literal] to use for 'this'
+     *  @param [in] method    [function] to extend
+     *  @param [in] extension [function] to run after method. (could be another wrapper)
+     *  @return the new function
+     *  
+     *  @details This is the old way that Doh used to meld methods, It is very inflexible and 
+     *           it's use is unknown. The new melders are so much better in ever way that it is
+     *           not known if this method has any advantages at all.
+     */
+    meld_methods: function(obj, method, extension){
+        return function(){
+          method.apply(obj, arguments);
+          extension.apply(obj, arguments);
+          return obj;
+        }
+    },
+    /**
+     *  @brief Turn a dot delimited name into a deep reference on 'base'
+     *
+     *  @param [in] base    The object to get a deep reference to
+     *                      pass TRUE to 'base' and it will return the last key of the split
+     *  @param [in] var_str A dot-delimited string
+     *  @return A deep reference into 'base' or the last key of the split
+     */
+    parse_reference: function(base, var_str){
+      var values = base;
+      var var_arr = new String(var_str).split('.');
+      // pass TRUE to 'base' and it will return the last key of the split
+      if(base===true) return var_arr[var_arr.length-1];
+      for(var i=0; i < var_arr.length; i++)
+      values = values[var_arr[i]];
+
+      return values;
+    },
+
+    // AA: things like this and parse_reference above are rather general utilities (not Doh-specific), I think it would be helpful to group them all, and maybe demote them
+    // in fact, if they aren't used by core, they should move into something more like my sim_util global space
+    
+    //return items from an array that pass callback
+    /**
+     *  @brief return items from array that pass (callback == !inverse)
+     *  
+     *  @param [in] array    [array] to search
+     *  @param [in] callback [function] to call for each key in array
+     *  @param [in] inverse  [bool] invert the result of each callback? defaults to false
+     *  @return Return description
+     *  
+     *  @details Old method used by array_unique for meld_arrays. No longer in use in core.
+     */
+    grep: function( array, callback, inverse ) {
+      var ret = [];
+      // Go through the array, only saving the items
+      // that pass the validator function
+      for ( var i = 0, length = array.length; i < length; i++ ) {
+        if ( !inverse !== !callback( array[ i ], i ) ) {
+          ret.push( array[ i ] );
+        }
+      }
+      return ret;
+    },
+    /**
+     *  @brief return an array filtered of duplicates
+     *  
+     *  @param [in] arr Description for arr
+     *  @return Return description
+     *  
+     *  @details Old method used by meld_arrays. No longer in use in core.
+     */
+    array_unique: function(array){
+      // reduce the array to contain no dupes via grep/in_array
+      return Doh.grep(array,function(value,key){
+          return Doh.in_array(value,array) === key;
+      });
+    },
+    /**
+     *  @brief transpose array values into the keys of a new object
+     *  
+     *  @param [in] array [array] to get values from
+     *  @return new {} object with keys from the array values
+     *  
+     *  @details Very handy transposition tool, but currently unused in core
+     */
+    object_keys_from_array_values: function (array = []){
+      var obj = {};
+      for(var i=0; i<array.length; i++){
+        obj[array[i]] = true
+      }
+      return obj;
+    },
+  });
+
 });
 
 /**
