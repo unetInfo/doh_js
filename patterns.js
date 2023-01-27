@@ -3458,19 +3458,6 @@ OnLoad('/doh_js/html', function($){
     attrs: {type: 'checkbox'},
   });
 
-  // AA: As we discussed, this guy should be migrated out of core
-
-  Pattern('checkbox2', ['input', 'input_value'], {
-    attrs: {type: 'checkbox'},
-    html_phase: function(){
-    //  this.e.button(this.button_options);
-      if(this.click){
-        var that = this;
-        this.e.click(function(){that.click.apply(that,arguments);});
-      }
-    },
-  });
-
   Pattern('date', 'text', {
     available_properties:{'value':'string of the option value that should be default selected'},
     html_phase: function(){
