@@ -427,6 +427,8 @@ Doh = {
   // show more errors and warnings, allow debug logs to throw breakpoints and most importantly...
   // Proxy ALL DohObjects.
   DebugMode: false,
+  // allow Doh to try and fix patterns and objects from older code
+  ApplyFixes: true,
   // This seems silly, but first-tier scripts (in the initial <head>) will
   // have access to Doh and OnLoad BEFORE Doh has finished loading, or
   // even before Doh has been told to load
@@ -761,11 +763,11 @@ window.OnCoreLoaded = window.OnCoreLoaded || function(condition, callback){
   if(condition){
     // determine if we should just run, or be queued
     if(Doh.IsLoaded) {
-      Doh.log('OnCoreLoaded was called after Doh.IsLoaded but before modules have finished:',callback);
+      // Doh.log('OnCoreLoaded was called after Doh.IsLoaded but before modules have finished:',callback);
       callback();
     }
     else {
-      console.log('OnCoreLoaded was called before Doh.IsLoaded:',callback);
+      // console.log('OnCoreLoaded was called before Doh.IsLoaded:',callback);
       Doh.OnCoreLoadedQueue.push(callback);
     }
   }

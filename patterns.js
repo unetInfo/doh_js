@@ -182,7 +182,8 @@ OnLoad('/doh_js/core', function($){
     MeldedTypeMatch: {
       'method':SeeIf.IsFunction,
         'phase':SeeIf.IsFunction,
-        'exclusive':SeeIf.IsAnything,
+      'exclusive':SeeIf.IsAnything,
+      'static_reference':SeeIf.IsEnumerable,
       'object':SeeIf.IsObjectObject,
         'idea':SeeIf.IsObjectObject,
       'array':SeeIf.IsArray,
@@ -613,10 +614,10 @@ OnLoad('/doh_js/core', function($){
               if(destination.melded[prop_name] != idea_melded_type){
                 Doh.debug('Doh.meld_ideas(',destination,',',idea,'). destination.melded[',prop_name,']:',destination.melded[prop_name],'will be overwritten by idea.melded[',prop_name,']:',idea_melded_type);
               }
-              if(idea_melded_type === 'exclusive'){
+              if(idea_melded_type === 'exclusive' || idea_melded_type === 'static_reference'){
                 // if we made it here then the check above has ensured we agree on the melded type.
                 // However!! destination already reserved it, this is an error.
-                Doh.debug('Doh.meld_ideas(',destination,',',idea,') found that a destination and idea both want the same property:',prop_name,'to be exclusive.');
+                Doh.debug('Doh.meld_ideas(',destination,',',idea,') found that a destination and idea both want the same property:',prop_name,'to be ',idea_melded_type,'.');
               }
             }
           }
@@ -651,7 +652,7 @@ OnLoad('/doh_js/core', function($){
         idea_prop = idea[prop_name];
         melded_type = melded[prop_name];
         if(idea_prop !== undefined && idea_prop !== destination[prop_name]){
-          if(melded_type === 'method' || melded_type === 'phase' || melded_type === 'exclusive'){
+          if(melded_type === 'method' || melded_type === 'phase' || melded_type === 'exclusive' || melded_type === 'static_reference'){
             // melded methods and phases will be updated outside of meld. our job is just to copy idea onto destination.
             // exclusive properties only come from first idea that claims it, this 'ownership' is resolved with thrown errors above, so we always copy.
             destination[prop_name] = idea_prop;
@@ -736,15 +737,15 @@ OnLoad('/doh_js/core', function($){
       if(!idea) idea = {};
       // otherwise the arguments are as indicated
       
-      if(Doh.DebugMode){
+//      if(Doh.DebugMode){
         if(Doh.WatchedPatternNames[name]){
           idea.pattern = name = Doh.look_at_pattern_name(name);
         }
         else idea.pattern = name
-      } else {
+//      } else {
         // every pattern must know it's own key on the Patterns object
-        idea.pattern = name;
-      }
+//        idea.pattern = name;
+//      }
       //*/
         //idea.pattern = name;
       
@@ -758,10 +759,10 @@ OnLoad('/doh_js/core', function($){
         Doh.warn('(',name,') pattern is being overwritten.\nOriginal Module:',Doh.PatternModule[name],'\nNew Module:',Doh.ModuleCurrentlyRunning);
       }
       // DebugMode tells us to look at pattern creation
-      if(Doh.DebugMode){
+//      if(Doh.DebugMode){
         // just generates a bunch of warns and stuff with a few possible fixes. Should not be used in production.
-        Doh.look_at_pattern_keys(idea);
-      }
+      Doh.look_at_pattern_keys(idea);
+//      }
 
       // clean up the various ways that inherits may be passed
       idea.inherits = Doh.meld_into_objectobject(idea.inherits, inherits);
@@ -823,9 +824,9 @@ OnLoad('/doh_js/core', function($){
      */
     mixin_pattern: function(destination, pattern){
       // some checking for the pattern and double-mixing
-      if(Doh.DebugMode){
-        pattern = Doh.look_at_pattern_name(pattern);
-      }
+//      if(Doh.DebugMode){
+      pattern = Doh.look_at_pattern_name(pattern);
+//      }
       if(Patterns[pattern]){
         if(!InstanceOf(destination, pattern)){
           // check for invalid mixin
@@ -926,7 +927,6 @@ OnLoad('/doh_js/core', function($){
      */
     New: function(pattern, idea, phase){
       var i = '';
-
       if(SeeIf.IsString(pattern)){ // if the pattern is a string,
         // then everything is normal
         // make sure idea is an object
@@ -996,6 +996,9 @@ OnLoad('/doh_js/core', function($){
       // this should now contain all patterns defined in the many places that things can be added to objects
       if(idea.inherits) idea.inherits = Doh.meld_into_objectobject(idea.inherits);
 
+//      if(Doh.DebugMode)
+        idea.pattern = Doh.look_at_pattern_name(idea.pattern);
+      
       // the builder requires at least one pattern
       if(SeeIf.IsEmptyObject(idea.inherits)){
         if(!Patterns[idea.pattern]) {
@@ -1024,12 +1027,7 @@ OnLoad('/doh_js/core', function($){
         if(!Patterns[i]){
           Doh.debug('Doh.New('+ idea.pattern + ') tried to inherit from "', i, '" but it was not found, skipping it entirely.');
         }
-        if(Doh.DebugMode) {
-          if(Doh.WatchedPatternNames[i]) Doh.mixin_pattern(object, Doh.look_at_pattern_name(i));
-          else Doh.mixin_pattern(object, i);
-        } else {
-          Doh.mixin_pattern(object, i);
-        }
+        Doh.mixin_pattern(object, i);
       }
 
       // reset the inherits property
@@ -1055,11 +1053,11 @@ OnLoad('/doh_js/core', function($){
       // when we find the functions that watch an object, push to stack so the melder will pick it up
       set_stack = [], get_stack = [];
       
+      // just generates a bunch of warns and stuff with a few possible fixes. Should not be used in production.
+      Doh.look_at_pattern_keys(idea);
+        
       // Do stuff that only happens in DebugMode
       if(Doh.DebugMode){
-        // just generates a bunch of warns and stuff with a few possible fixes. Should not be used in production.
-        Doh.look_at_pattern_keys(idea);
-        
         /*
          * throw a generic error if a_property is being set
          * thing.watch( 'a_property' )
@@ -1124,8 +1122,8 @@ OnLoad('/doh_js/core', function($){
           
           let thrower = function(target, prop, value){
             let args = ['Watch caught "',prop,'" being',type,'to:',value,(IsSeeIf?('and it '+IsSeeIf):('which matches watched value: '+value_condition)),'on:',target];
-            if(throw_error) throw Doh.error(...args);
-            else                  Doh.warn(...args);
+            if(throw_error) Doh.debug(...args);
+            else            Doh.warn(...args);
           };
           callback = callback || thrower;
           
@@ -1238,44 +1236,44 @@ OnLoad('/doh_js/core', function($){
       // attach the object machine
       object.machine = function(phase){
         // allow DebugMode to watch the machine activate phases
-        if(Doh.DebugMode){
-          // track when we see phases so we can mute flooding the console
-          Doh.SeenPhases = Doh.SeenPhases || {};
-          let watched_phase, command, command_value;
-          for(let watched_phase in Doh.WatchedPhases){
-            if(watched_phase === phase){
-              // note that we have seen a phase ever on any object
-              Doh.SeenPhases[watched_phase] = Doh.SeenPhases[watched_phase] || {};
-              // find out if we are watching phases
-              command = '';
-              command_value = '';
-              for(command in Doh.WatchedPhases[watched_phase]){
-                command_value = Doh.WatchedPhases[watched_phase][command];
-                switch(command){
-                  case 'rename':
-                    // simply rename a phase, notify once per pattern
-                    if(!Doh.SeenPhases[watched_phase][object.pattern]) Doh.warn('Watched Phase:',watched_phase,'has been renamed to:',command_value,object);
-                    phase = command_value;
-                    break;
-                  case 'run':
-                    // run a function if we see the phase, change phase to the return of the function, notify once per pattern
-                    if(!Doh.SeenPhases[watched_phase][object.pattern]) Doh.warn('Watched Phase:',watched_phase,'will run:',command_value,object);
-                    phase = command_value(object, phase);
-                    break;
-                  case 'log':
-                  case 'warn':
-                  case 'error':
-                  case 'throw':
-                    Doh[command]('Watched Phase:',watched_phase,'wants to',command,':',command_value,object);
-                    break;
-                }
+        //if(Doh.DebugMode){
+        // track when we see phases so we can mute flooding the console
+        Doh.SeenPhases = Doh.SeenPhases || {};
+        let watched_phase, command, command_value;
+        for(let watched_phase in Doh.WatchedPhases){
+          if(watched_phase === phase){
+            // note that we have seen a phase ever on any object
+            Doh.SeenPhases[watched_phase] = Doh.SeenPhases[watched_phase] || {};
+            // find out if we are watching phases
+            command = '';
+            command_value = '';
+            for(command in Doh.WatchedPhases[watched_phase]){
+              command_value = Doh.WatchedPhases[watched_phase][command];
+              switch(command){
+                case 'rename':
+                  // simply rename a phase, notify once per pattern
+                  if(!Doh.SeenPhases[watched_phase][object.pattern]) Doh.warn('Watched Phase:',watched_phase,'has been renamed to:',command_value,object);
+                  phase = command_value;
+                  break;
+                case 'run':
+                  // run a function if we see the phase, change phase to the return of the function, notify once per pattern
+                  if(!Doh.SeenPhases[watched_phase][object.pattern]) Doh.warn('Watched Phase:',watched_phase,'will run:',command_value,object);
+                  phase = command_value(object, phase);
+                  break;
+                case 'log':
+                case 'warn':
+                case 'error':
+                case 'throw':
+                  Doh[command]('Watched Phase:',watched_phase,'wants to',command,':',command_value,object);
+                  break;
               }
-              // now that we've run all the commands once, we have "seen" it, so we don't need to blast the console
-              /// notify once per pattern that we have encountered watched phases
-              Doh.SeenPhases[watched_phase][object.pattern] = true;
             }
+            // now that we've run all the commands once, we have "seen" it, so we don't need to blast the console
+            /// notify once per pattern that we have encountered watched phases
+            Doh.SeenPhases[watched_phase][object.pattern] = true;
           }
         }
+        //}
         
         // go through the phases to the one specified, or the last
         for(let phase_name in object.melded){
@@ -1359,15 +1357,14 @@ OnLoad('/doh_js/core', function($){
     /**
      *  
      */
-    WatchedKeys:{
-    /*'key':{
+    WatchedPatternNames:{
+    /*'pattern_name':{
         log:'message',
         warn:'message',
         error:'message',
         throw:'message',
         run:function(idea, prop, new_value){},
         rename:'to_this',
-        remove:'literally anything',
       }*/
     },
     WatchedPhases:{
@@ -1380,6 +1377,18 @@ OnLoad('/doh_js/core', function($){
         rename:'to_this',
       }*/
     },
+    WatchedKeys:{
+    /*'key':{
+        log:'message',
+        warn:'message',
+        error:'message',
+        throw:'message',
+        run:function(idea, prop, new_value){},
+        rename:'to_this',
+        remove:'literally anything',
+      }*/
+    },
+    
     WatchedKeySetters:{
       /*
       'pattern1':{
@@ -1405,16 +1414,6 @@ OnLoad('/doh_js/core', function($){
         'key1':function(target, prop, receiver){},
       },
       */
-    },
-    WatchedPatternNames:{
-    /*'pattern_name':{
-        log:'message',
-        warn:'message',
-        error:'message',
-        throw:'message',
-        run:function(idea, prop, new_value){},
-        rename:'to_this',
-      }*/
     },
     
     /**
@@ -1968,7 +1967,7 @@ OnLoad('/doh_js/core', function($){
  */
 // fix old Doh. references that have moved
 // NOTE: we aggressively comment these out as soon they are no longer needed
-OnCoreLoaded(Doh.DebugMode, function(){
+OnCoreLoaded(Doh.ApplyFixes, function(){
   /*
    * Fixes for changing the name of properties on Doh
    */
@@ -1991,7 +1990,7 @@ OnCoreLoaded(Doh.DebugMode, function(){
   rename_wrapper('log_melded_method', 'Doh.log_melded_method_string', Doh.log_melded_method_string);
   rename_wrapper('link_melded_method', 'Doh.log_melded_method_source', Doh.log_melded_method_source);
   
-  //* these renames may still plague old code, but usually are not needed
+  /* these renames may still plague old code, but usually are not needed
   for(var test in SeeIf){
     rename_wrapper(test, 'SeeIf.'+test, SeeIf[test]);
   }
@@ -2005,7 +2004,7 @@ OnCoreLoaded(Doh.DebugMode, function(){
 });
 
 // fix old melders
-OnCoreLoaded(Doh.DebugMode, function(){
+OnCoreLoaded(Doh.ApplyFixes, function(){
   /*
    * Fixes for changing meld_arrays, meld_objects, meld_methods, and phases to .melded
    */
@@ -2742,7 +2741,7 @@ OnLoad('/doh_js/utils', function($){
 }));
 
 // fix append_phase
-OnCoreLoaded(Doh.DebugMode, function(){
+OnCoreLoaded(Doh.ApplyFixes, function(){
   /*
    * Fixes for changing append_phase to html_phase
    */
@@ -2760,12 +2759,15 @@ OnCoreLoaded(Doh.DebugMode, function(){
 //});
 
 OnLoad('/doh_js/html', function($){
-  /*
-   * Fixes for old pattern names that live in /doh_js/html
-   */
-  Doh.meld_objects(Doh.WatchedPatternNames, {
-    html_image:{rename:'image'},
-  });
+  if(Doh.ApplyFixes){
+    /*
+     * Fixes for old pattern names that live in /doh_js/html
+     */
+    Doh.meld_objects(Doh.WatchedPatternNames, {
+      html_image:{rename:'image'},
+      checkbox2:{rename:'checkbox_click'},
+    });
+  }
   
   var jWin = $(window);
   Doh.meld_objects(Doh, {
@@ -3458,6 +3460,16 @@ OnLoad('/doh_js/html', function($){
     attrs: {type: 'checkbox'},
   });
 
+  Pattern('checkbox_click', 'checkbox', {
+    html_phase: function(){
+    //  this.e.button(this.button_options);
+      if(this.click){
+        var that = this;
+        this.e.click(function(){that.click.apply(that,arguments);});
+      }
+    },
+  });
+  
   Pattern('date', 'text', {
     available_properties:{'value':'string of the option value that should be default selected'},
     html_phase: function(){
