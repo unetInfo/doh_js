@@ -280,7 +280,7 @@ OnLoad('/doh_js/core', function($){
         if(i === 'length') continue;
         if(Doh.DebugMode){
           if(args[i].__original__){
-            // debug makes everything a proxy, help adjust for that
+            // debug makes things into a proxy, help adjust for that
             args[i] = args[i].__original__;
           }
         }
@@ -737,17 +737,15 @@ OnLoad('/doh_js/core', function($){
       if(!idea) idea = {};
       // otherwise the arguments are as indicated
       
-//      if(Doh.DebugMode){
+      if(Doh.ApplyFixes){
         if(Doh.WatchedPatternNames[name]){
           idea.pattern = name = Doh.look_at_pattern_name(name);
         }
         else idea.pattern = name
-//      } else {
+      } else {
         // every pattern must know it's own key on the Patterns object
-//        idea.pattern = name;
-//      }
-      //*/
-        //idea.pattern = name;
+        idea.pattern = name;
+      }
       
       if(Patterns[name]){
         // allow the new PatternModuleVictors system to dictate which pattern gets to stay and which gets overwritten
@@ -758,11 +756,11 @@ OnLoad('/doh_js/core', function($){
         // otherwise just warn about a pattern being replaced
         Doh.warn('(',name,') pattern is being overwritten.\nOriginal Module:',Doh.PatternModule[name],'\nNew Module:',Doh.ModuleCurrentlyRunning);
       }
-      // DebugMode tells us to look at pattern creation
-//      if(Doh.DebugMode){
+      // ApplyFixes tells us to look at pattern creation
+      if(Doh.ApplyFixes){
         // just generates a bunch of warns and stuff with a few possible fixes. Should not be used in production.
-      Doh.look_at_pattern_keys(idea);
-//      }
+        Doh.look_at_pattern_keys(idea);
+      }
 
       // clean up the various ways that inherits may be passed
       idea.inherits = Doh.meld_into_objectobject(idea.inherits, inherits);
@@ -824,9 +822,9 @@ OnLoad('/doh_js/core', function($){
      */
     mixin_pattern: function(destination, pattern){
       // some checking for the pattern and double-mixing
-//      if(Doh.DebugMode){
-      pattern = Doh.look_at_pattern_name(pattern);
-//      }
+      if(Doh.ApplyFixes){
+        pattern = Doh.look_at_pattern_name(pattern);
+      }
       if(Patterns[pattern]){
         if(!InstanceOf(destination, pattern)){
           // check for invalid mixin
@@ -996,7 +994,7 @@ OnLoad('/doh_js/core', function($){
       // this should now contain all patterns defined in the many places that things can be added to objects
       if(idea.inherits) idea.inherits = Doh.meld_into_objectobject(idea.inherits);
 
-//      if(Doh.DebugMode)
+      if(Doh.ApplyFixes)
         idea.pattern = Doh.look_at_pattern_name(idea.pattern);
       
       // the builder requires at least one pattern
@@ -1235,45 +1233,45 @@ OnLoad('/doh_js/core', function($){
       
       // attach the object machine
       object.machine = function(phase){
-        // allow DebugMode to watch the machine activate phases
-        //if(Doh.DebugMode){
-        // track when we see phases so we can mute flooding the console
-        Doh.SeenPhases = Doh.SeenPhases || {};
-        let watched_phase, command, command_value;
-        for(let watched_phase in Doh.WatchedPhases){
-          if(watched_phase === phase){
-            // note that we have seen a phase ever on any object
-            Doh.SeenPhases[watched_phase] = Doh.SeenPhases[watched_phase] || {};
-            // find out if we are watching phases
-            command = '';
-            command_value = '';
-            for(command in Doh.WatchedPhases[watched_phase]){
-              command_value = Doh.WatchedPhases[watched_phase][command];
-              switch(command){
-                case 'rename':
-                  // simply rename a phase, notify once per pattern
-                  if(!Doh.SeenPhases[watched_phase][object.pattern]) Doh.warn('Watched Phase:',watched_phase,'has been renamed to:',command_value,object);
-                  phase = command_value;
-                  break;
-                case 'run':
-                  // run a function if we see the phase, change phase to the return of the function, notify once per pattern
-                  if(!Doh.SeenPhases[watched_phase][object.pattern]) Doh.warn('Watched Phase:',watched_phase,'will run:',command_value,object);
-                  phase = command_value(object, phase);
-                  break;
-                case 'log':
-                case 'warn':
-                case 'error':
-                case 'throw':
-                  Doh[command]('Watched Phase:',watched_phase,'wants to',command,':',command_value,object);
-                  break;
+        // allow ApplyFixes to watch the machine activate phases
+        if(Doh.ApplyFixes){
+          // track when we see phases so we can mute flooding the console
+          Doh.SeenPhases = Doh.SeenPhases || {};
+          let watched_phase, command, command_value;
+          for(let watched_phase in Doh.WatchedPhases){
+            if(watched_phase === phase){
+              // note that we have seen a phase ever on any object
+              Doh.SeenPhases[watched_phase] = Doh.SeenPhases[watched_phase] || {};
+              // find out if we are watching phases
+              command = '';
+              command_value = '';
+              for(command in Doh.WatchedPhases[watched_phase]){
+                command_value = Doh.WatchedPhases[watched_phase][command];
+                switch(command){
+                  case 'rename':
+                    // simply rename a phase, notify once per pattern
+                    if(!Doh.SeenPhases[watched_phase][object.pattern]) Doh.warn('Watched Phase:',watched_phase,'has been renamed to:',command_value,object);
+                    phase = command_value;
+                    break;
+                  case 'run':
+                    // run a function if we see the phase, change phase to the return of the function, notify once per pattern
+                    if(!Doh.SeenPhases[watched_phase][object.pattern]) Doh.warn('Watched Phase:',watched_phase,'will run:',command_value,object);
+                    phase = command_value(object, phase);
+                    break;
+                  case 'log':
+                  case 'warn':
+                  case 'error':
+                  case 'throw':
+                    Doh[command]('Watched Phase:',watched_phase,'wants to',command,':',command_value,object);
+                    break;
+                }
               }
+              // now that we've run all the commands once, we have "seen" it, so we don't need to blast the console
+              /// notify once per pattern that we have encountered watched phases
+              Doh.SeenPhases[watched_phase][object.pattern] = true;
             }
-            // now that we've run all the commands once, we have "seen" it, so we don't need to blast the console
-            /// notify once per pattern that we have encountered watched phases
-            Doh.SeenPhases[watched_phase][object.pattern] = true;
           }
         }
-        //}
         
         // go through the phases to the one specified, or the last
         for(let phase_name in object.melded){
@@ -2755,7 +2753,7 @@ OnCoreLoaded(Doh.ApplyFixes, function(){
 });
 
 // fix old pattern names
-//OnCoreLoaded(Doh.DebugMode, function(){
+//OnCoreLoaded(Doh.ApplyFixes, function(){
 //});
 
 OnLoad('/doh_js/html', function($){
@@ -3112,7 +3110,7 @@ OnLoad('/doh_js/html', function($){
         Doh.UntitledControls[this.id]=this;
       }
       
-      if(Doh.DebugMode){
+      if(Doh.ApplyFixes){
         this.machine.completed.append_phase = true;
       }
     },
