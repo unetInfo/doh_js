@@ -30,7 +30,7 @@ if(typeof exports != 'undefined') {
  *  @details meld_objects is special for a few specific reasons:
  *           1. destination is both modified and returned. This means that passing a plain object 
  *              or falsey value first will make a new shallow-copy of all other paramaters
- *           2. it doesn't loop over destination. This means that meld_objects(object, object, object) will
+ *           2. it doesn't loop over destination. This means that meld_objects(object1, object1, object1) will
  *              have no loops and simply return object
  *           3. it has no other special call outs or references, making it very efficient.
  */
@@ -38,6 +38,7 @@ Doh.meld_objects = function(destination = {}){
   // destination is both modified and returned, so it must be defaulted to exist
   var object, i;
   for(let arg in arguments){
+    // stash a local reference for speed
     object = arguments[arg];
     // ignore references that are already the same.
     // this keeps us from processing ourself onto ourself
@@ -45,12 +46,13 @@ Doh.meld_objects = function(destination = {}){
     // reset i
     i = '';
     for(i in object){
-      // simply reference copy. This is considered 'shallow' because we don't loop over object[i] if it's an object or array.
+      // simple reference copy. This is considered 'shallow' because we don't loop over object[i] if it's an object or array.
       // this is desirable for us because deep copies are hard to control and inefficient.
-      // for controlled deep-copy
+      // for controlled deep-copy, see Doh.meld_ideas which uses .melded to control nest depth.
       destination[i] = object[i];
     }
   }
+  // modify AND return destination, this is crucial to the various design patterns that use meld_objects.
   return destination;
 };
 
@@ -61,26 +63,26 @@ OnLoad('/doh_js/see_if', function($){
      * These have to be in this order because they are the base types for type_of
      * When we loop over SeeIf, we will always catch one of these, so these are the most primitive types
      */
+    // undefined refers to objects that have not been defined anywhere in code yet
+    IsUndefined:    (value) => {return typeof value === 'undefined' ;},
+    // null is supposed to refer to objects that have been defined, but have no value. In truth because of "falsey" values, it can have other meanings
+    IsNull:         (value) => {return value === null ;},
+    // string refers to values that are actual string datatype
+    IsString:       (value) => {return typeof value === 'string' ;},
+    // function refers to values that are actual functions
+    IsFunction:     (value) => {return typeof value === 'function' ;},
+    // boolean refers to values that are actual native boolean datatype
+    IsBoolean:      (value) => {return typeof value === 'boolean' ;},
+    // Number refers to values that are a number datatype EXCEPT NaN (Not a Number)
+    IsNumber:       (value) => {return (typeof value === 'number' && !isNaN(value)) ;},
+    // NotNumber refers to values that ARE NOT a number OR ARE NaN (NotaNumber object)
+    NotNumber:      (value) => {return (typeof value !== 'number' || isNaN(value)) ;},
+    // array refers to values that are actual array datatype
+    IsArray:        (value) => {return Array.isArray(value) ;},
     // dohobject refers to values that are a complex objectobject which was built with Doh
     IsDohObject:    (value) => {return (InstanceOf?  InstanceOf(value)  :false) ;},
     // objectobject refers to values that are complex objects with named properties. No literals or arrays. 
     IsObjectObject: (value) => {return (typeof value === 'object' && toString.call(value) == '[object Object]') ;},
-    // function refers to values that are actual functions
-    IsFunction:     (value) => {return typeof value === 'function' ;},
-    // string refers to values that are actual string datatype
-    IsString:       (value) => {return typeof value === 'string' ;},
-    // Number refers to values that are a number datatype EXCEPT NaN (Not a Number)
-    IsNumber:       (value) => {return (typeof value === 'number' && !isNaN(value)) ;},
-    // array refers to values that are actual array datatype
-    IsArray:        (value) => {return Array.isArray(value) ;},
-    // boolean refers to values that are actual native boolean datatype
-    IsBoolean:      (value) => {return typeof value === 'boolean' ;},
-    // null is supposed to refer to objects that have been defined, but have no value. In truth because of "falsey" values, it can have other meanings
-    IsNull:         (value) => {return value === null ;},
-    // undefined refers to objects that have not been defined anywhere in code yet
-    IsUndefined:    (value) => {return typeof value === 'undefined' ;},
-    // NotNumber refers to values that are not a number OR NaN (NotaNumber object)
-    NotNumber:      (value) => {return (typeof value !== 'number' || isNaN(value)) ;},
     
     /*
      * Now the rest for type_match and regular SeeIf usage
@@ -101,9 +103,9 @@ OnLoad('/doh_js/see_if', function($){
     IsIterable:     (value) => {return ((typeof value !== 'undefined' && value !== null) && typeof value[Symbol.iterator] === 'function') ;},
     // enumerable refers to values that can be iterated over in a for/in loop
     // all objects can be iterated in a for loop and all arrays are objects too.
-    IsEnumerable:   (value) => {return typeof value === 'object' ;},
+    IsEnumerable:   (value) => {return (typeof value === 'object' && value !== null) ;},
     // literal refers to values that are static literals. Strings, booleans, numbers, etc. Basically anything that isn't an object or array. flat values.
-    IsLiteral:      (value) => {return typeof value !== 'object' ;},
+    IsLiteral:      (value) => {return (typeof value !== 'object' || value === null) ;},
     // emptyobject refers to values that are objectobject or arraylike but have no properties of their own. Will return true for both {} and [], as well as IsFalsey.
     IsEmptyObject:  (value) => {
       // falsey is a form of empty
@@ -116,7 +118,7 @@ OnLoad('/doh_js/see_if', function($){
       return true;
     },
     // keysafe refers to values that are safe for use as the key name in a complex objectobject
-    IsKeySafe:      (value) => {return (typeof value === 'string' || (typeof value === 'number' && !isNaN(value))) ;},
+    IsKeySafe:      (value) => {return (typeof value === 'string' || (typeof value === 'number' && !isNaN(value)) || value === null) ;},
     // emptystring refers to values that are string literals with no contents
     IsEmptyString:  (value) => {return value === '' ;},
     // hasvalue refers to values that are defined and notemptystring. specifically this includes 0 and negative numbers where truey does not.
@@ -126,6 +128,7 @@ OnLoad('/doh_js/see_if', function($){
     
     // Not conditions, interestingly different
     NotUndefined:   (value) => {return typeof value !== 'undefined' ;},
+    NotDefined:     (value) => {return (typeof value === 'undefined' || value === null) ;},
     NotNull:        (value) => {return value !== null ;},
     NotFalse:       (value) => {return value !== false ;},
     NotTrue:        (value) => {return value !== true ;},
@@ -258,6 +261,18 @@ OnLoad('/doh_js/core', function($){
       return false;
     },
 
+    type_list: function(value){
+      let rtn_true = {}, rtn_false = {}, result;
+      for(let seeif_name in SeeIf){
+        result = SeeIf[seeif_name](value);
+        if(result){
+          rtn_true[seeif_name] = result;
+        }
+        else rtn_false[seeif_name] = result;
+      }
+      //Doh.log(value,'is the following types:\n',rtn);
+      return {is:rtn_true, not:rtn_false};
+    },
     // AA: Explain the whole logging idea here
     /**
      *  @brief Log a message to Doh (usually the console, but maybe a remote logger)
@@ -279,9 +294,11 @@ OnLoad('/doh_js/core', function($){
       for(var i in args){
         if(i === 'length') continue;
         if(Doh.DebugMode){
-          if(args[i].__original__){
-            // debug makes things into a proxy, help adjust for that
-            args[i] = args[i].__original__;
+          if(args[i]){
+            if(args[i].__original__){
+              // debug makes things into a proxy, help adjust for that
+              args[i] = args[i].__original__;
+            }
           }
         }
         logger_args.push(args[i]);
@@ -1621,18 +1638,18 @@ OnLoad('/doh_js/core', function($){
   Pattern = Doh.pattern;
   New = Doh.New;
   /**
-   *  @brief Shallow-meld multiple objects (arguments) into destination
+   *  @brief determine if an object has had a pattern mixed into it
    *  
-   *  @param [in] object Description for object
-   *  @param [in] type   Description for type
-   *  @return Return description
+   *  @param [in] object    [object] to search pattern inheritence
+   *  @param [in] pattern   [string] name of pattern to search for
+   *  @return true if object inherited pattern, otherwise false
    *  
    *  @details 
 
    */
-  InstanceOf = Doh.InstanceOf = function(object, type){
-    type = type || 'object';
-    if(object)if(object.inherited)if(object.inherited[type]) return true;
+  InstanceOf = Doh.InstanceOf = function(object, pattern){
+    pattern = pattern || 'object';
+    if(object)if(object.inherited)if(object.inherited[pattern]) return true;
     return false;
   }
 
