@@ -684,7 +684,9 @@ OnLoad('/doh_js/core', function($){
       }
       
       // build name-keyed objects of the melded value lists
-      let melded = Doh.meld_objects(destination.melded || {}, inner_melded);
+      let parsed = {};
+      if(inner_melded) parsed = JSON.parse(JSON.stringify(inner_melded));
+      let melded = Doh.meld_objects(destination.melded || {}, parsed);
       // loop over the idea and decide what to do with the properties
       prop_name = '';
       for(prop_name in idea){
