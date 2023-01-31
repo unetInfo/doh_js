@@ -372,6 +372,20 @@ OnLoad('/doh_js/core', function($){
     },
 
     /**
+     *  @brief throw and log a debug error to Doh
+     *
+     *  @param [in] context, context, ...   object(s) of relevence to the error
+     *  @return nothing
+     *
+     *  @details 
+     *  
+     *  Doh.throw('error message', object1, 'some string', objectN, ...);
+     */
+    throw: function(){
+      throw Doh._log(arguments, 'Doh THROW:', 'error');
+    },
+
+    /**
      *  @brief return true if item is in array
      *  
      *  @param [in] item  [any] thing to search for
@@ -619,14 +633,17 @@ OnLoad('/doh_js/core', function($){
      *  
      *  @details 
      */
-    meld_ideas:function(destination = {}, idea) {
-      let prop_name = '', melded_type, idea_prop, idea_melded_type;
+    meld_ideas:function(destination = {}, idea, deep_melded) {
+      let prop_name = '', inner_melded = idea.melded, go_deep, melded_type, idea_prop, idea_melded_type, destination_melded_type;
+      
+      if(deep_melded) inner_melded = deep_melded
       
       //test melded stuff and make sure it is what we expect
-      if(idea.melded){
+      if(inner_melded){
         // we only want to know if the destination is going to be overwritten by the idea
-        for(prop_name in idea.melded){
-          idea_melded_type = idea.melded[prop_name];
+        for(prop_name in inner_melded){
+          idea_melded_type = inner_melded[prop_name];
+          if(SeeIf.IsObjectObject(idea_melded_type)) idea_melded_type = 'object';
           idea_prop = idea[prop_name];
           if(destination.melded){
             // deal with destination defines a meld type that is different from idea
@@ -657,20 +674,26 @@ OnLoad('/doh_js/core', function($){
       }
       prop_name = '';
       for(prop_name in destination.melded){
-          idea_prop = idea[prop_name];
+        destination_melded_type = destination.melded[prop_name];
+        if(SeeIf.IsObjectObject(destination_melded_type)) destination_melded_type = 'object';
+        idea_prop = idea[prop_name];
         // deal with idea has a property of type that is incompatible with destination melded type
-        if(SeeIf.IsDefined(idea_prop))if(destination.melded[prop_name])if(!Doh.type_match(idea_prop, destination.melded[prop_name])){
-          Doh.debug('Doh.meld_ideas(',destination,',',idea,'). idea[',prop_name,']:',idea_prop,'is an incompatible type with destination.melded[',prop_name,']:',destination.melded[prop_name]);
+        if(SeeIf.IsDefined(idea_prop))if(destination_melded_type)if(!Doh.type_match(idea_prop, destination_melded_type)){
+          Doh.debug('Doh.meld_ideas(',destination,',',idea,'). idea[',prop_name,']:',idea_prop,'is an incompatible type with destination.melded[',prop_name,']:',destination_melded_type);
         }
       }
       
       // build name-keyed objects of the melded value lists
-      let melded = Doh.meld_objects(destination.melded || {}, idea.melded);
+      let melded = Doh.meld_objects(destination.melded || {}, inner_melded);
       // loop over the idea and decide what to do with the properties
       prop_name = '';
       for(prop_name in idea){
-        idea_prop = idea[prop_name];
         melded_type = melded[prop_name];
+        if(SeeIf.IsObjectObject(melded_type)){
+          go_deep = true;
+          melded_type = 'object';
+        } else go_deep = false;
+        idea_prop = idea[prop_name];
         if(idea_prop !== undefined && idea_prop !== destination[prop_name]){
           if(melded_type === 'method' || melded_type === 'phase' || melded_type === 'exclusive' || melded_type === 'static_reference'){
             // melded methods and phases will be updated outside of meld. our job is just to copy idea onto destination.
@@ -680,7 +703,12 @@ OnLoad('/doh_js/core', function($){
           }
           if(melded_type === 'object' || (typeof idea_prop == 'object' && !Array.isArray(idea_prop) && SeeIf.IsEmptyObject(idea_prop))){
             // it's a melded object or an empty default
-            destination[prop_name] = Doh.meld_objects(destination[prop_name] || {}, idea_prop);
+            if(deep_melded || go_deep) {
+              destination[prop_name] = destination[prop_name] || {};
+              destination[prop_name] = Doh.meld_ideas(destination[prop_name], idea_prop, melded[prop_name]);
+            } else {
+              destination[prop_name] = Doh.meld_objects(destination[prop_name] || {}, idea_prop);
+            }
             continue;
           }
           if(melded_type === 'array' || (Array.isArray(idea_prop) && !idea_prop.length)){
@@ -800,6 +828,7 @@ OnLoad('/doh_js/core', function($){
       let meld_type_name, meld_type_js;
       for(var prop_name in idea.melded){
         meld_type_name = idea.melded[prop_name];
+        if(SeeIf.IsObjectObject(meld_type_name)) meld_type_name = 'object';
         // find out if there is a type mismatch between what .melded thinks the property SHOULD be and what IT IS.
         if(SeeIf.IsDefined(idea[prop_name]))if(!Doh.type_match(idea[prop_name], meld_type_name)){
           Doh.debug('Doh.patterns(',idea.pattern,').',prop_name,' was defined as a melded',meld_type_name,' but is not a',meld_type_name,'.',idea[prop_name],idea);
@@ -2810,10 +2839,12 @@ OnLoad('/doh_js/html', function($){
     /*
      * Fixes for old pattern names that live in /doh_js/html
      */
+     /*
     Doh.meld_objects(Doh.WatchedPatternNames, {
-      html_image:{rename:'image'},
-      checkbox2:{rename:'checkbox_click'},
+      //html_image:{rename:'image'},
+      //checkbox2:{rename:'checkbox_click',throw:'find the clicks!'},
     });
+    */
   }
   
   var jWin = $(window);
