@@ -34,8 +34,9 @@ if(typeof exports != 'undefined') {
  *              have no loops and simply return object
  *           3. it has no other special call outs or references, making it very efficient.
  */
-Doh.meld_objects = function(destination = {}){
-  // destination is both modified and returned, so it must be defaulted to exist
+Doh.meld_objects = Object.assign;
+
+Doh.old_meld_objects = function(destination = {}){
   var object, i;
   for(let arg in arguments){
     // stash a local reference for speed
@@ -55,6 +56,7 @@ Doh.meld_objects = function(destination = {}){
   // modify AND return destination, this is crucial to the various design patterns that use meld_objects.
   return destination;
 };
+//Doh.meld_objects = Doh.old_meld_objects;
 
 OnLoad('/doh_js/see_if', function($){
   // enshrine the definitions of variable states in the SeeIf library
@@ -165,6 +167,7 @@ OnLoad('/doh_js/core', function($){
     delete DohWatch.SeeIf;
   }
   
+  // build the core!
   Doh.meld_objects(Doh, {
     // in nodejs, the normal OnLoad is replaced with a far simpler one that needs this set for core.
     ModuleCurrentlyRunning: '/doh_js/core',
@@ -454,8 +457,11 @@ OnLoad('/doh_js/core', function($){
      *           Used to be used by the core to manage meld_ system until being replaced by .melded.
      */
     meld_arrays: function(destination, array = [], force_new){
-      if(force_new) return Doh.meld_into_array(destination, array);
-
+      if(force_new){
+        Doh.debug('Someone called meld_arrays and wants it forced to new array');
+        return Doh.meld_into_array(destination, array);
+      }
+      
       destination = destination || [];
       // loop over array
       for(var i=0; i<array.length; i++){
@@ -471,24 +477,21 @@ OnLoad('/doh_js/core', function($){
     /**
      *  @brief similar to meld_arrays but always melds onto a fresh array.
      *  
-     *  @param [in] arr1 [array] first array to meld from
-     *  @param [in] arr2 [array] second array to meld from
+     *  @param [in] ...arguments arrays or values that will be flattened into a new array
      *  @return new melded array
      *  
      *  @details specifically differs from regular meld_arrays because it doesn't modify either argument
      */
-     //NOTE update this to accept infinite aguments
-    meld_into_array: function(arr1, arr2){
-      var destination = Doh.meld_objects([], arr1);
-      // loop over arr
-      for(var i=0; i<arr2.length; i++){
-        // if the value is not in arr1
-        if(Doh.in_array(arr2[i], arr1) == -1){
-          // add it to the destination
-          destination.push(arr2[i]);
-        }
-      }
-      return destination;
+    meld_into_array: function(){
+      /*
+      // Set is unique by default, it is also order-of-insertion.
+      // arguments isn't a real array, it's a gimped one with no methods, so we have to use Array.prototype to get .flat()
+      // flat() takes an array of arrays or values and flattens into a single array of all the values in each nest.
+      // ... spread operator on a Set will spread it into an array or object (the outer array brackets, in our case)
+      // Soooo... flatten all the arguments into a single array, then use Set to make it unique, starting with order-inserted
+      //   then spread all remaining values into a new array.
+      */
+      return [...new Set(Array.prototype.flat.apply(arguments))];
     },
 
     /**
@@ -662,7 +665,7 @@ OnLoad('/doh_js/core', function($){
       }
       
       // build name-keyed objects of the melded value lists
-      let melded = Doh.meld_objects(destination.melded, idea.melded);
+      let melded = Doh.meld_objects(destination.melded || {}, idea.melded);
       // loop over the idea and decide what to do with the properties
       prop_name = '';
       for(prop_name in idea){
@@ -677,7 +680,7 @@ OnLoad('/doh_js/core', function($){
           }
           if(melded_type === 'object' || (typeof idea_prop == 'object' && !Array.isArray(idea_prop) && SeeIf.IsEmptyObject(idea_prop))){
             // it's a melded object or an empty default
-            destination[prop_name] = Doh.meld_objects(destination[prop_name], idea_prop);
+            destination[prop_name] = Doh.meld_objects(destination[prop_name] || {}, idea_prop);
             continue;
           }
           if(melded_type === 'array' || (Array.isArray(idea_prop) && !idea_prop.length)){
@@ -1656,9 +1659,10 @@ OnLoad('/doh_js/core', function($){
   // AA: It might be worth crafting a small ode to the elegance of this
   /**
    *  
+   *  NOTE: DO NOT INHERIT THIS PATTERN
    */
   Pattern('idea');
-
+  
   // set the prototype for the object constructor
   /**
    *  
@@ -1823,6 +1827,7 @@ OnLoad('/doh_js/core', function($){
       }
       return new_idea;
     },
+
   });
 
 // AA: group this with the log stuff above?   
@@ -2059,6 +2064,33 @@ OnCoreLoaded(Doh.ApplyFixes, function(){
 });
 
 OnLoad('/doh_js/utils', function($){
+    
+  Pattern('dict', 'object', {
+    each: function(callback){
+      let po = Patterns.object, pd = Patterns.dict_filter;
+      for(let key in this){
+        if(po[key] || pd[key]) continue;
+        callback(key, this[key], this);
+      }
+    }
+  });
+  // the stuff that object adds, or may add, which must be removed from meach loops
+  // NOTE: DO NOT INHERIT THIS PATTERN
+  Pattern('dict_filter', 'object', {
+    // will be added by New()
+    machine:true,
+    inherits:true,
+    inherited:true,
+    // will be added by dict
+    each:true,
+    // may be added by object during object_phase
+    auto_built:true,
+    _auto_built_by:true,
+    _auto_built_by_name:true,
+    // may be added by debug mode during New
+    watch:true,
+  });
+  
   /**
    *  A place to house things that we no longer want in core, but don't yet have another home
    */
@@ -3704,7 +3736,7 @@ OnLoad('/doh_js/html', function($){
     },
     object_phase:function(){
       var aDialog = this;
-      this.dialog_options = Doh.meld_objects(this.dialog_options,{
+      this.dialog_options = Doh.meld_objects(this.dialog_options || {},{
         modal:'true',
         buttons:{
           "OK":function(){

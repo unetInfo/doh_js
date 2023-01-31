@@ -1,19 +1,4 @@
 console.group('Doh Core');
-// this is a cheat, but it keeps us from messing with top here.
-let meld_objects = function(destination){
-  destination = destination || {}; // this may seem unneccesary but OH IS IT EVER NECCESSARY
-  var obj, i;
-  for(var arg in arguments){
-    obj = arguments[arg];
-    if(obj === destination) continue;
-    i = '';
-    for(i in obj){
-      destination[i] = obj[i];
-    }
-  }
-  return destination;
-};
-
 // simply add a property to DohWatch with a reference to the object you want "watched"
 // DohWatch.MyWatchedName = MyWatchedObject;
 var DohWatch = DohWatch || {top:top};
@@ -46,7 +31,7 @@ var DohWatchUpdate = function(name){
     // get last and current entries for top
     lastWatchEntry = DohWatchUpdate.Cache[watching][DohWatchUpdate.PreviousName];
     // this is where we make the new cache entry
-    currentWatchEntry = DohWatchUpdate.Cache[watching][diffName] = meld_objects({}, DohWatch[watching]);
+    currentWatchEntry = DohWatchUpdate.Cache[watching][diffName] = Object.assign({}, DohWatch[watching]);
     
     // build DohWatchDiffs[watching][propName] so we can see what's changed between saves
     if(lastWatchEntry){
@@ -77,12 +62,13 @@ DohWatchUpdate.PreviousName = '';
 
 
 // this is fast and will impact nothing
-//DohWatchUpdate = function(name){};
+DohWatchUpdate = function(){};
 
 // 
 DohWatchUpdate('init');
+
 // hand populate the initial cache diff with our DohWatch stuff since we can't record it until after it's happened
-DohWatchDiffs.top['1 init'] = {DohWatch:DohWatch,DohWatchDiffs:DohWatchDiffs,DohWatchUpdate:DohWatchUpdate};
+//DohWatchDiffs.top['1 init'] = {DohWatch:DohWatch,DohWatchDiffs:DohWatchDiffs,DohWatchUpdate:DohWatchUpdate};
 
 /*
  * Libraries and Polyfills related to deploy.js
@@ -419,13 +405,13 @@ window.LoadDohFrom = window.LoadDohFrom || '';
   // exist and we had to create it
   // after this, it will be an object of bundles or a malformed object
 })();
-
+top.Doh_Start_Time = performance.now();
 // Create the Doh Global Object. This should be a plain object in the global scope
 // do NOT put this directly on top, let it bubble up.
 // do NOT allow this to be overloaded, create it explicitly here.
 Doh = {
   // show more errors and warnings, allow debug logs to throw breakpoints and most importantly...
-  // Proxy ALL DohObjects.
+  // Proxy DohObjects.
   DebugMode: false,
   // allow Doh to try and fix patterns and objects from older code
   ApplyFixes: true,
@@ -709,6 +695,7 @@ Doh = {
       }
       console.log("Doh: deferred the loading of: ", Doh.ModuleWasDeferred);
       Doh.ModuleWasDeferred = {};
+      console.log("Doh: took",performance.now() - Doh_Start_Time,"ms to load.");
       console.groupEnd();
     });
   },
