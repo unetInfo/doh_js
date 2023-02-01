@@ -9,186 +9,293 @@ if(typeof global != 'undefined'){
 
 Doh = Doh || {};
 
-  // This has to be very early. 
-  Doh.DebugMode = true;
+// This has to be very early.
+// we try not to use this now that the url paramater is working
+//Doh.DebugMode = true;
 
+// this is for being required by a nodejs module
 if(typeof exports != 'undefined') {
   exports = top.Doh;
 }
 
 /* **** Prepare Doh **** */
 // the most important function in Doh:
-Doh.meld_objects = function(destination){
-  
-  destination = destination || {}; // this may seem unneccesary but OH IS IT EVER NECCESSARY
-  var obj, i;
+/**
+ *  @brief Shallow-meld multiple objects (arguments) into destination
+ *  
+ *  @param [in] destination   [object/falsey] the thing to add everrthing else onto. If falsey, a default of {} will be used.
+ *  @param [in] ...arguments  [object]        all additional paramaters will be added in the order they are passed so that the last passed will override everyone else.
+ *  @return destination
+ *  
+ *  @details meld_objects is special for a few specific reasons:
+ *           1. destination is both modified and returned. This means that passing a plain object 
+ *              or falsey value first will make a new shallow-copy of all other paramaters
+ *           2. it doesn't loop over destination. This means that meld_objects(object1, object1, object1) will
+ *              have no loops and simply return object
+ *           3. it has no other special call outs or references, making it very efficient.
+ */
+Doh.meld_objects = Object.assign;
+
+Doh.old_meld_objects = function(destination = {}){
+  var object, i;
   for(let arg in arguments){
-    obj = arguments[arg];
-    if(obj === destination) continue;
+    // stash a local reference for speed
+    object = arguments[arg];
+    // ignore references that are already the same.
+    // this keeps us from processing ourself onto ourself
+    if(object === destination) continue;
+    // reset i
     i = '';
-    for(i in obj){
-      destination[i] = obj[i];
+    for(i in object){
+      // simple reference copy. This is considered 'shallow' because we don't loop over object[i] if it's an object or array.
+      // this is desirable for us because deep copies are hard to control and inefficient.
+      // for controlled deep-copy, see Doh.meld_ideas which uses .melded to control nest depth.
+      destination[i] = object[i];
     }
   }
+  // modify AND return destination, this is crucial to the various design patterns that use meld_objects.
   return destination;
 };
+//Doh.meld_objects = Doh.old_meld_objects;
 
 OnLoad('/doh_js/see_if', function($){
-// enshrine the definitions of variable states
-  var SeeIf_Templates = {
+  // enshrine the definitions of variable states in the SeeIf library
+  Doh.meld_objects(SeeIf, {
     /*
      * These have to be in this order because they are the base types for type_of
      * When we loop over SeeIf, we will always catch one of these, so these are the most primitive types
      */
-    // dohobject refers to values that are a complex objectobject which was built with Doh
-    'IsDohObject':(value) => `(InstanceOf?InstanceOf(${value}):false)`,
-    // objectobject refers to values that are complex objects with named properties. No flat values or number-keyed lists. 
-    'IsObjectObject':(value) => `(typeof ${value} === 'object' && toString.call(${value}) == '[object Object]')`,
-    // function refers to values that are actual functions
-    'IsFunction':(value) => `typeof ${value} === 'function'`,
-    // string refers to values that are actual string datatype
-    'IsString':(value) => `typeof ${value} === 'string'`,
-    // Number refers to values that are a number datatype EXCEPT NaN (Not a Number)
-    'IsNumber':(value) => `(typeof ${value} === 'number' && !isNaN(${value}))`,
-    // array refers to values that are actual array datatype
-    'IsArray':(value) => `Array.isArray(${value})`,
-    // boolean refers to values that are actual native boolean datatype
-    'IsBoolean':(value) => `typeof ${value} === 'boolean'`,
-    // null is supposed to refer to objects that have been defined, but have no value. In truth because of "falsey" values, it can have other meanings
-    'IsNull':(value) => `${value} === null`,
     // undefined refers to objects that have not been defined anywhere in code yet
-    'IsUndefined':(value) => `typeof ${value} === 'undefined'`,
-    // NotNumber refers to values that are not a number OR NaN (NotaNumber object)
-    'NotNumber':(value) => `(typeof ${value} !== 'number' || isNaN(${value}))`,
+    IsUndefined:    (value) => {return typeof value === 'undefined' ;},
+    // null is supposed to refer to objects that have been defined, but have no value. In truth because of "falsey" values, it can have other meanings
+    IsNull:         (value) => {return value === null ;},
+    // string refers to values that are actual string datatype
+    IsString:       (value) => {return typeof value === 'string' ;},
+    // function refers to values that are actual functions
+    IsFunction:     (value) => {return typeof value === 'function' ;},
+    // boolean refers to values that are actual native boolean datatype
+    IsBoolean:      (value) => {return typeof value === 'boolean' ;},
+    // Number refers to values that are a number datatype EXCEPT NaN (Not a Number)
+    IsNumber:       (value) => {return (typeof value === 'number' && !isNaN(value)) ;},
+    // NotNumber refers to values that ARE NOT a number OR ARE NaN (NotaNumber object)
+    NotNumber:      (value) => {return (typeof value !== 'number' || isNaN(value)) ;},
+    // array refers to values that are actual array datatype
+    IsArray:        (value) => {return Array.isArray(value) ;},
+    // dohobject refers to values that are a complex objectobject which was built with Doh
+    IsDohObject:    (value) => {return (InstanceOf?  InstanceOf(value)  :false) ;},
+    // objectobject refers to values that are complex objects with named properties. No literals or arrays. 
+    IsObjectObject: (value) => {return (typeof value === 'object' && toString.call(value) == '[object Object]') ;},
+    
     /*
      * Now the rest for type_match and regular SeeIf usage
      */
     // defined is supposed to refer to having a usable reference. undefined means without reference. null references are still unusable in JS, so defined nulls should demand special handling
-    'IsDefined':(value) => `(typeof ${value} !== 'undefined' && ${value} !== null)`,
+    IsDefined:      (value) => {return (typeof value !== 'undefined' && value !== null) ;},
     // true refers to the binary 1 state (Boolean)
-    'IsTrue':(value) => `${value} === true`,
+    IsTrue:         (value) => {return value === true ;},
     // false refers to the binary 0 state (Boolean)
-    'IsFalse':(value) => `${value} === false`,
+    IsFalse:        (value) => {return value === false ;},
     // truey referes to values that equal binary 1, even if represented by a different datatype. Truey values include: True, HasValue, 1...[positive numbers]
-    'IsTruey':(value) => `${value} == true`,
+    IsTruey:        (value) => {return value?true:false ;},
     // falsey refers to values that equal binary 0, even if represented by a different datatype. Falsey values include: Undefined, Null, False, '', 0, -1...[negative numbers]
-    'IsFalsey':(value) => `!${value}`,
+    IsFalsey:       (value) => {return value?false:true ;},
     // arraylike refers to values that act like arrays in every way. they can be used by native array methods
-    'IsArrayLike':(value) => `(Array.isArray(${value}) || ((typeof ${value} !== 'undefined' && ${value} !== null) && typeof value[Symbol.iterator] === 'function') && typeof ${value}.length === 'number' && typeof ${value} !== 'string')`,
+    IsArrayLike:    (value) => {return (Array.isArray(value) || ((typeof value !== 'undefined' && value !== null) && typeof value[Symbol.iterator] === 'function') && typeof value.length === 'number' && typeof value !== 'string') ;},
     // iterable refers to values that define a Symbol iterator so that native methods can iterate over them
-    'IsIterable':(value) => `((typeof ${value} !== 'undefined' && ${value} !== null) && typeof value[Symbol.iterator] === 'function')`,
+    IsIterable:     (value) => {return ((typeof value !== 'undefined' && value !== null) && typeof value[Symbol.iterator] === 'function') ;},
     // enumerable refers to values that can be iterated over in a for/in loop
     // all objects can be iterated in a for loop and all arrays are objects too.
-    'IsEnumerable':(value) => `typeof ${value} === 'object'`,
+    IsEnumerable:   (value) => {return (typeof value === 'object' && value !== null) ;},
     // literal refers to values that are static literals. Strings, booleans, numbers, etc. Basically anything that isn't an object or array. flat values.
-    'IsLiteral':(value) => `typeof ${value} !== 'object'`,
-    // to-be-replaced:
-    // emptyobject refers to values that are objectobject or arraylike but have no properties of their own (empty of named properties that aren't javascript native)
-    'IsEmptyObject':(value) => `${value}`,
+    IsLiteral:      (value) => {return (typeof value !== 'object' || value === null) ;},
+    // emptyobject refers to values that are objectobject or arraylike but have no properties of their own. Will return true for both {} and [], as well as IsFalsey.
+    IsEmptyObject:  (value) => {
+      // falsey is a form of empty
+      if (SeeIf.IsFalsey(value)) return true;
+      // is it an array with keys? fail if so.
+      if (value.length && value.length > 0) return false;
+      // if this triggers for an Own property, we fail out.
+      for (var key in value) { if (hasOwnProperty.call(value, key)) return false; }
+      // it's none of the above, so it can only be an object without Own properties
+      return true;
+    },
     // keysafe refers to values that are safe for use as the key name in a complex objectobject
-    'IsKeySafe':(value) => `(typeof ${value} === 'string' || (typeof ${value} === 'number' && !isNaN(${value})))`,
+    IsKeySafe:      (value) => {return (typeof value === 'string' || (typeof value === 'number' && !isNaN(value)) || value === null) ;},
     // emptystring refers to values that are string literals with no contents
-    'IsEmptyString':(value) => `${value} === ''`,
+    IsEmptyString:  (value) => {return value === '' ;},
     // hasvalue refers to values that are defined and notemptystring. specifically this includes 0 and negative numbers where truey does not.
-    'HasValue':(value) => `((typeof ${value} !== 'undefined' && ${value} !== null) && ${value} !== '')`,
+    HasValue:       (value) => {return ((typeof value !== 'undefined' && value !== null) && value !== '') ;},
+    // anything refers to values of any type. it is specifically useful when SeeIf is being used as a filtering library.
+    IsAnything:     (value) => {return true ;},
     
     // Not conditions, interestingly different
-    'NotUndefined':(value) => `typeof ${value} !== 'undefined'`,
-    'NotNull':(value) => `${value} !== null`,
-    'NotFalse':(value) => `${value} !== false`,
-    'NotTrue':(value) => `${value} !== true`,
-    'NotBoolean':(value) => `typeof ${value} !== 'boolean'`,
-    'NotString':(value) => `typeof ${value} !== 'string'`,
-    'NotArray':(value) => `!Array.isArray(${value})`,
-    'NotArrayLike':(value) => `!(((typeof ${value} !== 'undefined' && ${value} !== null) && typeof value[Symbol.iterator] === 'function') && typeof ${value}.length === 'number' && typeof ${value} !== 'string')`,
-    'NotIterable':(value) => `!((typeof ${value} !== 'undefined' && ${value} !== null) && typeof value[Symbol.iterator] === 'function')`,
-    'NotEnumerable':(value) => `typeof ${value} !== 'object'`,
-    'NotFunction':(value) => `typeof ${value} !== 'function'`,
-    'NotLiteral':(value) => `typeof ${value} === 'object'`,
-    'NotObjectObject':(value) => `!(typeof ${value} === 'object' && toString.call(${value}) == '[object Object]')`,
-    'NotDohObject':(value) => `!InstanceOf(${value})`,
-    'NotKeySafe':(value) => `!(typeof ${value} === 'string' || (typeof ${value} === 'number' && !isNaN(${value})))`,
-    'NotEmptyString':(value) => `${value} !== ''`,
-    'LacksValue':(value) => `(typeof ${value} === 'undefined' || ${value} === null || ${value} === '')`
-  };
-  Doh.meld_objects(SeeIf_Templates, {
-    'NotDefined':SeeIf_Templates.IsUndefined,
-    'NotFalsey':SeeIf_Templates.IsTruey,
-    'NotTruey':SeeIf_Templates.IsFalsey,
-    'IsSet':SeeIf_Templates.IsDefined,
-    'NotSet':SeeIf_Templates.IsUndefined,
+    NotUndefined:   (value) => {return typeof value !== 'undefined' ;},
+    NotDefined:     (value) => {return (typeof value === 'undefined' || value === null) ;},
+    NotNull:        (value) => {return value !== null ;},
+    NotFalse:       (value) => {return value !== false ;},
+    NotTrue:        (value) => {return value !== true ;},
+    NotBoolean:     (value) => {return typeof value !== 'boolean' ;},
+    NotString:      (value) => {return typeof value !== 'string' ;},
+    NotArray:       (value) => {return !Array.isArray(value) ;},
+    NotArrayLike:   (value) => {return !(((typeof value !== 'undefined' && value !== null) && typeof value[Symbol.iterator] === 'function') && typeof value.length === 'number' && typeof value !== 'string') ;},
+    NotIterable:    (value) => {return !((typeof value !== 'undefined' && value !== null) && typeof value[Symbol.iterator] === 'function') ;},
+    NotEnumerable:  (value) => {return typeof value !== 'object' ;},
+    NotFunction:    (value) => {return typeof value !== 'function' ;},
+    NotLiteral:     (value) => {return typeof value === 'object' ;},
+    NotObjectObject:(value) => {return !(typeof value === 'object' && toString.call(value) == '[object Object]') ;},
+    NotDohObject:   (value) => {return !InstanceOf(value) ;},
+    NotKeySafe:     (value) => {return !(typeof value === 'string' || (typeof value === 'number' && !isNaN(value))) ;},
+    NotEmptyString: (value) => {return value !== '' ;},
+    NotEmptyObject: (value) => {return !SeeIf.IsEmptyObject(value) ;},
+    LacksValue:     (value) => {return (typeof value === 'undefined' || value === null || value === '') ;},
   });
-  for(let i in SeeIf_Templates){
-    SeeIf[i] = new Function('value', `return ${SeeIf_Templates[i]('value')}`);
-  }
-  SeeIf.IsEmptyObject = function(value) {
-    if(SeeIf.IsDefined(value)) {
-      if (value.length && value.length > 0) { 
-        return false;
-      }
-
-      for (var key in value) {
-        if (hasOwnProperty.call(value, key)) {
-          return false;
-        }
-      }
-    }
-    return true;    
-  };
-  SeeIf.NotEmptyObject = function(value){
-    return !SeeIf.IsEmptyObject(value);
-  };
+  // some aliases
+  Doh.meld_objects(SeeIf, {
+    NotDefined:SeeIf.IsUndefined,
+    NotFalsey:SeeIf.IsTruey,
+    NotTruey:SeeIf.IsFalsey,
+    IsSet:SeeIf.IsDefined,
+    NotSet:SeeIf.IsUndefined,
+  });
 }, 'SeeIf');
 
 OnLoad('/doh_js/core', function($){
   
+  // if included, we remove SeeIf. It should not be added to
   if(top.DohWatch)if(DohWatch.SeeIf){
     DohWatch.SeeIf = false;
     delete DohWatch.SeeIf;
   }
   
+  // build the core!
   Doh.meld_objects(Doh, {
-    
+    // in nodejs, the normal OnLoad is replaced with a far simpler one that needs this set for core.
     ModuleCurrentlyRunning: '/doh_js/core',
-    
+    // this remains to be updated, Doh still hasn't really grasped versioning
     Version:'2.0a',
-    
-    ModulePatterns: {},
+    // allow storage of patterns
+    Patterns: {},
+    // keyed by pattern, the name of the module that made it (or false if made after load)
     PatternModule: {},
-
-    // work on pattern for watching any key setter and getter
-    
-
-    //return items from the elems array that pass callback
-    grep: function( elems, callback, inv ) {
-      var ret = [];
-      // Go through the array, only saving the items
-      // that pass the validator function
-      for ( var i = 0, length = elems.length; i < length; i++ ) {
-        if ( !inv !== !callback( elems[ i ], i ) ) {
-          ret.push( elems[ i ] );
-        }
-      }
-      return ret;
+    // keyed by pattern, a list of things that inherit from it
+    PatternInheritedBy: {},
+    // keyed by module, a list of patterns it creates
+    ModulePatterns: {},
+    /**
+     *  a collection of functions to validate compatibility of a melded property
+     *  with it's contents
+     */
+    MeldedTypeMatch: {
+      'method':SeeIf.IsFunction,
+        'phase':SeeIf.IsFunction,
+      'exclusive':SeeIf.IsAnything,
+      'static_reference':SeeIf.IsEnumerable,
+      'object':SeeIf.IsObjectObject,
+        'idea':SeeIf.IsObjectObject,
+      'array':SeeIf.IsArray,
     },
-
-    in_array: function( elem, array ) {
-      
-      if ( typeof array == 'undefined') return -1;
-      
-      if ( array.indexOf ) {
-        return array.indexOf( elem );
-      }
-
-      for ( var i = 0, length = array.length; i < length; i++ ) {
-        if ( array[ i ] === elem ) {
-          return i;
-        }
-      }
-
-      return -1;
+    /**
+     *  Default values used by New to provide automatic defaults for melded properties
+     */
+    MeldedTypeDefault:{
+      'method':function(){},
+        'phase':function(){},
+      'object':{},
+        'idea':{},
+      'array':[],
     },
     
+    /**
+     *  @brief return the SeeIf primative for value
+     *  
+     *  @param [in] value [any] thing to find the type of
+     *  @return the string name of a SeeIf method that describes the primative for this type of value
+     *  
+     *  @details Attempts to provide a consistent typeof for javascript primatives
+     *  
+     *    Doh.type_of()
+     *                'IsUndefined'
+     *    Doh.type_of('')
+     *                'IsString'
+     *    Doh.type_of(0)
+     *                'IsNumber'
+     *    Doh.type_of(false)
+     *                'IsBoolean'
+     *    Doh.type_of(null)
+     *                'IsNull'
+     *    Doh.type_of([])
+     *                'IsArray'
+     *    Doh.type_of({})
+     *                'IsObjectObject'
+     *    Doh.type_of(function(){})
+     *                'IsFunction'
+     *    Doh.type_of(New('object',{}))
+     *                'IsDohObject'
+     */
+    type_of: function(value){
+      let type;
+      for(type in SeeIf){
+        if(SeeIf[type](value)){
+          return type;
+        }
+      }
+      // SeeIf can't see it, so it's not defined
+      // this should never be possible
+      throw Doh.error("SeeIf couldn't find a type for:'",value,"'");
+      return undefined;
+    },
+    
+    /**
+     *  @brief Match value against melded types and SeeIf to find out if it matches
+     *         a melded type or SeeIf method
+     *  
+     *  @param [in] value [any] thing to match against
+     *  @param [in] is    [string] name of melded type or SeeIf method
+     *  @return true if value == is()
+     *  
+     *  @details 
+     */
+    type_match: function(value, is){
+      if(typeof Doh.MeldedTypeMatch[is] === 'function')
+        return Doh.MeldedTypeMatch[is](value);
+      else if(typeof SeeIf[is] === 'function')
+        return SeeIf[is](value);
+
+      return false;
+    },
+
+    /**
+     *  @brief produce a list of all SeeIf results for value
+     *  
+     *  @param [in] value [any] thing to test
+     *  @return a separated list of types this value is and (is) not
+     *  
+     *  @details Return {is:[array of types this value is], not:[array of types this values is not]}
+     */
+    type_list: function(value){
+      let rtn_true = {}, rtn_false = {}, result;
+      for(let seeif_name in SeeIf){
+        result = SeeIf[seeif_name](value);
+        if(result){
+          rtn_true[seeif_name] = result;
+        }
+        else rtn_false[seeif_name] = result;
+      }
+      //Doh.log(value,'is the following types:\n',rtn);
+      return {is:rtn_true, not:rtn_false};
+    },
+
+    /**
+     *  @brief Log a message to Doh (usually the console, but maybe a remote logger)
+     *  
+     *  @param [in] args          [array] captured args from a main logging function
+     *  @param [in] log_type      [string] a string appended to the front of the log
+     *  @param [in] logger_method [string] a string name of the method to use on the logger
+     *  @param [in] logger        [object] the actual logger to run these commands on
+     *  @return nothing
+     *  
+     *  @details this is usually called by a main logging function below
+     */
     _log: function(args, log_type, logger_method, logger){
       log_type = log_type || '';
       logger_method = logger_method || 'log';
@@ -197,6 +304,14 @@ OnLoad('/doh_js/core', function($){
       var logger_args = [log_type];
       for(var i in args){
         if(i === 'length') continue;
+        if(Doh.DebugMode){
+          if(args[i]){
+            if(args[i].__original__){
+              // debug makes things into a proxy, help adjust for that
+              args[i] = args[i].__original__;
+            }
+          }
+        }
         logger_args.push(args[i]);
       }
       if(logger_method === 'trace'){
@@ -207,173 +322,169 @@ OnLoad('/doh_js/core', function($){
         logger[logger_method](...logger_args);
       }
     },
+    /**
+     *  @brief Log a message to Doh, defaults to 'trace' type log
+     *  
+     *  @param [in] ...arguments [any] values to send to the logger
+     *  
+     *  @return nothing
+     *  
+     *  @details Creates a collapsed stack trace for each log entry
+     *  Doh.log('error message', object1, 'some string', objectN, ...);
+     */
     log: function(){
       Doh._log(arguments, 'Doh:', 'trace');
     },
     /**
-     *  @brief return a custom Doh error
+     *  @brief log a custom warning to Doh
+     *
+     *  @param [in] context, context, ...   object(s) of relevence to the warning
+     *  @return nothing
+     *
+     *  @details
+     *  Doh.warn('error message', object1, 'some string', objectN, ...);
+     */
+    warn: function(){
+      Doh._log(arguments, 'Doh Warning:', 'warn');
+    },
+    /**
+     *  @brief log a custom error to Doh
      *
      *  @param [in] context, context, ...   object(s) of relevence to the error
-     *  @return Patterns.error object
+     *  @return nothing
      *
      *  @details
      *  Doh.error('error message', object1, 'some string', objectN, ...);
      */
     error: function(){
       Doh._log(arguments, 'Doh ERROR:', 'error');
-      // build and return the custom error
-      //return New({pattern:'error',args:arguments});
     },
     /**
-     *  @brief return a custom Doh warning
+     *  @brief log a debug error to Doh
      *
      *  @param [in] context, context, ...   object(s) of relevence to the error
-     *  @return Patterns.error object
+     *  @return nothing
      *
-     *  @details
-     *  Doh.error('error message', object1, 'some string', objectN, ...);
+     *  @details A debug error throws automatically in DebugMode, but otherwise does not.
+     *           Used by core features that want to degrade more gracefully in production.
+     *  
+     *  Doh.debug('error message', object1, 'some string', objectN, ...);
      */
-    warn: function(){
-      Doh._log(arguments, 'Doh Warning:', 'warn');
-      //if(Patterns.warning)
-      //  return New({pattern:'warning',args:arguments});
+    debug: function(){
+      if(Doh.DebugMode) throw Doh._log(arguments, 'Doh DEBUG:', 'error');
+      Doh._log(arguments, 'Doh DEBUG:', 'error');
+    },
+    /**
+     *  @brief throw and log an error to Doh
+     *
+     *  @param [in] context, context, ...   object(s) of relevence to the error
+     *  @return nothing
+     *
+     *  @details 
+     *  
+     *  Doh.throw('error message', object1, 'some string', objectN, ...);
+     */
+    throw: function(){
+      throw Doh._log(arguments, 'Doh THROW:', 'error');
     },
 
     /**
-     *  @brief Get a new id
-     *
-     *  @return A new unique id
+     *  @brief return true if item is in array
+     *  
+     *  @param [in] item  [any] thing to search for
+     *  @param [in] array [array] to search
+     *  @return true if item is in array
+     *  
+     *  @details Used by Doh.array_unique to filter arrays of duplicates
+     *           NOTE: array_unique is required by meld_arrays
      */
-    NewIdCounter:0,
-    new_id: function () {
-      return this.NewIdCounter += 1;
+    in_array: function( item, array ) {
+      
+      if ( typeof array == 'undefined') return -1;
+      
+      if ( array.indexOf ) {
+        return array.indexOf( item );
+      }
+
+      for ( var i = 0, length = array.length; i < length; i++ ) {
+        if ( array[ i ] === item ) {
+          return i;
+        }
+      }
+
+      return -1;
     },
+    
     /**
-     *  @brief Turn a dot delimited name into a deep reference on 'base'
-     *
-     *  @param [in] base    The object to get a deep reference to
-     *                      pass TRUE to 'base' and it will return the last key of the split
-     *  @param [in] var_str A dot-delimited string
-     *  @return A deep reference into 'base' or the last key of the split
+     *  @brief Concatenate array onto destination, removing duplicates from array.
+     *  
+     *  @param [in] destination [array] to be melded onto
+     *  @param [in] array       [array] to meld onto destination
+     *  @param [in] force_new   [bool] if true, meld both destination AND array onto a new [] and pass that back instead
+     *  @return destination or the new array from being force_new'd
+     *  
+     *  @details Primarilly used by html for ordering classes.
+     *           Used to be used by the core to manage meld_ system until being replaced by .melded.
      */
-    parse_reference: function(base, var_str){
-      var values = base;
-      var var_arr = new String(var_str).split('.');
-      // pass TRUE to 'base' and it will return the last key of the split
-      if(base===true) return var_arr[var_arr.length-1];
-      for(var i=0; i < var_arr.length; i++)
-      values = values[var_arr[i]];
-
-      return values;
-    },
-
-    array_move: function(array, from_index, to_index) {
-      array.splice(to_index, 0, array.splice(from_index, 1)[0]);
-      return array;
-    },
-
-    // allow storage of patterns
-    Patterns: {},
-    
-    // This is used by the builder to a mix a pattern into a new instance of an object
-    mixin_pattern: function(destination, pattern){
-
-      if(Patterns[pattern]){
-        if(!InstanceOf(destination, pattern)){
-          // check for invalid mixin
-          Doh.meld_ideas(destination, Patterns[pattern]);
-
-          destination.inherited[pattern] = Patterns[pattern];
-        }
-      } else {
-        Doh.error('Doh.mixin_pattern(',destination,',',pattern,') did not find the pattern');
+    meld_arrays: function(destination, array = [], force_new){
+      if(force_new){
+        Doh.debug('Someone called meld_arrays and wants it forced to new array');
+        return Doh.meld_into_array(destination, array);
       }
-    },
-    
-    extend_inherits: function(inherits, skip_core = false){
-      var extended = {};
-      if(SeeIf.NotObjectObject(inherits)) inherits = Doh.meld_into_objectobject(inherits);
-      for(var pattern_name in inherits){
-        if(!Patterns[pattern_name]) throw Doh.error('Doh.extend_inherits() did not find pattern:', pattern_name, 'in inherits list:', inherits); // CHRIS:  Andy added this error msg, is there a better way?
-        if(skip_core){
-          //Doh.log(Doh.PatternModule[pattern_name],'spawns',pattern_name,'from',inherits);
-          if(pattern_name !== 'idea')if(Doh.PatternModule[pattern_name].indexOf('/doh_js/') == 0){
-            //Doh.log('Doh.extend_inherits() is skipping core and found a core pattern:', pattern_name, 'from module:', Doh.PatternModule[pattern_name]);
-            // this is a core module because the string starts with /doh_js/
-            inherits[pattern_name] = null;
-            delete inherits[pattern_name]
-            continue;
-          }
-        }
-        Doh.meld_objects(extended, Doh.extend_inherits(Patterns[pattern_name].inherits, skip_core));
-      }
-      Doh.meld_objects(extended, inherits);
-      return extended;
-    },
-
-    array_unique: function(arr){
-      // reduce the array to contain no dupes via grep/in_array
-      return Doh.grep(arr,function(v,k){
-          return Doh.in_array(v,arr) === k;
-      });
-    },
-
-    object_keys_from_array_values: function (arr){
-      var obj = {};
-      arr = arr || [];
-      for(var i=0; i<arr.length; i++){
-        obj[arr[i]] = true
-      }
-      return obj;
-    },
-
-    meld_arrays: function(destination, arr, force_new){
-
-      arr = arr || [];
-      if(force_new) return Doh._meld_arrays(destination, arr);
-
+      
       destination = destination || [];
-      // loop over arr
-      for(var i=0; i<arr.length; i++){
+      // loop over array
+      for(var i=0; i<array.length; i++){
         // if the value is not in destination
-        if(Doh.in_array(arr[i], destination) == -1){
+        if(Doh.in_array(array[i], destination) == -1){
           // add it
-          destination.push(arr[i]);
+          destination.push(array[i]);
         }
       }
       return destination;
     },
-    _meld_arrays: function(arr1, arr2){
-      var destination = Doh.meld_objects([], arr1);
-      // loop over arr
-      for(var i=0; i<arr2.length; i++){
-        // if the value is not in arr1
-        if(Doh.in_array(arr2[i], arr1) == -1){
-          // add it to the destination
-          destination.push(arr2[i]);
-        }
-      }
-      return destination;
+    
+    /**
+     *  @brief similar to meld_arrays but always melds onto a fresh array.
+     *  
+     *  @param [in] ...arguments arrays or values that will be flattened into a new array
+     *  @return new melded array
+     *  
+     *  @details specifically differs from regular meld_arrays because it doesn't modify either argument
+     */
+    meld_into_array: function(){
+      /*
+      // Set is unique by default, it is also order-of-insertion.
+      // arguments isn't a real array, it's a gimped one with no methods, so we have to use Array.prototype to get .flat()
+      // flat() takes an array of arrays or values and flattens into a single array of all the values in each nest.
+      // ... spread operator on a Set will spread it into an array or object (the outer array brackets, in our case)
+      // Soooo... flatten all the arguments into a single array, then use Set to make it unique, starting with order-inserted
+      //   then spread all remaining values into a new array.
+      */
+      return [...new Set(Array.prototype.flat.apply(arguments))];
     },
 
     /**
      *  @brief meld all the ways we can format a list of args into a set of object keys
+     *            NOTE: always melds into a new {}. No argument is altered.
+     *                   maybe that should be called collect_into_objectobject?
      *
      *  @param [in] aruguments  String, Array, Array-like-object, or Object to
      *                          meld with. (See details)
-     *  @return {}
-     *
-     * 'pattern_name_1'
-     * ['pattern_name_1', 'pattern_name_2']
-     * {0:'pattern_name_1', 1:'pattern_name_2'}
-     * {'pattern_name_1':true, 'pattern_name_2':true}
-     *
-     * *RESULTS IN:* {'pattern_name_1':true, 'pattern_name_2':true}
-     * *OR* {}
+     *  @return objectobject with keys from the strings and arrays and keys of arguments
+     *  
+     *  @details
+     *  'pattern_name_1'
+     *  ['pattern_name_1', 'pattern_name_2']
+     *  {0:'pattern_name_1', 1:'pattern_name_2'}
+     *  {'pattern_name_1':true, 'pattern_name_2':true}
+     *  
+     *  *RESULTS IN:* {'pattern_name_1':true, 'pattern_name_2':true}
+     *  *OR* {}
      **/
     meld_into_objectobject: function(){
       // we always need a new object
-      let obj = {}, list, item;
+      let object = {}, list, item;
       for(let arg in arguments){
         // walk through all arguments
         list = arguments[arg];
@@ -381,7 +492,7 @@ OnLoad('/doh_js/core', function($){
         if (typeof list === 'string')
           //NOTE: we can expand this to accept limited depth and complexity
           //      like, CSV or dot-notated (this.that.theother)
-          obj[list] = true;
+          object[list] = true;
         // or an object (array and object, technically)
         else if (SeeIf.IsEnumerable(list)){
           item = '';
@@ -389,30 +500,28 @@ OnLoad('/doh_js/core', function($){
             if (item !== 'length'){
               // allow the array structure to have the list in key (Key is not a number)
               //NOTE .is key safe?
-              if(isNaN(item)) obj[item] = list[item];
+              if(isNaN(item)) object[item] = list[item];
               // or in the list
-              else obj[list[item]] = true;
+              else object[list[item]] = true;
             }
           }
         }
       }
       // send what we found, even if empty
-      return obj;
-    },
-    
-    // ADD COMMENTS HERE
-    // old method of nesting closures
-    meld_methods: function(obj, method, extension){
-        return function(){
-          method.apply(obj, arguments);
-          extension.apply(obj, arguments);
-          return obj;
-        }
+      return object;
     },
 
-    // given an object and method name, return an array of function references for
-    // inherited patterns that implement the named method
-    meld_method_stack: function(object, method_name){
+    /**
+     *  @brief Given an object and method name, return an array of function references
+     *         for inherited patterns that implement the named method
+     *  
+     *  @param [in] object      [object] to search .inherited
+     *  @param [in] method_name [string] name of method to search for
+     *  @return an array of function references from .inherited in order of .inherits when extended
+     *  
+     *  @details NOTE: also prepares and prepends the list of pre_{method} functions
+     */
+    find_meld_method_stack: function(object, method_name){
       let meld_method_order = [], pre_meld_method_order = [], ilist = object.inherited;
       for(let i in ilist){
         if(object.inherited[i]['pre_'+method_name]) pre_meld_method_order.push(object.inherited[i]['pre_'+method_name]);
@@ -420,95 +529,72 @@ OnLoad('/doh_js/core', function($){
       }
       return pre_meld_method_order.concat(meld_method_order);
     },
-    // return a closure for obj[method_name] that will call each function in method_stack
-    meld_method: function(obj, method_stack){
+    
+    /**
+     *  @brief return a closure for object[method_name] that will call each function in method_stack
+     *  
+     *  @param [in] object       [any] thing to use as 'this'
+     *  @param [in] method_stack [array] of functions to run as this method OR
+     *                           [string] of method name to use for collecting methods from .inherited
+     *  @return a closure function that will call each function in method_stack
+     *  
+     *  @details object[method_name].update_meld_stack() will automatically recalculate
+     *           melds based on current .inherited
+     *           object[method_name].meld_stack is the actual meld_stack array that can be manipulated to affect the next run of method
+     */
+    meld_method: function(object, method_stack){
       // if the stack is a string, then we are trying to meld a method from object.inherited
       let method_name = false;
       if(typeof method_stack === 'string'){
         method_name = method_stack;
-        method_stack = Doh.meld_method_stack(obj, method_name);
+        method_stack = Doh.find_meld_method_stack(object, method_name);
       }
       let melded_method = function(){
         // this melder always does the same thing:
         //  walk the method stack and apply each method to the bound object
         let len = method_stack.length;
         for(let i=0;i<len;i++){
-          method_stack[i].apply(obj, arguments);
+          method_stack[i].apply(object, arguments);
         }
-        return obj;
+        return object;
       };
+      // track the meld_stack so we can manipulate it
+      melded_method.meld_stack = method_stack;
+      // if we want to update the pointer, we need a closure to access the original scope
       melded_method.update_meld_stack = function(newStack){
+        // if we didn't pass a stack in but we remember our own name
         if(!newStack && method_name){
-          method_stack = Doh.meld_method_stack(obj, method_name);
+          // get the stack from Doh
+          method_stack = Doh.find_meld_method_stack(object, method_name);
           return;
         }
+        // otherwise, apply the stack we sent in
         method_stack = newStack;
       };
       return melded_method;
     },
-    // update meld_methods and phases of obj
-    update_meld_methods: function(obj){
-      for(let melded_prop in obj.melded){
-        if(obj.melded[melded_prop] === 'method' || obj.melded[melded_prop] === 'phase'){
-          // conditionally update only the method stack
-          if(typeof obj[melded_prop] === 'function')if(typeof obj[melded_prop].update_meld_stack === 'function'){
-            obj[melded_prop].update_meld_stack();
+    
+    /**
+     *  @brief Update ALL meld_methods and phases of object
+     *  
+     *  @param [in] object [object] to look for melded methods on
+     *  @return nothing
+     *  
+     *  @details operates on object, replaces melded method keys with actual method melders
+     */
+    update_meld_methods: function(object){
+      for(let melded_prop in object.melded){
+        // look for melded methods and phases on object
+        if(object.melded[melded_prop] === 'method' || object.melded[melded_prop] === 'phase'){
+          // conditionally update only the method stack if the method was melded before
+          if(typeof object[melded_prop] === 'function')if(typeof object[melded_prop].update_meld_stack === 'function'){
+            object[melded_prop].update_meld_stack();
             continue;
           }
-          obj[melded_prop] = Doh.meld_method(obj, melded_prop);
+          // otherwise, do a fresh meld
+          object[melded_prop] = Doh.meld_method(object, melded_prop);
         }
       }
-    },
-
-/*
-Doh.type_of()
-'IsUndefined'
-Doh.type_of('')
-'IsString'
-Doh.type_of(0)
-'IsNumber'
-Doh.type_of(false)
-'IsBoolean'
-Doh.type_of(null)
-'IsNull'
-Doh.type_of([])
-'IsArray'
-Doh.type_of({})
-'IsObjectObject'
-Doh.type_of(function(){})
-'IsFunction'
-Doh.type_of(unet.uNetNodes['1-1'])
-'IsDohObject'
-*/
-    type_of: function(value){
-      let type;
-      for(type in SeeIf){
-        if(SeeIf[type](value)){
-          return type;
-        }
-      }
-      // SeeIf can't see it, so it's not defined
-      return undefined;
-    },
-    
-    MeldedTypeMatch: {
-      // currently implemented meldable types
-      'method':SeeIf.IsFunction,
-      'phase':SeeIf.IsFunction,
-      'object':SeeIf.IsObjectObject,
-      'array':SeeIf.IsArray,
-      'idea':SeeIf.IsObjectObject,
-    },
-    type_match: function(value, is){
-      //if(Doh.type_of(Doh.MeldedTypeMatch[is]) === 'IsFunction')
-      //if(SeeIf.IsFunction(Doh.MeldedTypeMatch[is]))
-      //if(SeeIf['IsFunction'](Doh.MeldedTypeMatch[is]))
-      if(typeof Doh.MeldedTypeMatch[is] === 'function')
-        return Doh.MeldedTypeMatch[is](value);
-      else if(typeof SeeIf[is] === 'function')
-        return SeeIf[is](value);
-
-      return false;
     },
 
     /*
@@ -523,101 +609,146 @@ Doh.type_of(unet.uNetNodes['1-1'])
     .JMML  JMML  JMML.`Mbmmd'.JMML.`Wbmd"MML. .JMML.`Wbmd"MML.`Mbmmd' `Moo9^Yo.M9mmmP' 
 
 
-  */                                     
-
-    meld_ideas:function(destination, idea, skip_methods) {
-      idea = idea || {};
+  */        
+    
+    // AA: clearly another essay is needed here  
+    /**
+     *  @brief Use Doh's meld_ functions to meld two ideas together.
+     *  
+     *  @param [in] destination [object] to meld into
+     *  @param [in] idea        [object] to meld from
+     *  @param [in] deep_melded [object] should be falsey or an object that describes melded types of properties of each idea
+     *                                    - used primarily to allow deeply melded objects without polluting them with .melded
+     *  @return destination
+     *  
+     *  @details Uses destination.melded and idea.melded (or deep_melded) to define meld and data types for each property.
+     *  
+     *    Doh.meld_ideas({},{}) == {};
+     *                  ({},{prop:'myprop'}) == {prop:'myprop'}
+     *                  ({prop:'oldval'},{prop:'myprop'}) == {prop:'myprop'}
+     */
+    meld_ideas:function(destination = {}, idea, deep_melded) {
+      let prop_name = '', inner_melded = idea.melded, go_deep, melded_type, idea_prop, idea_melded_type, destination_melded_type;
       
-      let prop_name = '';
+      if(deep_melded) inner_melded = deep_melded
+      
       //test melded stuff and make sure it is what we expect
-      if(idea.melded){
+      if(inner_melded){
         // we only want to know if the destination is going to be overwritten by the idea
-        for(prop_name in idea.melded){
+        for(prop_name in inner_melded){
+          idea_melded_type = inner_melded[prop_name];
+          if(SeeIf.IsSet(idea_melded_type))if(SeeIf.NotString(idea_melded_type)) idea_melded_type = 'object';
+          idea_prop = idea[prop_name];
           if(destination.melded){
             // deal with destination defines a meld type that is different from idea
-            if(destination.melded[prop_name])if(destination.melded[prop_name] != idea.melded[prop_name]){
-              throw Doh.error('Doh.meld_ideas(',destination,',',idea,'). destination.melded[',prop_name,']:',destination.melded[prop_name],'will be overwritten by idea.melded[',prop_name,']:',idea.melded[prop_name]);
+            if(destination.melded[prop_name]){
+              if(destination.melded[prop_name] != idea_melded_type){
+                Doh.debug('Doh.meld_ideas(',destination,',',idea,'). destination.melded[',prop_name,']:',destination.melded[prop_name],'will be overwritten by idea.melded[',prop_name,']:',idea_melded_type);
+              }
+              if(idea_melded_type === 'exclusive' || idea_melded_type === 'static_reference'){
+                // if we made it here then the check above has ensured we agree on the melded type.
+                // However!! destination already reserved it, this is an error.
+                Doh.debug('Doh.meld_ideas(',destination,',',idea,') found that a destination and idea both want the same property:',prop_name,'to be ',idea_melded_type,'.');
+              }
             }
           }
           // deal with destination already has a property of type that is incompatible with idea.melded type
           if(SeeIf.IsDefined(destination[prop_name])){
-            if(!Doh.type_match(destination[prop_name], idea.melded[prop_name])){
-              throw Doh.error('Doh.meld_ideas(',destination,',',idea,'). destination[',prop_name,']:',destination[prop_name],'is an incompatible type with idea.melded[',prop_name,']:',idea.melded[prop_name]);
+            if(!Doh.type_match(destination[prop_name], idea_melded_type)){
+              Doh.debug('Doh.meld_ideas(',destination,',',idea,'). destination[',prop_name,']:',destination[prop_name],'is an incompatible type with idea.melded[',prop_name,']:',idea_melded_type);
             }
           }
           // deal with idea has a property of type that is incompatible with idea.melded type
-          if(SeeIf.IsDefined(idea[prop_name])){
-            if(!Doh.type_match(idea[prop_name], idea.melded[prop_name])){
-              throw Doh.error('Doh.meld_ideas(',destination,',',idea,'). idea[',prop_name,']:',idea[prop_name],'is an incompatible type with idea.melded[',prop_name,']:',idea.melded[prop_name]);
+          if(SeeIf.IsDefined(idea_prop)){
+            if(!Doh.type_match(idea_prop, idea_melded_type)){
+              Doh.debug('Doh.meld_ideas(',destination,',',idea,'). idea[',prop_name,']:',idea_prop,'is an incompatible type with idea.melded[',prop_name,']:',idea_melded_type);
             }
           }
         }
       }
-      
       prop_name = '';
       for(prop_name in destination.melded){
+        destination_melded_type = destination.melded[prop_name];
+        if(SeeIf.IsSet(destination_melded_type))if(SeeIf.NotString(destination_melded_type)) destination_melded_type = 'object';
+        idea_prop = idea[prop_name];
         // deal with idea has a property of type that is incompatible with destination melded type
-        if(SeeIf.IsDefined(idea[prop_name]))if(destination.melded[prop_name])if(!Doh.type_match(idea[prop_name], destination.melded[prop_name])){
-          throw Doh.error('Doh.meld_ideas(',destination,',',idea,'). idea[',prop_name,']:',idea[prop_name],'is an incompatible type with destination.melded[',prop_name,']:',destination.melded[prop_name]);
+        if(SeeIf.IsDefined(idea_prop))if(destination_melded_type)if(!Doh.type_match(idea_prop, destination_melded_type)){
+          Doh.debug('Doh.meld_ideas(',destination,',',idea,'). idea[',prop_name,']:',idea_prop,'is an incompatible type with destination.melded[',prop_name,']:',destination_melded_type);
         }
       }
       
       // build name-keyed objects of the melded value lists
-      let melded = Doh.meld_objects(destination.melded, idea.melded);
+      let parsed = {};
+      if(inner_melded) parsed = JSON.parse(JSON.stringify(inner_melded));
+      let melded = Doh.meld_objects(destination.melded || {}, parsed);
       // loop over the idea and decide what to do with the properties
       prop_name = '';
       for(prop_name in idea){
-        if(idea[prop_name] !== undefined && idea[prop_name] !== destination[prop_name]){
-          if(melded[prop_name] === 'method' || melded[prop_name] === 'phase'){
-            // we handle melded methods and phases later
-            // we set to null to preserve property order
-            destination[prop_name] = null;
+        melded_type = melded[prop_name];
+        if(SeeIf.IsSet(melded_type))if(SeeIf.NotString(melded_type)){
+          go_deep = true;
+          melded_type = 'object';
+        } else go_deep = false;
+        idea_prop = idea[prop_name];
+        if(idea_prop !== undefined && idea_prop !== destination[prop_name]){
+          if(melded_type === 'method' || melded_type === 'phase' || melded_type === 'exclusive' || melded_type === 'static_reference'){
+            // melded methods and phases will be updated outside of meld. our job is just to copy idea onto destination.
+            // exclusive properties only come from first idea that claims it, this 'ownership' is resolved with thrown errors above, so we always copy.
+            destination[prop_name] = idea_prop;
             continue;
           }
-          if(melded[prop_name] === 'object' || (typeof idea[prop_name] == 'object' && !Array.isArray(idea[prop_name]) && SeeIf.IsEmptyObject(idea[prop_name]))){
+          if(melded_type === 'object' || (typeof idea_prop == 'object' && !Array.isArray(idea_prop) && SeeIf.IsEmptyObject(idea_prop))){
             // it's a melded object or an empty default
-            destination[prop_name] = Doh.meld_objects(destination[prop_name], idea[prop_name]);
+            if(deep_melded || go_deep) {
+              destination[prop_name] = destination[prop_name] || {};
+              destination[prop_name] = Doh.meld_ideas(destination[prop_name], idea_prop, melded[prop_name]);
+            } else {
+              destination[prop_name] = Doh.meld_objects(destination[prop_name] || {}, idea_prop);
+            }
             continue;
           }
-          if(melded[prop_name] === 'array' || (Array.isArray(idea[prop_name]) && !idea[prop_name].length)){
+          if(melded_type === 'array' || (Array.isArray(idea_prop) && !idea_prop.length)){
             // it's a melded array or an empty default
-            destination[prop_name] = Doh.meld_arrays(destination[prop_name], idea[prop_name]);
+            destination[prop_name] = Doh.meld_arrays(destination[prop_name], idea_prop);
             continue;
           }
           // stack the ifs for speed
-          if(idea[prop_name].pattern)if(!idea[prop_name].machine)if(!idea[prop_name].skip_auto_build){
+          if(idea_prop.pattern)if(!idea_prop.machine)if(!idea_prop.skip_auto_build){
             // it's an auto-build property, auto-meld it below
             destination.melded[prop_name] = melded[prop_name] = 'idea';
           }
-          if(melded[prop_name] === 'idea'){
+          if(melded_type === 'idea'){
             destination[prop_name] = destination[prop_name] || {};
-            destination[prop_name] = Doh.meld_ideas(destination[prop_name], idea[prop_name]);
+            destination[prop_name] = Doh.meld_ideas(destination[prop_name], idea_prop);
             continue;
           }
           
           // non-melded property
-          destination[prop_name] = idea[prop_name];
+          destination[prop_name] = idea_prop;
         }
-      }
-
-      // this section is only run after the origin idea was inherited
-      if(destination.inherited)if(destination.machine){
-        // we update here so it only happens once
-        // we only want to run this after the idea has been melded 
-        // inherited is only present on instances, patterns don't have it
-        // and neither do plain ideas
-        Doh.update_meld_methods(destination);
       }
 
       return destination;
     },
-    
-    pattern_inherits_extended: function(pattern_name_or_inherits, skip_core = false){
-      return Object.keys( Doh.extend_inherits( Doh.meld_into_objectobject(pattern_name_or_inherits) , skip_core) );
+
+    /**
+     *  @brief Meld ideas with a special melded descriptor AND multiple ideas
+     *  
+     *  @param [in] special_melded [object] should be falsey or an object that describes melded types of properties of each idea
+     *  @param [in] destination [object/falsey] an object to modify, or falsey/{} to create a new object and return it
+     *  @param [in] arguments[] [idea(s)] to meld onto the destination, using special_melded as a melded_type map
+     *  @return destination
+     *  
+     *  @details special_meld_ideas(special_melded, dest, idea1, idea2, idea3, ...)
+     */
+    special_meld_ideas: function(special_melded, destination){
+      for(let i in arguments){
+        if(i == 0 || i === 'length' || arguments[i] === destination) continue;
+        Doh.meld_ideas(destination, arguments[i], special_melded);
+      }
+      return destination;
     },
     
-    PatternInheritedBy: {},
-
     /*
 
                                                                                   
@@ -655,9 +786,9 @@ Doh.type_of(unet.uNetNodes['1-1'])
         // only allow this if the idea contains its own pattern name
         idea = name;
         if(SeeIf.IsString(idea.pattern)) name = idea.pattern;
-        else throw Doh.error('Doh.pattern('+idea+') tried to make a pattern with no name');
+        else Doh.debug('Doh.pattern('+idea+') tried to make a pattern with no name');
 
-        // inherits will be in the idea
+        // inherits will be in the idea.inherits
         inherits = false;
       } else if (SeeIf.NotString(inherits) && SeeIf.NotArray(inherits)) {
         // inherits is the idea
@@ -667,24 +798,31 @@ Doh.type_of(unet.uNetNodes['1-1'])
       }
       if(!idea) idea = {};
       // otherwise the arguments are as indicated
-
-      // every pattern must know it's own key on the Patterns object
-      idea.pattern = name;
+      
+      if(Doh.ApplyFixes){
+        if(Doh.WatchedPatternNames[name]){
+          idea.pattern = name = Doh.look_at_pattern_name(name);
+        }
+        else idea.pattern = name
+      } else {
+        // every pattern must know it's own key on the Patterns object
+        idea.pattern = name;
+      }
       
       if(Patterns[name]){
+        // allow the new PatternModuleVictors system to dictate which pattern gets to stay and which gets overwritten
         if(PatternModuleVictors[name] && (PatternModuleVictors[name] !== Doh.ModuleCurrentlyRunning)){
           Doh.warn('(',name,') pattern was going to be overwritten but was ignored.\nOriginal Module:',Doh.PatternModule[name],'\nNew Module:',Doh.ModuleCurrentlyRunning);
           return false;
         }
+        // otherwise just warn about a pattern being replaced
         Doh.warn('(',name,') pattern is being overwritten.\nOriginal Module:',Doh.PatternModule[name],'\nNew Module:',Doh.ModuleCurrentlyRunning);
       }
-      // we crawl the properties of idea to deprecated stuff, only do this if we have been told to:
-      if(Doh.DebugMode){
+      // ApplyFixes tells us to look at pattern creation
+      if(Doh.ApplyFixes){
         // just generates a bunch of warns and stuff with a few possible fixes. Should not be used in production.
-        Doh.see_pattern_keys(idea);
+        Doh.look_at_pattern_keys(idea);
       }
-
-
 
       // clean up the various ways that inherits may be passed
       idea.inherits = Doh.meld_into_objectobject(idea.inherits, inherits);
@@ -697,39 +835,27 @@ Doh.type_of(unet.uNetNodes['1-1'])
         Doh.PatternInheritedBy[ancestor] = Doh.PatternInheritedBy[ancestor] || [];
         Doh.PatternInheritedBy[ancestor].push(name);
       }
-      // we need to default the .melded collection here:
+      // we need to default the .melded collection here.
+      // this allows a shorthand declaration of melded types that demand defaults
+      // Pattern('mypattern',{melded:{myprop:'object'}}) will produce a pattern with pattern.myprop = {}
+      // only Doh.MeldedTypeDefault[meld_type_name] will be defaulted
       let meld_type_name, meld_type_js;
       for(var prop_name in idea.melded){
         meld_type_name = idea.melded[prop_name];
+        if(SeeIf.IsSet(meld_type_name))if(SeeIf.NotString(meld_type_name)) meld_type_name = 'object';
+        // find out if there is a type mismatch between what .melded thinks the property SHOULD be and what IT IS.
         if(SeeIf.IsDefined(idea[prop_name]))if(!Doh.type_match(idea[prop_name], meld_type_name)){
-          throw Doh.error('Doh.patterns(',idea.pattern,').',prop_name,' was defined as a melded',meld_type_name,' but is not a',meld_type_name,'.',idea[prop_name],idea);
+          Doh.debug('Doh.patterns(',idea.pattern,').',prop_name,' was defined as a melded',meld_type_name,' but is not a',meld_type_name,'.',idea[prop_name],idea);
         }
-        // find the base js for defaulting melded stuff
-        switch(meld_type_name){
-          case 'phase':
-            meld_type_js = function(){};
-            break;
-          case 'method':
-            meld_type_js = function(){};
-            break;
-          case 'object':
-            meld_type_js = {};
-            break;
-          case 'array':
-            meld_type_js = [];
-            break;
-          case 'idea':
-            meld_type_js = {};
-            break;
-          default:
-            // is it a known SeeIf type?
-            if(!SeeIf[meld_type_name]){
-              throw Doh.error('Doh.pattern(',idea.pattern,') tried to define unknown meld type:',meld_type_name,'for idea:',idea);
-            }
-            break;
+        // find out if we have defined a default for this melded type
+        if(Doh.MeldedTypeDefault[meld_type_name]) meld_type_js = Doh.MeldedTypeDefault[meld_type_name];
+        // otherwise, find out if the melded type is unknown
+        else if(!Doh.MeldedTypeMatch[meld_type_name] && !SeeIf[meld_type_name]) {
+          Doh.debug('Doh.pattern(',idea.pattern,') tried to define unknown meld type:',meld_type_name,'for idea:',idea);
         }
-        // default the property if needed. if we define the meld, we should at least implement it
+        // default the property if needed.
         if(meld_type_js){
+          // somewhat obviously, only default it if it isn't already present
           idea[prop_name] = idea[prop_name] || meld_type_js;
         }
       }
@@ -746,9 +872,88 @@ Doh.type_of(unet.uNetNodes['1-1'])
       return idea;
     },
     
+    // AA: Describe how it might be used by a developer?
+    /**
+     *  @brief Mix a pattern from Patterns into destination
+     *  
+     *  @param [in] destination [object] the object to copy onto
+     *  @param [in] pattern     [string] the name of a pattern to mixin
+     *  @return destination
+     *  
+     *  @details This is used by the builder to a mix a pattern into a new instance of an object.
+     *           NOTE: will also update_meld_methods for destination ONLY IF it is already a built DohObject
+     *           NOTE: mixin_pattern will not inherit a pattern onto the same object twice.
+     *           NOTE: mixin_pattern will properly meld the pattern onto destination, update .inherited,
+     *                 and update all melded methods, BUT it will not run or re-run any phases.
+     */
+    mixin_pattern: function(destination, pattern){
+      // some checking for the pattern and double-mixing
+      if(Doh.ApplyFixes){
+        pattern = Doh.look_at_pattern_name(pattern);
+      }
+      if(Patterns[pattern]){
+        if(!InstanceOf(destination, pattern)){
+          // check for invalid mixin
+          Doh.meld_ideas(destination, Patterns[pattern]);
+          // this mixin type is 
+          destination.inherited[pattern] = Patterns[pattern];
+          
+          // this section is only run if we are mixing into an already built object
+          if(destination.machine){
+            // we only want to update melds if the object is already built
+            // inherited is only present on instances, patterns don't have it
+            // and neither do plain ideas
+            Doh.update_meld_methods(destination);
+          }
+        }
+      } else {
+        Doh.debug('Doh.mixin_pattern(',destination,',',pattern,') did not find the pattern');
+      }
+      return destination;
+    },
+        
+    // AA: Surely this merits a small dissertation
+    /**
+     *  @brief Return a collection of all ancestor dependencies for [inherits]
+     *  
+     *  @param [in] inherits  [string/array/object] a name, list of names, or object whose keys are a list of things to inherit
+     *  @param [in] skip_core [bool] remove core dependencies from the list? Default to false.
+     *  @return object-list where keys are inherited patterns
+     *  
+     *  @details core dependencies refers to modules that come from core modules and are therefore
+     *           considered universally available. In some cases it may be useful to know how dependant
+     *           a given pattern is on external patterns, rather than core ones.
+     */
+    extend_inherits: function(inherits, skip_core = false){
+      var extended = {};
+      if(SeeIf.NotObjectObject(inherits)) inherits = Doh.meld_into_objectobject(inherits);
+      for(var pattern_name in inherits){
+        
+        //Doh.look_at_pattern_name(pattern_name);
+        
+        if(!Patterns[pattern_name]) Doh.debug('Doh.extend_inherits() did not find pattern:', pattern_name, 'in inherits list:', inherits); // CHRIS:  Andy added this error msg, is there a better way?
+        if(skip_core){
+          //Doh.log(Doh.PatternModule[pattern_name],'spawns',pattern_name,'from',inherits);
+          if(pattern_name !== 'idea')if(Doh.PatternModule[pattern_name].indexOf('/doh_js/') == 0){
+            //Doh.log('Doh.extend_inherits() is skipping core and found a core pattern:', pattern_name, 'from module:', Doh.PatternModule[pattern_name]);
+            // this is a core module because the string starts with /doh_js/
+            inherits[pattern_name] = null;
+            delete inherits[pattern_name]
+            continue;
+          }
+        }
+        Doh.meld_objects(extended, Doh.extend_inherits(Patterns[pattern_name].inherits, skip_core));
+      }
+      Doh.meld_objects(extended, inherits);
+      return extended;
+    },
+    
     // MANDATORY FOR OBJECTS TO BE SINGLETON CLASSES
     Prototype: function(){
+      // create a new object as a function that can be used as a class
+      // use var to keep the class from ever being 'new' again
       var DohObject = function(){};
+      // instantiate our new class the first and only time it will make an object
       return new DohObject();
     },
     
@@ -766,33 +971,57 @@ Doh.type_of(unet.uNetNodes['1-1'])
                                                  
     */
     /**
-     *  @brief Build a new Doh Object
+     *  @brief Build a new Doh Object.
+     *
+     *  @param [in] pattern     a string or array of patterns to inherit from, in order
+     *  @param [in] idea        a prototype object
+     *  @param [in] phase       a string of the phase to machine to after building
+     *
+     *  @return the created DohObject
+     *
+     *  @details
+     *  Can be called as follows:
+     *   New(DohObject, *optional* 'phase');    *[DohObject], [string] sending an already built object through New will move it through the phases
+     *                                                                 to 'phase' or 'final' if none is specified.
+     *   New(idea);                             *[object] requires the idea to define .pattern, machine to 'final' phase
+     *   New('somepattern', idea);              *[string/array], [object] create a DohObject from 'somepattern' then meld idea to it, machine to 'final' phase
+     *   New(['pattern1', 'pattern2'], idea);                                                     (OR 'pattern1' THEN 'pattern2')
+     *   New('somepattern', idea, 'somephase'); *[string/array], [object], [string] see above, BUT machine to 'somephase'
+     * 
      */
     New: function(pattern, idea, phase){
       var i = '';
-
-      // if the pattern is a string,
-      if(SeeIf.IsString(pattern)){
+      if(SeeIf.IsString(pattern)){ // if the pattern is a string,
         // then everything is normal
+        // make sure idea is an object
         idea = idea || {};
         // overwrite the idea's pattern?
-        // NOTE: we need a new way to deal with this.
+        // if the idea already has a pattern, stuff it onto inherits before blowing it away.
         if(SeeIf.IsString(idea.pattern))if(SeeIf.HasValue(idea.pattern))if(pattern !== idea.pattern){
+          // warn about needing to do this for now, since it never happens
           Doh.warn('Doh.New(',pattern,',',idea,',',phase,') was sent pattern:',pattern,'AND different idea.pattern:',idea.pattern);
+          // nest the if's for speed
+          // HasValue means not undefined or null or a blank string
           if(SeeIf.HasValue(idea.inherits)){
+            // NotObjectObject means that we need to convert it. 
             if(SeeIf.NotObjectObject(idea.inherits)){
               // convert inherits from whatever it is to an object so we can add to it.
               idea.inherits = Doh.meld_into_objectobject(idea.inherits);
             }
           } else {
+            // it wasn't set to something unusable, so use it or create it here
             idea.inherits = idea.inherits || {};
           }
+          // add our thing to it
           idea.inherits[idea.pattern] = true;
         }
+        // now that we have handled possible collisions, the last pattern passed in was the argument 'pattern'
+        // which means it should be the declared pattern of this idea.
+        // NOTE: this means that the Pattern() definition may be different than the proported original idea.
+        //       We may need to note this in some other ways.
         idea.pattern = pattern;
 
-      // if the pattern is an array,
-      } else if(SeeIf.IsArray(pattern)){
+      } else if(SeeIf.IsArray(pattern)){ // if the pattern is an array,
         // make sure idea is an object
         idea = idea || {};
         // meld_into_objectobject() the passed-in inherits (string/array/object->object)
@@ -803,35 +1032,43 @@ Doh.type_of(unet.uNetNodes['1-1'])
           if(i === 'length') continue;
           idea.inherits[pattern[i]] = true;
         }
-        // NOTE: What is this? blah. I mean, I get it, but also...
-        idea.pattern = 'idea';
-      // pattern is the idea
-      } else {
+        // make the pattern of this idea object because this is safe.
+        // object inherits from nothing and is always at the bottom of the inherits stack by default
+        idea.pattern = 'object';
+      
+      } else { // pattern is the idea
+        // first, this will mean that the phase is actually in the 'idea'
         phase = idea;
+        // now we can make the idea from the first argument: 'pattern'
         idea = pattern;
       }
       // ensure that the idea object is at least blank
+      // idea can still be undefined if we New();
       idea = idea || {};
       // either a specified phase or final. final works because it's reserved.
       // since there is no 'final' phase, the machine will always keep advancing
       // even if you add more phases after phase-time and run machine again.
       phase = phase || 'final';
       // if the idea already has a machine, just run it to the specified or final phase
+      
       if(idea.machine){
         idea.machine(phase);
         return idea;
       }
 
-      // normalize passed-in inherits
+      // meld passed-in inherits
       // this should now contain all patterns defined in the many places that things can be added to objects
       if(idea.inherits) idea.inherits = Doh.meld_into_objectobject(idea.inherits);
 
+      if(Doh.ApplyFixes)
+        idea.pattern = Doh.look_at_pattern_name(idea.pattern);
+      
       // the builder requires at least one pattern
       if(SeeIf.IsEmptyObject(idea.inherits)){
         if(!Patterns[idea.pattern]) {
           // we could not find at least one pattern
           // default to object
-         Doh.error('New idea had no inherits OR no pattern was found, default pattern to "object"',idea);
+         Doh.debug('New idea had no inherits OR no pattern was found, default pattern to "object"',idea);
          
          idea.pattern = 'object';
         }
@@ -843,11 +1080,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
       object.inherited = object.inherited || {};
       // now that we have all the patterns defined and passed in, get the patterns that all that stuff depend on
       // collect a list of patterns by recursively crawling the pattern .inherits
-      var patterns = Doh.extend_inherits(Patterns[idea.pattern].inherits);
-      // allow the idea to specify last-second inherits to at the end
-      var idea_patterns = Doh.extend_inherits(idea.inherits);
-      // add inherited patterns from the idea if missing from patterns
-      patterns = Doh.meld_objects(patterns, idea_patterns);
+      var patterns = Doh.meld_objects(Doh.extend_inherits(Patterns[idea.pattern].inherits), Doh.extend_inherits(idea.inherits));
 
       // add the pattern last
       if(idea.pattern) patterns[idea.pattern] = true;
@@ -856,8 +1089,8 @@ Doh.type_of(unet.uNetNodes['1-1'])
       i = '';
       for(i in patterns){
         if(!Patterns[i]){
-          Doh.warn('Doh.New('+ idea.pattern + ') tried to inherit from "', i, '" but it was not found, skipping it entirely.');
-        } 
+          Doh.debug('Doh.New('+ idea.pattern + ') tried to inherit from "', i, '" but it was not found, skipping it entirely.');
+        }
         Doh.mixin_pattern(object, i);
       }
 
@@ -870,11 +1103,13 @@ Doh.type_of(unet.uNetNodes['1-1'])
         object.inherits.push(i);
       }
       
+      // setup some stuff for DebugMode
+      // (we need these to exist, even if we don't do debug mode)
       // do we need a proxy?
-      let proxy = false,
+      var proxy = false, watch,
       // stash a reference to the original object we started making
       originalObject = object,
-      // a way for our melded methods to tell the outer method that we care about a key
+      // a way for our us to tell the outer set and get traps that we care about a key
       // keys are keys we care about, values must be true;
       setters = {}, getters = {},
       // local storage for loop iterators
@@ -882,48 +1117,181 @@ Doh.type_of(unet.uNetNodes['1-1'])
       // when we find the functions that watch an object, push to stack so the melder will pick it up
       set_stack = [], get_stack = [];
       
-      // we crawl the properties of idea to deprecated stuff, only do this if we have been told to:
-      if(Doh.DebugMode){
-        // just generates a bunch of warns and stuff with a few possible fixes. Should not be used in production.
-        Doh.see_pattern_keys(idea);
-      
-        // do we need to setup watches?
+      // just generates a bunch of warns and stuff with a few possible fixes. Should not be used in production.
+      Doh.look_at_pattern_keys(idea);
         
+      // Do stuff that only happens in DebugMode
+      if(Doh.DebugMode){
+        /*
+         * throw a generic error if a_property is being set
+         * thing.watch( 'a_property' )
+         *
+         * throw a generic error if a_property is being retrieved
+         * thing.watch( 'a_property', 'get')
+         *
+         * throw a generic error if a_property is being set to a number
+         * thing.watch( 'a_property', 'set', SeeIf.IsNumber )
+         *
+         * throw a generic error if a_property is a number when retrieved
+         * thing.watch( 'a_property', 'get', SeeIf.IsNumber )
+         *
+         * print a generic error if a_property is being set
+         * if the callback is a Bool, use it to decide if we throw. true for throw, false for print only
+         * thing.watch( 'a_property', 'set', SeeIf.IsNumber, false )
+         *
+         * call the callback provided if a_property is being set to a number
+         * thing.watch( 'a_property', 'set', SeeIf.IsNumber, function(target,prop,value){} )
+         *
+         * call the callback provided THEN throw an error if a_property is being set to a number
+         * thing.watch( 'a_property', 'set', SeeIf.IsNumber, function(target,prop,value){}, true )
+         *
+         * call the callback provided THEN print an error BUT DON'T THROW, if a_property is being set to a number
+         * thing.watch( 'a_property', 'set', SeeIf.IsNumber, function(target,prop,value){}, false )
+         *
+         * call the callback provided if a_property is being set to exactly 37
+         * thing.watch( 'a_property', 'set', 37,             function(target,prop,value){Doh.log('hey,',prop,'on',target,'set to:',value,';')} )
+         *
+         * call the callback provided if a_property is exactly 37 when retrieved
+         * thing.watch( 'a_property', 'get', 37,             function(target,prop,receiver){Doh.log('hey, got',prop,'=',target[prop],'; on',target)} )
+         *
+         */
+        /**
+         *  @brief allow proxied objects to watch their own properties
+         *  
+         *  @param [in] prop_name       Description for prop_name
+         *  @param [in] type            Description for type
+         *  @param [in] value_condition Description for value_condition
+         *  @param [in] callback        Description for callback
+         *  @return Return description
+         *  
+         *  @details
+         */
+        watch = function(prop_name, type = 'set', value_condition = SeeIf.IsAnything, callback){
+          // figure out the last variable situation
+          var throw_error = false;
+          if(SeeIf.IsTrue(callback)){
+            throw_error = true;
+          }
+          // false if the value_condition is a value, otherwise IsSeeIf will be 
+          //   the string name of the SeeIf property that we should check
+          let IsSeeIf = false;
+          if(typeof value_condition === 'function'){
+            // we only want to know about functions that are the actual SeeIf properties
+            for(let tester in SeeIf){
+              if(value_condition === SeeIf[tester]){
+                IsSeeIf = tester;
+              }
+            }
+          }
+          
+          let thrower = function(target, prop, value){
+            let args = ['Watch caught "',prop,'" being',type,'to:',value,(IsSeeIf?('and it '+IsSeeIf):('which matches watched value: '+value_condition)),'on:',target];
+            if(throw_error) Doh.debug(...args);
+            else            Doh.warn(...args);
+          };
+          callback = callback || thrower;
+          
+          let outer_callback = function(target, prop, value){
+            if(prop !== prop_name) return;
+            if(type === 'get') value = target[prop];
+            if(IsSeeIf){
+              if(value_condition(value)){
+                callback(...arguments);
+              }
+            } else {
+              if(value_condition === value){
+                callback(...arguments);
+              }
+            }
+          };
+          if(type === 'set'){
+            if(originalObject.__handler__){
+              originalObject.__handler__.setters[prop_name] = true;
+              originalObject.__handler__.melded_set.meld_stack.push(outer_callback);
+            } else {
+              setters[prop_name] = true;              
+              return outer_callback;
+            }
+          } else {
+            if(originalObject.__handler__){
+              originalObject.__handler__.getters[prop_name] = true;
+              originalObject.__handler__.melded_get.meld_stack.push(outer_callback);
+            } else {
+              getters[prop_name] = true;     
+              return outer_callback;
+            }
+          }
+        };
+        
+        // do we need to setup watches?
         for(let ancestor in object.inherited){
           // look for setters by pattern and key
           keys = Doh.WatchedKeySetters[ancestor];
+          // there are keys on this pattern that need preset watchers
           if(keys){
             watcher = '';
+            // go through the watchers and set them up for each key
             for(watcher in keys){
+              // is the watcher just a param list for .watch?
+              if(SeeIf.IsArray(keys[watcher])){
+                // if so, use as intended and continue because that system handles everything
+                set_stack.push(watch(...keys[watcher]));
+                continue;
+              }
+              // otherwise, we need to make a little wrapper to look for our key
+              // each watcher needs a wrapper on the set trap that only looks for it's key
               set_stack.push((function(keys, watcher, target, prop, value){
-                if(watcher === prop)
+                // if we are the key, do a thing
+                if(watcher === prop){
+                  // the thing we need to do should be a function that is the value of the watcher
                   keys[watcher](target, prop, value);
+                }
+                // we bind to this function so that the originalObject, keys, and watcher can pass through the closure
               }).bind(originalObject, keys, watcher));
-              // someone wants us to have a proxy
-              proxy = true;
+              // tell the setter that we are watching this key
               setters[watcher] = true;
+              // tell our checks below that we want a proxy
+              proxy = true;
             }
           }
           // look for getters by pattern and key
           keys = Doh.WatchedKeyGetters[ancestor];
+          // there are keys on this pattern that need preset watchers
           if(keys){
             watcher = '';
             for(watcher in keys){
-              get_stack.push((function(keys, watcher, obj, prop, receiver){
-                if(watcher === prop)
-                  keys[watcher](obj, prop, receiver);
+              // is the watcher just a param list for .watch?
+              if(SeeIf.IsArray(keys[watcher])){
+                // if so, use as intended and continue because that system handles everything
+                set_stack.push(watch(...keys[watcher]));
+                continue;
+              }
+              // otherwise, we need to make a little wrapper to look for our key
+              // each watcher needs a wrapper on the get trap that only looks for it's key
+              get_stack.push((function(keys, watcher, object, prop, receiver){
+                // if we are the key, do a thing
+                if(watcher === prop){
+                  // the thing we need to do should be a function that is the value of the watcher
+                  keys[watcher](object, prop, receiver);
+                }
+                // we bind to this function so that the originalObject, keys, and watcher can pass through the closure
               }).bind(originalObject, keys, watcher));
-              // someone wants us to have a proxy
-              proxy = true;
+              // tell the getter that we are watching this key
               getters[watcher] = true;
+              // tell our checks below that we want a proxy
+              proxy = true;
             }
           }
         }
-      
-        //proxy = false;
-        if(proxy === true){
+        // if already true, fine, otherwise only true if DebugMode is set to 'proxy'
+        proxy = proxy || (Doh.DebugMode==='proxy'?true:false);
+        if(proxy){
           // we need the proxy reference early, but late-binding the handlers should be fine
           originalObject.__handler__ = {};
+          originalObject.__handler__.setters = setters;
+          originalObject.__handler__.getters = getters;
+          // since we are proxying, add the ability to watch new things here
+          originalObject.watch = watch;
           // we replace object here so that the rest of the system will use it in their closures
           object = new Proxy(originalObject, originalObject.__handler__);
         }
@@ -931,29 +1299,36 @@ Doh.type_of(unet.uNetNodes['1-1'])
       
       // attach the object machine
       object.machine = function(phase){
-        
-        if(Doh.DebugMode){
+        // allow ApplyFixes to watch the machine activate phases
+        if(Doh.ApplyFixes){
+          // track when we see phases so we can mute flooding the console
           Doh.SeenPhases = Doh.SeenPhases || {};
           let watched_phase, command, command_value;
           for(let watched_phase in Doh.WatchedPhases){
             if(watched_phase === phase){
+              // note that we have seen a phase ever on any object
               Doh.SeenPhases[watched_phase] = Doh.SeenPhases[watched_phase] || {};
+              // find out if we are watching phases
               command = '';
               command_value = '';
               for(command in Doh.WatchedPhases[watched_phase]){
                 command_value = Doh.WatchedPhases[watched_phase][command];
                 switch(command){
                   case 'rename':
+                    // simply rename a phase, notify once per pattern
                     if(!Doh.SeenPhases[watched_phase][object.pattern]) Doh.warn('Watched Phase:',watched_phase,'has been renamed to:',command_value,object);
                     phase = command_value;
                     break;
-                  case 'throw':
-                    // throw an error so we can trace from here
-                    throw Doh.error('Watched Phase:',watched_phase,'wants to be thrown. It said:',command_value,object);
-                    break;
                   case 'run':
+                    // run a function if we see the phase, change phase to the return of the function, notify once per pattern
                     if(!Doh.SeenPhases[watched_phase][object.pattern]) Doh.warn('Watched Phase:',watched_phase,'will run:',command_value,object);
-                    command_value(object, phase);
+                    phase = command_value(object, phase);
+                    break;
+                  case 'log':
+                  case 'warn':
+                  case 'error':
+                  case 'throw':
+                    Doh[command]('Watched Phase:',watched_phase,'wants to',command,':',command_value,object);
                     break;
                 }
               }
@@ -985,7 +1360,10 @@ Doh.type_of(unet.uNetNodes['1-1'])
         // always return the object. New() relies on this.
         return object;
       };
-      //object.machine = object.machine.bind(object);
+      // allow the machine to cleanly track completed phases
+      // object.machine.completed['phase'] === IsUndefined if the phase hasn't been started
+      //                                       IsFalse if the phase has been started and is currently running
+      //                                       IsTrue if the phase has completed successfully
       object.machine.completed = {};
 
       // add the idea to the object
@@ -997,59 +1375,196 @@ Doh.type_of(unet.uNetNodes['1-1'])
       
       // update the meld methods to include the inherited idea we just added
       Doh.update_meld_methods(object);
-
-      //fix the idealize method
-      object.idealize = Doh.idealize;
-      
-      //fix the perspective method
-      object.perspective = Doh.perspective.bind(object, object);
       
       // now we can add the handlers, since the object is finished being constructed and is ready to go through phases
-      if(proxy === true){
-        //__handler__.has = function(target, key) {return key in target;};
-        //__handler__.ownKeys = function(target) {return Reflect.ownKeys(target);};
-        
-        // use a fancy melded_method to apply our stack of methods to each set call
-        originalObject.__handler__.melded_set = Doh.meld_method(originalObject, set_stack);
-        originalObject.__handler__.set = function(target, prop, value){
-          if(prop === '__original__') return target;
-          if(setters[prop]){ 
-            //throw Doh.error('setter stuff:',object,target,prop,value);
-            // in here, the target is the 
-            target.__handler__.melded_set(...arguments);
-          }
-          return Reflect.set(...arguments);
-        };
-        
-        originalObject.__handler__.melded_get = Doh.meld_method(originalObject, get_stack);
-        originalObject.__handler__.get = function(target, prop){
-          if(prop === '__original__') return target;
-          if(getters[prop]){ 
-            //throw Doh.error('getter stuff:',object,target,prop,receiver);
-            target.__handler__.melded_get(...arguments);
-          }
-          return Reflect.get(...arguments);
-        };
-        
+      if(Doh.DebugMode){
+        if(proxy){
+          // use a fancy melded_method to apply our stack of setters to each set call
+          originalObject.__handler__.melded_set = Doh.meld_method(originalObject, set_stack);
+          // define the main set trap
+          originalObject.__handler__.set = function(target, prop, value){
+            // if we try and set __original__, just return target to keep us from having circular loops when looking in from the proxy
+            if(prop === '__original__') return target;
+            // if we have been told that there is a setter for this property
+            if(target.__handler__.setters[prop]){ 
+              //throw Doh.error('setter stuff:',object,target,prop,value);
+              // run the melded_set. Each setter will check if this is the prop it cares about
+              target.__handler__.melded_set(...arguments);
+            }
+            // no matter what happens, run the reflected set so that the object's behavior is unaltered.
+            return Reflect.set(...arguments);
+          };
+          
+          // use a fancy melded_method to apply our stack of setters to each set call
+          originalObject.__handler__.melded_get = Doh.meld_method(originalObject, get_stack);
+          // define the main get trap
+          originalObject.__handler__.get = function(target, prop){
+            // if we try and get __original__, just return target to keep us from having circular loops when looking in from the proxy
+            if(prop === '__original__') return target;
+            // if we have been told that there is a getter for this property
+            if(target.__handler__.getters[prop]){ 
+              //throw Doh.error('getter stuff:',object,target,prop,receiver);
+              // run the melded_get. Each getter will check if this is the prop it cares about
+              target.__handler__.melded_get(...arguments);
+            }
+            // no matter what happens, run the reflected set so that the object's behavior is unaltered.
+            return Reflect.get(...arguments);
+          };
+        }
       }
 
       // run the machine to the specified phase and return the object
       return object.machine(phase);
     },
 
-    WatchedKeys:{
-      /*'key':{
+    /**
+     *  @brief call a callback any time a property on an object changes
+     *  
+     *  @param [in] object             [object] the object to watch
+     *  @param [in] prop               [string] the property name to watch
+     *  @param [in] on_change_callback [function] the callback to fire when the value of prop changes
+     *  @return a function that clears the observing
+     *  
+     *  @details 
+     */
+    observe: function(object, prop, on_change_callback){
+      let prop_desc;
+      // we can only set this system up on objectobjects
+      if(SeeIf.IsObjectObject(object)){
+        // for now, the only valid prop indicator is a string
+        // observe requires a function for callback or the observation isn't seen
+        if(SeeIf.IsString(prop))if(SeeIf.IsFunction(on_change_callback)){
+          // check for a setter already there
+          prop_desc = Object.getOwnPropertyDescriptor(object, prop);
+          if(SeeIf.NotFunction(prop_desc.set)){
+            // bind the original value to a new local variable
+            let val = object[prop];
+            let method_stack = [];
+            let melded_method = function(new_value){
+              // use the original value storage as intended, even though these closures are all that can see it
+              if(val !== new_value){
+                // set the value to the new value
+                // we have to set the val first BEFORE calling the stack or we will recurse on ourself forever
+                val = new_value;
+                // this melder always does the same thing:
+                //  walk the method stack and apply each method to the bound object
+                let len = method_stack.length;
+                for(let i=0;i<len;i++){
+                  method_stack[i](object, prop, new_value);
+                }
+              }
+            };
+            // track the meld_stack so we can manipulate it
+            melded_method.meld_stack = method_stack;
+            // if we want to update the pointer, we need a closure to access the original scope
+            melded_method.update_meld_stack = function(new_stack){
+              // if we didn't pass a stack
+              if(!new_stack){
+                Doh.debug("[melded_method].update_meld_stack didn't get a new_stack");
+                return;
+              }
+              // otherwise, apply the stack we sent in
+              method_stack = new_stack;
+            };
+            // attach a utility method to remove melded functions from the stack
+            melded_method.remove_melded = function(method){
+              method_stack.splice(method_stack.indexOf(method), 1);
+            };
+            
+            Object.defineProperty(object, prop, {
+              // if we have a setter, then we must have a getter
+              // our fancy getter retrieves the original value storage, which
+              // is the thing that gets updated.
+              get: function(){return val;},
+              set: melded_method,
+              // don't break enumerable stuff
+              enumerable: SeeIf.IsEnumerable(val),
+              // don't break our ability to configure
+              configurable: true,
+            });
+          }
+          // we have to get (or re-get) the prop_desc here in case the melded setter already exists
+          prop_desc = Object.getOwnPropertyDescriptor(object, prop);
+          if(!prop_desc.set.meld_stack){
+            Doh.debug('Doh.observe found a non-Doh setter for:',prop,'on object:',object,'with callback:',on_change_callback);
+            return function(){};
+          }
+          // just push our on_change onto the meld_stack. 
+          prop_desc.set.meld_stack.push(on_change_callback);
+          // return a function that can be called to remove the on_change callback
+          return function(){
+            prop_desc.set.remove_melded(on_change_callback);
+          }
+        }
+      }
+    },
+    
+    /**
+     *  @brief tell two things to have their defined prop mimic the other
+     *  
+     *  @param [in] my_thing           [object] the object the callback is relative to
+     *  @param [in] my_prop            [string] name of the prop on my_thing to sync
+     *  @param [in] their_thing        [object] the object to sync with
+     *  @param [in] their_prop         [string] name of the prop on their_thing to sync with
+     *  @param [in] on_change_callback [function] optionally a function to run when my_thing[my_prop] is changed
+     *  @return a function that will remove the mimic that was just created when called
+     *  
+     *  @details optionally provide a callback to be run when either side changes their mimicked prop
+     */
+    mimic: function(my_thing, my_prop, their_thing, their_prop, on_change_callback){
+      
+      // syncing demands initial state to be synced BEFORE setters are defined
+      // this keeps the initial set from echoing forever
+      if(my_thing[my_prop] !== their_thing[their_prop]) my_thing[my_prop] = their_thing[their_prop];
+      
+      let my_set = function(object, prop, new_value){
+        // i only get run if my value changed
+        their_thing[their_prop] = new_value;
+        if(on_change_callback) on_change_callback(my_thing, my_prop, their_thing, their_prop, new_value);
+      },
+      their_set = function(object, prop, new_value){
+        // i get run if THEIR value changed, we still have to check
+        // if the new value is actually new to us too.
+        if(new_value !== my_thing[my_prop]){
+          // if it IS new to us, then setting it will trigger the setters
+          my_thing[my_prop] = new_value;
+        }
+      },
+      my_remover = Doh.observe(my_thing, my_prop, my_set),
+      their_remover = Doh.observe(their_thing, their_prop, their_set);
+      // return a function that can be called to remove both callbacks
+      return function(){
+        my_remover();
+        their_remover();
+      };
+    },
+    
+    // AA: Explain how to use / where you should set these things (maybe templates belong on OnCoreLoaded?) 
+    /**
+     *  
+     */
+    WatchedPatternNames:{
+    /*'pattern_name':{
         log:'message',
         warn:'message',
         error:'message',
         throw:'message',
         run:function(idea, prop, new_value){},
         rename:'to_this',
-        remove:'literally anything',
       }*/
     },
     WatchedPhases:{
-      /*'key':{
+    /*'phase_name':{
+        log:'message',
+        warn:'message',
+        error:'message',
+        throw:'message',
+        run:function(idea, prop, new_value){},
+        rename:'to_this',
+      }*/
+    },
+    WatchedKeys:{
+    /*'key':{
         log:'message',
         warn:'message',
         error:'message',
@@ -1059,15 +1574,17 @@ Doh.type_of(unet.uNetNodes['1-1'])
         remove:'literally anything',
       }*/
     },
+    
     WatchedKeySetters:{
       /*
       'pattern1':{
-        'key1':function(obj, prop, value){},
-        'key2':function(obj, prop, value){},
+        'key1':function(object, prop, value){},
+        // accept a .watch argument set for this system so there is parity between the watchers
+        'key2':[prop_name, type = 'set', value_condition = SeeIf.IsAnything, callback],
       },
       'pattern8':{
-        'key1':function(obj, prop, value){},
-        'key2':function(obj, prop, value){},
+        'key1':function(object, prop, value){},
+        'key2':function(object, prop, value){},
       },
       */
     },
@@ -1075,7 +1592,8 @@ Doh.type_of(unet.uNetNodes['1-1'])
       /*
       'pattern1':{
         'key1':function(target, prop, receiver){},
-        'key1':function(target, prop, receiver){},
+        // accept a .watch argument set for this system so there is parity between the watchers
+        'key1':[prop_name, type = 'get', value_condition = SeeIf.IsAnything, callback],
       },
       'pattern4':{
         'key1':function(target, prop, receiver){},
@@ -1084,11 +1602,15 @@ Doh.type_of(unet.uNetNodes['1-1'])
       */
     },
     
-    /*
-     *  Commands:
-     *    RenameTo: move the value to a different key.
+    /**
+     *  @brief inspect and alter keys of patterns and New ideas
+     *  
+     *  @param [in] idea [object] to inspect for keys that need changes
+     *  @return nothing
+     *  
+     *  @details Used by Doh.pattern and Doh.New to watch for changed or deprecated keys
      */
-    see_pattern_keys: function(idea){
+    look_at_pattern_keys: function(idea){
       let logger_method = 'warn', idea_prop, pattern_prop, command, command_value;
       for(pattern_prop in Doh.WatchedKeys){
         idea_prop = '';
@@ -1103,11 +1625,8 @@ Doh.type_of(unet.uNetNodes['1-1'])
                 case 'log':
                 case 'warn':
                 case 'error':
-                  Doh[command]('WatchedKeys:',pattern_prop,'wants to',command,':',command_value,idea);
-                  break;
                 case 'throw':
-                  // throw an error so we can trace from here
-                  throw Doh.error('WatchedKeys:',pattern_prop, 'wants to be thrown. It said:',command_value,idea);
+                  Doh[command]('WatchedKeys:',pattern_prop,'wants to',command,':',command_value,idea);
                   break;
                 case 'run':
                   Doh[logger_method]('WatchedKeys:',pattern_prop,'will run:',command_value,idea);
@@ -1142,309 +1661,94 @@ Doh.type_of(unet.uNetNodes['1-1'])
       }
       return idea;
     },
-    
-    /*                                                 
-      ,,        ,,                     ,,    ,,                  
-      db      `7MM                   `7MM    db                  
-                MM                     MM                        
-    `7MM   ,M""bMM  .gP"Ya   ,6"Yb.    MM  `7MM  M"""MMV .gP"Ya  
-      MM ,AP    MM ,M'   Yb 8)   MM    MM    MM  '  AMV ,M'   Yb 
-      MM 8MI    MM 8M""""""  ,pm9MM    MM    MM    AMV  8M"""""" 
-      MM `Mb    MM YM.    , 8M   MM    MM    MM   AMV  ,YM.    , 
-    .JMML.`Wbmd"MML.`Mbmmd' `Moo9^Yo..JMML..JMML.AMMmmmM `Mbmmd' 
-                                                                 
-                                                             
-  */                                                                                                              
-                                                                                                                     
-    // change param name to inherits to indicate a inherits type array
-    
-    idealize: function(patterns, active) {
-      let j, new_idea = {}, which_idea;
-      // default to finding the original idea
-      patterns = patterns || 'idea';
-      // make sure that patterns is an array
-      if(!Array.isArray(patterns)) patterns = [patterns];
-      // for each filter idea
-      for(let i=0; i<patterns.length; i++){
-        which_idea = patterns[i];
-        j = '';
-        // loop over the idea and use it to add properties from the inherited.idea
-        for(j in this.inherited[which_idea]){
-          // functions should only come from the inherited.idea
-          if(typeof this.inherited[which_idea][j] === 'function'){
-            if(which_idea === 'idea'){
-              new_idea[j] = this.inherited.idea[j];
-            }
-            continue;
-          }
-          // if we are getting active values, get them from this
-          if(which_idea === 'idea' || j !== 'inherits'){
-            if(active){
-              new_idea[j] = this[j];
-            } else if(this.inherited[which_idea][j] !== undefined) {
-              
-              new_idea[j] = this.inherited[which_idea][j];
-            }
-          }
-        }
-        // if the idea has a funtion for it's "ideal" state, run it
-        if(Patterns[which_idea])
-         if(typeof Patterns[which_idea].idealize === 'function'){
-            Patterns[which_idea].idealize.call(this, patterns, active, new_idea);
-        }
-      }
-      return new_idea;
-    },
-    
-    // show me properties/methods/both of a doh object filtered by [patterns]
-    perspective: function(obj, patterns, methods = false){
-      if(!obj) return false;
-      let prop, new_idea = {}, which_idea, pattern_object, original_patterns = patterns;
+
+    /**
+     *  @brief inspect and alter a passed-in pattern name
+     *  
+     *  @param [in] pattern_name [string] a pattern name to inspect
+     *  @return nothing
+     *  
+     *  @details Used by Doh.pattern and Doh.New to watch for changed or deprecated pattern names
+     */
+    look_at_pattern_name: function(pattern_name){
+      //return pattern_name;
+      let rtn = pattern_name, logger_method = 'warn', watched_pattern_name, command, command_value;
       
-      Doh.log('Doh.perspective() was sent patterns:',patterns,'and methods:',methods);
-      // default to finding the original idea
-      patterns = patterns || 'idea';
-      if(patterns === 'idea'){
-        pattern_object = obj.inherited.idea;
-        /*
-         * ideas can introduce patterns for inheritance in: .inherits, New('pattern_name', ...), and New(['pattern_1', 'pattern_2'], ...)
-         * this is also the order of signifigance
-         * so pattern_2 will be the last pattern inherited.
-         */
-         patterns = Doh.meld_into_objectobject(patterns, pattern_object.inherits, pattern_object.pattern);
-      }
-      Doh.log('Doh.perspective() is using',patterns,'to extend inherits.');
-      // default to expanding the pattern, but skip core patterns, cause we never need those
-      patterns = Doh.pattern_inherits_extended(patterns, true);
-      Doh.log('Doh.perspective() found:',patterns);
-      // for each filter idea
-      for(let i=0; i<patterns.length; i++){
-        which_idea = patterns[i];
-        if(which_idea === 'idea'){
-          pattern_object = obj.inherited.idea;
-        } else {
-          pattern_object = Patterns[which_idea];
-        }
-        prop = '';
-        // loop over the pattern or idea and use it to add properties to new_idea
-        for(prop in pattern_object){
-          //if(which_idea !== 'object' /*|| i != 'html'*/){
-            if(!methods){
-              if(typeof obj[prop] !== 'function'){
-                new_idea[prop] = obj[prop];
-              }
-            } else {
-              if(methods === 'both'){
-                new_idea[prop] = obj[prop];
-              } else if(typeof obj[prop] === 'function'){
-                new_idea[prop] = obj[prop];
-              }
+      for(watched_pattern_name in Doh.WatchedPatternNames){
+        if(pattern_name === watched_pattern_name){
+          // this pattern_name is watched, log it and run the list of commands to try and fix it
+          command = '';
+          command_value = '';
+          for(command in Doh.WatchedPatternNames[pattern_name]){
+            command_value = Doh.WatchedPatternNames[pattern_name][command];
+            switch(command){
+              case 'log':
+              case 'warn':
+              case 'error':
+              case 'throw':
+                Doh[command]('WatchedPatternNames:',pattern_name,'wants to',command,':',command_value);
+                break;
+              case 'run':
+                Doh[logger_method]('WatchedPatternNames:',pattern_name,'will run:',command_value);
+                rtn = command_value(pattern_or_name, pattern_name, pattern);
+                break;
+              case 'rename':
+                Doh[logger_method]('WatchedPatternNames:',pattern_name,'has been renamed:',command_value);
+                // make our new reference to the contents
+                rtn = command_value;
+                break;
             }
-          //}
-        }
-        // if it's a pattern or the idea that has a function for it's "perspective" state, then run it
-        if(pattern_object)
-          if(typeof pattern_object.perspective === 'function'){
-            pattern_object.perspective.call(this, obj, patterns, methods, which_idea, pattern_object, new_idea);
           }
-      }
-      return new_idea;
-    },
-
-    // args.exclude_methods, args.truncate_methods, args.exclude_children
-    idea_to_yaml: function(idea, args){
-      var ic = this.idea_to_ideacode(idea, args);
-      return jsyaml.load(ic);
-    },
-
-    idea_to_ideacode: function(idea, args){
-
-      var trailing_comma = '';
-
-      var str = (Array.isArray(idea)? '[':'{');
-
-      for(var i in idea){
-        if(i == 'prototype' || i == '__proto__') {continue;}
-        if(idea[i] instanceof Doh.jQuery) {continue;}
-        if(InstanceOf(idea[i])){ continue;}
-        if(args){
-          if(args.exclude_methods){if(typeof idea[i] == 'function') continue;}
-          if(args.exclude_children){if(i == 'children') continue;}
-        }
-
-        str = str + trailing_comma;
-        trailing_comma = ',';
-
-        if(!Array.isArray(idea)) str = str + '"' + i + '":';
-
-        switch(typeof idea[i]){
-          case 'function':
-            if(args)if(args.truncate_methods){
-              str = str + 'Function';
-              break;
-            }
-          case 'number':
-          case 'boolean': // ANDY added 11.30.19
-            str = str + ''+idea[i];
-            break;
-          case 'object':
-          case 'array':
-            str = str + Doh.idea_to_ideacode(idea[i]);
-            break;
-          case 'string':
-            if(i == 'children'){
-              str = str + ''+idea[i];
-              break;
-            }
-          default:
-            str = str + '"' + idea[i] + '"';
-            break;
+          // we found the thing we were looking for, just bail to the next pattern_name
+          break;
         }
       }
-
-      str = str + (Array.isArray(idea)? ']':'}');
-
-      return str;
+      return rtn;
+      //*/
     },
-
-    idea_to_pretty_ideacode: function(idea, indent){
-      var args = false;
-      if(typeof indent == 'object'){
-        args = indent;
-        indent = args.indent || 1;
-      } else indent = indent || 1;
-      var indent_type = '  ', indent_str = indent_type.repeat(indent);
-
-      var trailing_comma = '';
-
-      var str = (Array.isArray(idea)? '[\n':'{\n');
-
-      for(var i in idea){
-        if(i == 'prototype' || i == '__proto__') {continue;}
-        if(idea[i] instanceof Doh.jQuery) {continue;}
-        if(InstanceOf(idea[i])){ continue;}
-        if(args){
-          if(args.exclude_methods){if(typeof idea[i] == 'function') continue;}
-          if(args.exclude_children){if(i == 'children') continue;}
-        }
-
-        str = str + trailing_comma;
-        trailing_comma = ',\n';
-
-        if(!Array.isArray(idea)) str = str + indent_str + i + ':';
-        else str = str + indent_str;
-
-        switch(typeof idea[i]){
-          case 'function':
-            if(args)if(args.truncate_methods){
-              str = str + 'Function';
-              break;
-            }
-          case 'number':
-            str = str + ''+idea[i];
-            break;
-          case 'object':
-          case 'array':
-            str = str + Doh.idea_to_ideacode(idea[i], indent + 1);
-            break;
-          case 'string':
-            if(i == 'children'){
-              str = str + ''+idea[i];
-              break;
-            }
-          default:
-            str = str + '"' + idea[i] + '"';
-            break;
-        }
-      }
-
-      str = str + indent_type.repeat(indent - 1 || 0) + (Array.isArray(idea)? ']':'}');
-
-      return str;
-    },
-
-    ideacode_to_source: function(ideacode){
-      return 'New(' + ideacode + ');\n';
-    },
-    
-    meld_method_order: function(object, method){
-      var meld_method_order = [], pre_meld_method_order = [];
-      for(var i in object.inherited){
-        if(object.inherited[i]['pre_'+method]) pre_meld_method_order.push(i+'.pre_'+method);
-        if(object.inherited[i][method]) meld_method_order.push(i+'.'+method);
-      }
-      return pre_meld_method_order.concat(meld_method_order);
-    },
-    
-    phases_method_order: function(object){
-      var phases_method_order = [];
-      for(var melded_prop in object.melded){
-        if(object.melded[melded_prop] === 'phase'){
-          phases_method_order.push(Doh.meld_method_order(object, melded_prop));
-        }
-      }
-      return phases_method_order;
-    },
-    
-    meld_methods_order: function(object){
-      var methods_order = [], counter = 0, phase_methods = 0;
-      
-      for(var melded_prop in object.melded){
-        if(object.melded[melded_prop] === 'method' || object.melded[melded_prop] === 'phase'){
-          methods_order.push(Doh.meld_method_order(object, melded_prop));
-          counter += methods_order[methods_order.length-1].length
-        }
-      }
-      /*
-      for(let i in object.phases){
-        methods_order.push(Doh.meld_method_order(object, object.phases[i]));
-        counter += methods_order[methods_order.length-1].length
-      }
-      phase_methods = counter;
-      Doh.log('has:', phase_methods, ' phase methods.');
-      for(let i in object.meld_methods){
-        methods_order.push(Doh.meld_method_order(object, object.meld_methods[i]));
-        counter += methods_order[methods_order.length-1].length
-      }
-      Doh.log('and:', counter - phase_methods, ' melded methods.');
-      */
-      return methods_order;
-    },
-    
-    log_melded_method: function(object, method){
-      var method_array = Doh.meld_method_order(object, method);
-      for (i in method_array){
-        Doh.log(method_array[i],object.inherited[method_array[i].split('.')[0]][method].toString());
-      }
-    },
-    
-    link_melded_method: function(object, method){
-      var method_array = Doh.meld_method_order(object, method);
-      for (i in method_array){
-        Doh.log(method_array[i],object.inherited[method_array[i].split('.')[0]][method]);
-      }
-    }
     
   });
   /* **** Doh Object Ready **** */
   Patterns = Doh.Patterns;
   Pattern = Doh.pattern;
   New = Doh.New;
-  InstanceOf = Doh.InstanceOf = function(object, type){
-    type = type || 'object';
-    if(object)if(object.inherited)if(object.inherited[type]) return true;
+  /**
+   *  @brief determine if an object has had a pattern mixed into it
+   *  
+   *  @param [in] object    [object] to search pattern inheritence
+   *  @param [in] pattern   [string] name of pattern to search for
+   *  @return true if object inherited pattern, otherwise false
+   *  
+   *  @details 
+
+   */
+  InstanceOf = Doh.InstanceOf = function(object, pattern){
+    pattern = pattern || 'object';
+    if(object)if(object.inherited)if(object.inherited[pattern]) return true;
     return false;
   }
-  //Doh.Error = Doh.error;
-  //Doh.Warn = Doh.warn;
 
+  // AA: It might be worth crafting a small ode to the elegance of this
+  /**
+   *  
+   *  NOTE: DO NOT INHERIT THIS PATTERN
+   */
   Pattern('idea');
-
-  // set the prototype for the object constructor
+  
+  /**
+   *  set the prototype for the object constructor
+   */
   Pattern('object', {
+    // define the melded types of all objects of Doh
     melded:{
+      // always meld this collection so our patterns can extend this
       melded:'object',
+      // mark object_phase as a phase
       object_phase:'phase',
+      // mark idealize and perspective as exclusive
+      // this will indicate that we want the builder to ignore anyone setting it except us
+      idealize:'exclusive',
+      perspective:'exclusive',
     },
     // ensure that we are the base object phase
     object_phase: function() {
@@ -1468,8 +1772,136 @@ Doh.type_of(unet.uNetNodes['1-1'])
         }
       }
     },
+    /*                                                 
+      ,,        ,,                     ,,    ,,                  
+      db      `7MM                   `7MM    db                  
+                MM                     MM                        
+    `7MM   ,M""bMM  .gP"Ya   ,6"Yb.    MM  `7MM  M"""MMV .gP"Ya  
+      MM ,AP    MM ,M'   Yb 8)   MM    MM    MM  '  AMV ,M'   Yb 
+      MM 8MI    MM 8M""""""  ,pm9MM    MM    MM    AMV  8M"""""" 
+      MM `Mb    MM YM.    , 8M   MM    MM    MM   AMV  ,YM.    , 
+    .JMML.`Wbmd"MML.`Mbmmd' `Moo9^Yo..JMML..JMML.AMMmmmM `Mbmmd' 
+                                                                 
+                                                             
+    */                                                                                                          
+    // change param name to inherits to indicate a inherits type array
+    /**
+     *  @brief reduce an object to it's 'ideal' state based on a list of
+     *         patterns it inherits from
+     *  
+     *  @param [in] inherits [string/array/object] string or list of inherits to filter for
+     *  @param [in] active   [bool] default to false to get the initial values of each key for each pattern in inherits
+     *  @return a new idea containing the filtered set of keys from this
+     *  
+     *  @details Differs from .perspective because the list of patterns MUST be in .inherited,
+     *           functions will always be ignored, and values can be retrieved from the .inherited defaults or that active object
+     */
+    idealize: function(inherits, active) {
+      let j, new_idea = {}, which_idea;
+      // default to finding the original idea
+      inherits = inherits || 'idea';
+      // make sure that inherits is an array
+      inherits = Object.keys(Doh.meld_into_objectobject(inherits));
+      // for each filter idea
+      for(let i=0; i<inherits.length; i++){
+        which_idea = inherits[i];
+        j = '';
+        // loop over the idea and use it to add properties from the inherited.idea
+        for(j in this.inherited[which_idea]){
+          // functions should only come from the inherited.idea
+          if(typeof this.inherited[which_idea][j] === 'function'){
+            if(which_idea === 'idea'){
+              new_idea[j] = this.inherited.idea[j];
+            }
+            continue;
+          }
+          // if we are getting active values, get them from this
+          if(which_idea === 'idea' || j !== 'inherits'){
+            if(active){
+              new_idea[j] = this[j];
+            } else if(this.inherited[which_idea][j] !== undefined) {
+              
+              new_idea[j] = this.inherited[which_idea][j];
+            }
+          }
+        }
+        // if the idea has a funtion for it's "ideal" state, run it
+        if(Patterns[which_idea])
+         if(typeof Patterns[which_idea].idealize === 'function'){
+            Patterns[which_idea].idealize.call(this, inherits, active, new_idea);
+        }
+      }
+      return new_idea;
+    },
+    
+    /**
+     *  @brief Show properties/methods/both of a doh object filtered by 
+     *         an arbitrary list of patterns
+     *  
+     *  @param [in] patterns [string/array/object] list of patterns to filter for
+     *  @param [in] methods  Description for methods
+     *  @return a new idea containing the filtered set of keys from this
+     *  
+     *  @details Differs from .idealize because the list of patterns does not have to be from .inherited,
+     *           values retrieved are always from this rather than .inherited,
+     *           and methods can be optionally included, or selected exclusively
+     */
+    perspective: function(patterns, methods = false){
+      let prop, new_idea = {}, which_idea, pattern_object, original_patterns = patterns;
+      
+      Doh.log('Doh.perspective() was sent patterns:',patterns,'and methods:',methods);
+      // default to finding the original idea
+      patterns = patterns || 'idea';
+      if(patterns === 'idea'){
+        pattern_object = this.inherited.idea;
+        /*
+         * ideas can introduce patterns for inheritance in: .inherits, New('pattern_name', ...), and New(['pattern_1', 'pattern_2'], ...)
+         * this is also the order of signifigance
+         * so pattern_2 will be the last pattern inherited.
+         */
+         patterns = Doh.meld_into_objectobject(patterns, pattern_object.inherits, pattern_object.pattern);
+      }
+      Doh.log('Doh.perspective() is using',patterns,'to extend inherits.');
+      // default to expanding the pattern, but skip core patterns, cause we never need those
+      patterns = Object.keys(Doh.extend_inherits(patterns, true));
+      Doh.log('Doh.perspective() found:',patterns);
+      // for each filter idea
+      for(let i=0; i<patterns.length; i++){
+        which_idea = patterns[i];
+        if(which_idea === 'idea'){
+          pattern_object = this.inherited.idea;
+        } else {
+          pattern_object = Patterns[which_idea];
+        }
+        prop = '';
+        // loop over the pattern or idea and use it to add properties to new_idea
+        for(prop in pattern_object){
+          //if(which_idea !== 'object' /*|| i != 'html'*/){
+            if(!methods){
+              if(typeof this[prop] !== 'function'){
+                new_idea[prop] = this[prop];
+              }
+            } else {
+              if(methods === 'both'){
+                new_idea[prop] = this[prop];
+              } else if(typeof this[prop] === 'function'){
+                new_idea[prop] = this[prop];
+              }
+            }
+          //}
+        }
+        // if it's a pattern or the idea that has a function for it's "perspective" state, then run it
+        if(pattern_object)
+          if(typeof pattern_object.perspective === 'function'){
+            pattern_object.perspective.call(this, patterns, methods, which_idea, pattern_object, new_idea);
+          }
+      }
+      return new_idea;
+    },
+
   });
 
+// AA: group this with the log stuff above?   
   Pattern('log', 'object', {
     log_type: 'Doh:',
     logger:console,
@@ -1512,6 +1944,7 @@ Doh.type_of(unet.uNetNodes['1-1'])
                                                                    OOb"                                                                                                                                                                         
 */
 
+  // AA: talk about the relationship of this to html, the role of the children array
 
   Pattern('parenting', 'object', {
     // parent should be a Doh Object or false

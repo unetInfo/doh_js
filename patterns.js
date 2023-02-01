@@ -229,7 +229,7 @@ OnLoad('/doh_js/core', function($){
      *                'IsObjectObject'
      *    Doh.type_of(function(){})
      *                'IsFunction'
-     *    Doh.type_of(unet.uNetNodes['1-1'])
+     *    Doh.type_of(New('object',{}))
      *                'IsDohObject'
      */
     type_of: function(value){
@@ -264,6 +264,14 @@ OnLoad('/doh_js/core', function($){
       return false;
     },
 
+    /**
+     *  @brief produce a list of all SeeIf results for value
+     *  
+     *  @param [in] value [any] thing to test
+     *  @return a separated list of types this value is and (is) not
+     *  
+     *  @details Return {is:[array of types this value is], not:[array of types this values is not]}
+     */
     type_list: function(value){
       let rtn_true = {}, rtn_false = {}, result;
       for(let seeif_name in SeeIf){
@@ -276,7 +284,7 @@ OnLoad('/doh_js/core', function($){
       //Doh.log(value,'is the following types:\n',rtn);
       return {is:rtn_true, not:rtn_false};
     },
-    // AA: Explain the whole logging idea here
+
     /**
      *  @brief Log a message to Doh (usually the console, but maybe a remote logger)
      *  
@@ -314,7 +322,6 @@ OnLoad('/doh_js/core', function($){
         logger[logger_method](...logger_args);
       }
     },
-
     /**
      *  @brief Log a message to Doh, defaults to 'trace' type log
      *  
@@ -328,7 +335,6 @@ OnLoad('/doh_js/core', function($){
     log: function(){
       Doh._log(arguments, 'Doh:', 'trace');
     },
-
     /**
      *  @brief log a custom warning to Doh
      *
@@ -341,7 +347,6 @@ OnLoad('/doh_js/core', function($){
     warn: function(){
       Doh._log(arguments, 'Doh Warning:', 'warn');
     },
-
     /**
      *  @brief log a custom error to Doh
      *
@@ -354,7 +359,6 @@ OnLoad('/doh_js/core', function($){
     error: function(){
       Doh._log(arguments, 'Doh ERROR:', 'error');
     },
-
     /**
      *  @brief log a debug error to Doh
      *
@@ -370,9 +374,8 @@ OnLoad('/doh_js/core', function($){
       if(Doh.DebugMode) throw Doh._log(arguments, 'Doh DEBUG:', 'error');
       Doh._log(arguments, 'Doh DEBUG:', 'error');
     },
-
     /**
-     *  @brief throw and log a debug error to Doh
+     *  @brief throw and log an error to Doh
      *
      *  @param [in] context, context, ...   object(s) of relevence to the error
      *  @return nothing
@@ -412,53 +415,6 @@ OnLoad('/doh_js/core', function($){
       return -1;
     },
     
-    /**
-     *  @brief meld all the ways we can format a list of args into a set of object keys
-     *            NOTE: always melds into a new {}. No argument is altered.
-     *                   maybe that should be called collect_into_objectobject?
-     *
-     *  @param [in] aruguments  String, Array, Array-like-object, or Object to
-     *                          meld with. (See details)
-     *  @return objectobject with keys from the strings and arrays and keys of arguments
-     *  
-     *  @details
-     *  'pattern_name_1'
-     *  ['pattern_name_1', 'pattern_name_2']
-     *  {0:'pattern_name_1', 1:'pattern_name_2'}
-     *  {'pattern_name_1':true, 'pattern_name_2':true}
-     *  
-     *  *RESULTS IN:* {'pattern_name_1':true, 'pattern_name_2':true}
-     *  *OR* {}
-     **/
-    meld_into_objectobject: function(){
-      // we always need a new object
-      let object = {}, list, item;
-      for(let arg in arguments){
-        // walk through all arguments
-        list = arguments[arg];
-        // allow value to be a string
-        if (typeof list === 'string')
-          //NOTE: we can expand this to accept limited depth and complexity
-          //      like, CSV or dot-notated (this.that.theother)
-          object[list] = true;
-        // or an object (array and object, technically)
-        else if (SeeIf.IsEnumerable(list)){
-          item = '';
-          for(item in list){
-            if (item !== 'length'){
-              // allow the array structure to have the list in key (Key is not a number)
-              //NOTE .is key safe?
-              if(isNaN(item)) object[item] = list[item];
-              // or in the list
-              else object[list[item]] = true;
-            }
-          }
-        }
-      }
-      // send what we found, even if empty
-      return object;
-    },
-
     /**
      *  @brief Concatenate array onto destination, removing duplicates from array.
      *  
@@ -509,6 +465,53 @@ OnLoad('/doh_js/core', function($){
     },
 
     /**
+     *  @brief meld all the ways we can format a list of args into a set of object keys
+     *            NOTE: always melds into a new {}. No argument is altered.
+     *                   maybe that should be called collect_into_objectobject?
+     *
+     *  @param [in] aruguments  String, Array, Array-like-object, or Object to
+     *                          meld with. (See details)
+     *  @return objectobject with keys from the strings and arrays and keys of arguments
+     *  
+     *  @details
+     *  'pattern_name_1'
+     *  ['pattern_name_1', 'pattern_name_2']
+     *  {0:'pattern_name_1', 1:'pattern_name_2'}
+     *  {'pattern_name_1':true, 'pattern_name_2':true}
+     *  
+     *  *RESULTS IN:* {'pattern_name_1':true, 'pattern_name_2':true}
+     *  *OR* {}
+     **/
+    meld_into_objectobject: function(){
+      // we always need a new object
+      let object = {}, list, item;
+      for(let arg in arguments){
+        // walk through all arguments
+        list = arguments[arg];
+        // allow value to be a string
+        if (typeof list === 'string')
+          //NOTE: we can expand this to accept limited depth and complexity
+          //      like, CSV or dot-notated (this.that.theother)
+          object[list] = true;
+        // or an object (array and object, technically)
+        else if (SeeIf.IsEnumerable(list)){
+          item = '';
+          for(item in list){
+            if (item !== 'length'){
+              // allow the array structure to have the list in key (Key is not a number)
+              //NOTE .is key safe?
+              if(isNaN(item)) object[item] = list[item];
+              // or in the list
+              else object[list[item]] = true;
+            }
+          }
+        }
+      }
+      // send what we found, even if empty
+      return object;
+    },
+
+    /**
      *  @brief Given an object and method name, return an array of function references
      *         for inherited patterns that implement the named method
      *  
@@ -531,11 +534,13 @@ OnLoad('/doh_js/core', function($){
      *  @brief return a closure for object[method_name] that will call each function in method_stack
      *  
      *  @param [in] object       [any] thing to use as 'this'
-     *  @param [in] method_stack [array] of functions to run as this method
+     *  @param [in] method_stack [array] of functions to run as this method OR
+     *                           [string] of method name to use for collecting methods from .inherited
      *  @return a closure function that will call each function in method_stack
      *  
      *  @details object[method_name].update_meld_stack() will automatically recalculate
      *           melds based on current .inherited
+     *           object[method_name].meld_stack is the actual meld_stack array that can be manipulated to affect the next run of method
      */
     meld_method: function(object, method_stack){
       // if the stack is a string, then we are trying to meld a method from object.inherited
@@ -570,7 +575,7 @@ OnLoad('/doh_js/core', function($){
     },
     
     /**
-     *  @brief Update meld_methods and phases of object
+     *  @brief Update ALL meld_methods and phases of object
      *  
      *  @param [in] object [object] to look for melded methods on
      *  @return nothing
@@ -617,6 +622,10 @@ OnLoad('/doh_js/core', function($){
      *  @return destination
      *  
      *  @details Uses destination.melded and idea.melded (or deep_melded) to define meld and data types for each property.
+     *  
+     *    Doh.meld_ideas({},{}) == {};
+     *                  ({},{prop:'myprop'}) == {prop:'myprop'}
+     *                  ({prop:'oldval'},{prop:'myprop'}) == {prop:'myprop'}
      */
     meld_ideas:function(destination = {}, idea, deep_melded) {
       let prop_name = '', inner_melded = idea.melded, go_deep, melded_type, idea_prop, idea_melded_type, destination_melded_type;
@@ -730,9 +739,9 @@ OnLoad('/doh_js/core', function($){
      *  @param [in] arguments[] [idea(s)] to meld onto the destination, using special_melded as a melded_type map
      *  @return destination
      *  
-     *  @details deep_meld_ideas(special_melded, dest, idea1, idea2, idea3, ...)
+     *  @details special_meld_ideas(special_melded, dest, idea1, idea2, idea3, ...)
      */
-    deep_meld_ideas: function(special_melded, destination){
+    special_meld_ideas: function(special_melded, destination){
       for(let i in arguments){
         if(i == 0 || i === 'length' || arguments[i] === destination) continue;
         Doh.meld_ideas(destination, arguments[i], special_melded);
@@ -863,7 +872,6 @@ OnLoad('/doh_js/core', function($){
       return idea;
     },
     
-    // This is used by the builder to a mix a pattern into a new instance of an object
     // AA: Describe how it might be used by a developer?
     /**
      *  @brief Mix a pattern from Patterns into destination
@@ -872,7 +880,11 @@ OnLoad('/doh_js/core', function($){
      *  @param [in] pattern     [string] the name of a pattern to mixin
      *  @return destination
      *  
-     *  @details Will also update_meld_methods for destination if it was previously built by New()
+     *  @details This is used by the builder to a mix a pattern into a new instance of an object.
+     *           NOTE: will also update_meld_methods for destination ONLY IF it is already a built DohObject
+     *           NOTE: mixin_pattern will not inherit a pattern onto the same object twice.
+     *           NOTE: mixin_pattern will properly meld the pattern onto destination, update .inherited,
+     *                 and update all melded methods, BUT it will not run or re-run any phases.
      */
     mixin_pattern: function(destination, pattern){
       // some checking for the pattern and double-mixing
@@ -902,7 +914,7 @@ OnLoad('/doh_js/core', function($){
         
     // AA: Surely this merits a small dissertation
     /**
-     *  @brief Return a collection of all ancestor dependencies
+     *  @brief Return a collection of all ancestor dependencies for [inherits]
      *  
      *  @param [in] inherits  [string/array/object] a name, list of names, or object whose keys are a list of things to inherit
      *  @param [in] skip_core [bool] remove core dependencies from the list? Default to false.
@@ -1405,6 +1417,128 @@ OnLoad('/doh_js/core', function($){
       return object.machine(phase);
     },
 
+    /**
+     *  @brief call a callback any time a property on an object changes
+     *  
+     *  @param [in] object             [object] the object to watch
+     *  @param [in] prop               [string] the property name to watch
+     *  @param [in] on_change_callback [function] the callback to fire when the value of prop changes
+     *  @return a function that clears the observing
+     *  
+     *  @details 
+     */
+    observe: function(object, prop, on_change_callback){
+      let prop_desc;
+      // we can only set this system up on objectobjects
+      if(SeeIf.IsObjectObject(object)){
+        // for now, the only valid prop indicator is a string
+        // observe requires a function for callback or the observation isn't seen
+        if(SeeIf.IsString(prop))if(SeeIf.IsFunction(on_change_callback)){
+          // check for a setter already there
+          prop_desc = Object.getOwnPropertyDescriptor(object, prop);
+          if(SeeIf.NotFunction(prop_desc.set)){
+            // bind the original value to a new local variable
+            let val = object[prop];
+            let method_stack = [];
+            let melded_method = function(new_value){
+              // use the original value storage as intended, even though these closures are all that can see it
+              if(val !== new_value){
+                // set the value to the new value
+                // we have to set the val first BEFORE calling the stack or we will recurse on ourself forever
+                val = new_value;
+                // this melder always does the same thing:
+                //  walk the method stack and apply each method to the bound object
+                let len = method_stack.length;
+                for(let i=0;i<len;i++){
+                  method_stack[i](object, prop, new_value);
+                }
+              }
+            };
+            // track the meld_stack so we can manipulate it
+            melded_method.meld_stack = method_stack;
+            // if we want to update the pointer, we need a closure to access the original scope
+            melded_method.update_meld_stack = function(new_stack){
+              // if we didn't pass a stack
+              if(!new_stack){
+                Doh.debug("[melded_method].update_meld_stack didn't get a new_stack");
+                return;
+              }
+              // otherwise, apply the stack we sent in
+              method_stack = new_stack;
+            };
+            // attach a utility method to remove melded functions from the stack
+            melded_method.remove_melded = function(method){
+              method_stack.splice(method_stack.indexOf(method), 1);
+            };
+            
+            Object.defineProperty(object, prop, {
+              // if we have a setter, then we must have a getter
+              // our fancy getter retrieves the original value storage, which
+              // is the thing that gets updated.
+              get: function(){return val;},
+              set: melded_method,
+              // don't break enumerable stuff
+              enumerable: SeeIf.IsEnumerable(val),
+              // don't break our ability to configure
+              configurable: true,
+            });
+          }
+          // we have to get (or re-get) the prop_desc here in case the melded setter already exists
+          prop_desc = Object.getOwnPropertyDescriptor(object, prop);
+          if(!prop_desc.set.meld_stack){
+            Doh.debug('Doh.observe found a non-Doh setter for:',prop,'on object:',object,'with callback:',on_change_callback);
+            return function(){};
+          }
+          // just push our on_change onto the meld_stack. 
+          prop_desc.set.meld_stack.push(on_change_callback);
+          // return a function that can be called to remove the on_change callback
+          return function(){
+            prop_desc.set.remove_melded(on_change_callback);
+          }
+        }
+      }
+    },
+    
+    /**
+     *  @brief tell two things to have their defined prop mimic the other
+     *  
+     *  @param [in] my_thing           [object] the object the callback is relative to
+     *  @param [in] my_prop            [string] name of the prop on my_thing to sync
+     *  @param [in] their_thing        [object] the object to sync with
+     *  @param [in] their_prop         [string] name of the prop on their_thing to sync with
+     *  @param [in] on_change_callback [function] optionally a function to run when my_thing[my_prop] is changed
+     *  @return a function that will remove the mimic that was just created when called
+     *  
+     *  @details optionally provide a callback to be run when either side changes their mimicked prop
+     */
+    mimic: function(my_thing, my_prop, their_thing, their_prop, on_change_callback){
+      
+      // syncing demands initial state to be synced BEFORE setters are defined
+      // this keeps the initial set from echoing forever
+      if(my_thing[my_prop] !== their_thing[their_prop]) my_thing[my_prop] = their_thing[their_prop];
+      
+      let my_set = function(object, prop, new_value){
+        // i only get run if my value changed
+        their_thing[their_prop] = new_value;
+        if(on_change_callback) on_change_callback(my_thing, my_prop, their_thing, their_prop, new_value);
+      },
+      their_set = function(object, prop, new_value){
+        // i get run if THEIR value changed, we still have to check
+        // if the new value is actually new to us too.
+        if(new_value !== my_thing[my_prop]){
+          // if it IS new to us, then setting it will trigger the setters
+          my_thing[my_prop] = new_value;
+        }
+      },
+      my_remover = Doh.observe(my_thing, my_prop, my_set),
+      their_remover = Doh.observe(their_thing, their_prop, their_set);
+      // return a function that can be called to remove both callbacks
+      return function(){
+        my_remover();
+        their_remover();
+      };
+    },
+    
     // AA: Explain how to use / where you should set these things (maybe templates belong on OnCoreLoaded?) 
     /**
      *  
@@ -1528,6 +1662,14 @@ OnLoad('/doh_js/core', function($){
       return idea;
     },
 
+    /**
+     *  @brief inspect and alter a passed-in pattern name
+     *  
+     *  @param [in] pattern_name [string] a pattern name to inspect
+     *  @return nothing
+     *  
+     *  @details Used by Doh.pattern and Doh.New to watch for changed or deprecated pattern names
+     */
     look_at_pattern_name: function(pattern_name){
       //return pattern_name;
       let rtn = pattern_name, logger_method = 'warn', watched_pattern_name, command, command_value;
@@ -1565,212 +1707,6 @@ OnLoad('/doh_js/core', function($){
       //*/
     },
     
-    // call a callback any time a property on an object changes
-    observe: function(object, prop, on_change_callback){
-      let prop_desc;
-      // we can only set this system up on objectobjects
-      if(SeeIf.IsObjectObject(object)){
-        // for now, the only valid prop indicator is a string
-        // observe requires a function for callback or the observation isn't seen
-        if(SeeIf.IsString(prop))if(SeeIf.IsFunction(on_change_callback)){
-          // check for a setter already there
-          prop_desc = Object.getOwnPropertyDescriptor(object, prop);
-          if(SeeIf.NotFunction(prop_desc.set)){
-            // bind the original value to a new local variable
-            let val = object[prop];
-            let method_stack = [];
-            let melded_method = function(new_value){
-              // use the original value storage as intended, even though these closures are all that can see it
-              if(val !== new_value){
-                // set the value to the new value
-                // we have to set the val first BEFORE calling the stack or we will recurse on ourself forever
-                val = new_value;
-                // this melder always does the same thing:
-                //  walk the method stack and apply each method to the bound object
-                let len = method_stack.length;
-                for(let i=0;i<len;i++){
-                  method_stack[i](object, prop, new_value);
-                }
-              }
-            };
-            // track the meld_stack so we can manipulate it
-            melded_method.meld_stack = method_stack;
-            // if we want to update the pointer, we need a closure to access the original scope
-            melded_method.update_meld_stack = function(new_stack){
-              // if we didn't pass a stack
-              if(!new_stack){
-                Doh.debug("[melded_method].update_meld_stack didn't get a new_stack");
-                return;
-              }
-              // otherwise, apply the stack we sent in
-              method_stack = new_stack;
-            };
-            // attach a utility method to remove melded functions from the stack
-            melded_method.remove_melded = function(method){
-              method_stack.splice(method_stack.indexOf(method), 1);
-            };
-            
-            Object.defineProperty(object, prop, {
-              // if we have a setter, then we must have a getter
-              // our fancy getter retrieves the original value storage, which
-              // is the thing that gets updated.
-              get: function(){return val;},
-              set: melded_method,
-              // don't break enumerable stuff
-              enumerable: SeeIf.IsEnumerable(val),
-              // don't break our ability to configure
-              configurable: true,
-            });
-          }
-          // we have to get (or re-get) the prop_desc here in case the melded setter already exists
-          prop_desc = Object.getOwnPropertyDescriptor(object, prop);
-          if(!prop_desc.set.meld_stack){
-            Doh.debug('Doh.observe found a non-Doh setter for:',prop,'on object:',object,'with callback:',on_change_callback);
-            return function(){};
-          }
-          // just push our on_change onto the meld_stack. 
-          prop_desc.set.meld_stack.push(on_change_callback);
-          // return a function that can be called to remove the on_change callback
-          return function(){
-            prop_desc.set.remove_melded(on_change_callback);
-          }
-        }
-      }
-    },
-    // tell two things to have their defined prop mimic the other
-    // optionally provide a callback to be run when either side changes their mimicked prop
-    mimic: function(my_thing, my_prop, their_thing, their_prop, on_change_callback){
-      
-      // syncing demands initial state to be synced BEFORE setters are defined
-      // this keeps the initial set from echoing forever
-      if(my_thing[my_prop] !== their_thing[their_prop]) my_thing[my_prop] = their_thing[their_prop];
-      
-      let my_set = function(object, prop, new_value){
-        // i only get run if my value changed
-        their_thing[their_prop] = new_value;
-        if(on_change_callback) on_change_callback(my_thing, my_prop, their_thing, their_prop, new_value);
-      },
-      their_set = function(object, prop, new_value){
-        // i get run if THEIR value changed, we still have to check
-        // if the new value is actually new to us too.
-        if(new_value !== my_thing[my_prop]){
-          // if it IS new to us, then setting it will trigger the setters
-          my_thing[my_prop] = new_value;
-        }
-      },
-      my_remover = Doh.observe(my_thing, my_prop, my_set),
-      their_remover = Doh.observe(their_thing, their_prop, their_set);
-      // return a function that can be called to remove both callbacks
-      return function(){
-        my_remover();
-        their_remover();
-      };
-    },
-    
-    // AA:  can we develop a system for readability / discovery.   maybe things like this (that return info) should be named "get_meld_method_order" or "meld_method_order_to_array"
-    /**
-     *  @brief Shallow-meld multiple objects (arguments) into destination
-     *  
-     *  @param [in] object Description for object
-     *  @param [in] method Description for method
-     *  @return Return description
-     *  
-     *  @details 
-     */
-    get_melded_method_order: function(object, method){
-      var meld_method_order = [], pre_meld_method_order = [];
-      for(var i in object.inherited){
-        if(object.inherited[i]['pre_'+method]) pre_meld_method_order.push(i+'.pre_'+method);
-        if(object.inherited[i][method]) meld_method_order.push(i+'.'+method);
-      }
-      return pre_meld_method_order.concat(meld_method_order);
-    },
-    
-    /**
-     *  @brief Shallow-meld multiple objects (arguments) into destination
-     *  
-     *  @param [in] object Description for object
-     *  @return Return description
-     *  
-     *  @details 
-     */
-    get_phase_method_order: function(object){
-      var phases_method_order = [];
-      for(var melded_prop in object.melded){
-        if(object.melded[melded_prop] === 'phase'){
-          phases_method_order.push(Doh.get_melded_method_order(object, melded_prop));
-        }
-      }
-      return phases_method_order;
-    },
-        
-    /**
-     *  @brief Shallow-meld multiple objects (arguments) into destination
-     *  
-     *  @param [in] object Description for object
-     *  @return Return description
-     *  
-     *  @details 
-     */
-    get_all_melded_method_order: function(object){
-      var methods_order = [], counter = 0, phase_methods = 0;
-      
-      for(var melded_prop in object.melded){
-        if(object.melded[melded_prop] === 'method' || object.melded[melded_prop] === 'phase'){
-          methods_order.push(Doh.get_melded_method_order(object, melded_prop));
-          counter += methods_order[methods_order.length-1].length
-        }
-      }
-      /*
-      for(let i in object.phases){
-        methods_order.push(Doh.get_melded_method_order(object, object.phases[i]));
-        counter += methods_order[methods_order.length-1].length
-      }
-      phase_methods = counter;
-      Doh.log('has:', phase_methods, ' phase methods.');
-      for(let i in object.meld_methods){
-        methods_order.push(Doh.get_melded_method_order(object, object.meld_methods[i]));
-        counter += methods_order[methods_order.length-1].length
-      }
-      Doh.log('and:', counter - phase_methods, ' melded methods.');
-      */
-      return methods_order;
-    },
-    
-    // send the stringified code of a melded method to the Doh log
-    /**
-     *  @brief Shallow-meld multiple objects (arguments) into destination
-     *  
-     *  @param [in] object Description for object
-     *  @param [in] method Description for method
-     *  @return Return description
-     *  
-     *  @details 
-     */
-    log_melded_method_string: function(object, method){
-      var method_array = Doh.get_melded_method_order(object, method);
-      for (i in method_array){
-        Doh.log(method_array[i],object.inherited[method_array[i].split('.')[0]][method].toString());
-      }
-    },
-    
-    // send a clickable list of the melded methods to the Doh log
-    /**
-     *  @brief Shallow-meld multiple objects (arguments) into destination
-     *  
-     *  @param [in] object Description for object
-     *  @param [in] method Description for method
-     *  @return Return description
-     *  
-     *  @details 
-     */
-    log_melded_method_source: function(object, method){
-      var method_array = Doh.get_melded_method_order(object, method);
-      for (i in method_array){
-        Doh.log(method_array[i],object.inherited[method_array[i].split('.')[0]][method]);
-      }
-    }
-    
   });
   /* **** Doh Object Ready **** */
   Patterns = Doh.Patterns;
@@ -1799,9 +1735,8 @@ OnLoad('/doh_js/core', function($){
    */
   Pattern('idea');
   
-  // set the prototype for the object constructor
   /**
-   *  
+   *  set the prototype for the object constructor
    */
   Pattern('object', {
     // define the melded types of all objects of Doh
@@ -2200,7 +2135,7 @@ OnCoreLoaded(Doh.ApplyFixes, function(){
 });
 
 OnLoad('/doh_js/utils', function($){
-    
+  // testing out some interesting filter functionallity
   Pattern('dict', 'object', {
     each: function(callback){
       let po = Patterns.object, pd = Patterns.dict_filter;
@@ -2231,43 +2166,7 @@ OnLoad('/doh_js/utils', function($){
    *  A place to house things that we no longer want in core, but don't yet have another home
    */
   Doh.meld_objects(Doh, {
-    // AA:  Explain the role of ids
-    /**
-     *  @brief Get a new id
-     *
-     *  @return A new ephemeral id
-     *  
-     *  @details IDs are a simple way to get ephemeral indexes that reset on each page load
-     */
-    NewIdCounter:0,
-    new_id: function () {
-      return this.NewIdCounter += 1;
-    },
-
-    // AA: general utility?
-    array_move: function(array, from_index, to_index) {
-      array.splice(to_index, 0, array.splice(from_index, 1)[0]);
-      return array;
-    },
-    /**
-     *  @brief old closure melder for methods that bound them in a wrapper
-     *  
-     *  @param [in] object    [object/literal] to use for 'this'
-     *  @param [in] method    [function] to extend
-     *  @param [in] extension [function] to run after method. (could be another wrapper)
-     *  @return the new function
-     *  
-     *  @details This is the old way that Doh used to meld methods, It is very inflexible and 
-     *           it's use is unknown. The new melders are so much better in ever way that it is
-     *           not known if this method has any advantages at all.
-     */
-    meld_methods: function(object, method, extension){
-        return function(){
-          method.apply(object, arguments);
-          extension.apply(object, arguments);
-          return object;
-        }
-    },
+    // USED BY: /utils/ajax
     /**
      *  @brief Turn a dot delimited name into a deep reference on 'base'
      *
@@ -2287,85 +2186,125 @@ OnLoad('/doh_js/utils', function($){
       return values;
     },
 
-    // AA: things like this and parse_reference above are rather general utilities (not Doh-specific), I think it would be helpful to group them all, and maybe demote them
-    // in fact, if they aren't used by core, they should move into something more like my sim_util global space
-    
-    //return items from an array that pass callback
+    // USED BY: /utils/node (node is horribly named)
     /**
-     *  @brief return items from array that pass (callback == !inverse)
+     *  @brief Get a new id
+     *
+     *  @return A new ephemeral id
      *  
-     *  @param [in] array    [array] to search
-     *  @param [in] callback [function] to call for each key in array
-     *  @param [in] inverse  [bool] invert the result of each callback? defaults to false
-     *  @return Return description
-     *  
-     *  @details Old method used by array_unique for meld_arrays. No longer in use in core.
+     *  @details IDs are a simple way to get ephemeral indexes that reset on each page load
      */
-    grep: function( array, callback, inverse ) {
-      var ret = [];
-      // Go through the array, only saving the items
-      // that pass the validator function
-      for ( var i = 0, length = array.length; i < length; i++ ) {
-        if ( !inverse !== !callback( array[ i ], i ) ) {
-          ret.push( array[ i ] );
+    NewIdCounter:0,
+    new_id: function () {
+      return this.NewIdCounter += 1;
+    },
+
+    // USED BY: doh inspector?
+    /**
+     *  @brief return the execution order of a melded method by name on an object
+     *  
+     *  @param [in] object [object] a DohObject to inspect
+     *  @param [in] method [string] name of method to expose
+     *  @return an array of 'inherited_pattern.pre_method/method' for each pattern that implements this method name
+     *  
+     *  @details [examples?]
+     */
+    get_melded_method_order: function(object, method){
+      var meld_method_order = [], pre_meld_method_order = [];
+      for(var i in object.inherited){
+        if(object.inherited[i]['pre_'+method]) pre_meld_method_order.push(i+'.pre_'+method);
+        if(object.inherited[i][method]) meld_method_order.push(i+'.'+method);
+      }
+      return pre_meld_method_order.concat(meld_method_order);
+    },
+    /**
+     *  @brief return the execution order of all phases on an object
+     *  
+     *  @param [in] object [object] a DohObject to inspect
+     *  @return an array of 'inherited_pattern.pre_method/method' for each pattern that implements each phase
+     *  
+     *  @details [examples?]
+     */
+    get_phase_method_order: function(object){
+      var phases_method_order = [];
+      for(var melded_prop in object.melded){
+        if(object.melded[melded_prop] === 'phase'){
+          phases_method_order.push(Doh.get_melded_method_order(object, melded_prop));
         }
       }
-      return ret;
+      return phases_method_order;
     },
     /**
-     *  @brief return an array filtered of duplicates
+     *  @brief return the execution order of all melded methods and phases on an object
      *  
-     *  @param [in] arr Description for arr
-     *  @return Return description
+     *  @param [in] object [object] a DohObject to inspect
+     *  @return an array of 'inherited_pattern.pre_method/method' for each pattern that implements this method or phase
      *  
-     *  @details Old method used by meld_arrays. No longer in use in core.
+     *  @details [examples?]
      */
-    array_unique: function(array){
-      // reduce the array to contain no dupes via grep/in_array
-      return Doh.grep(array,function(value,key){
-          return Doh.in_array(value,array) === key;
-      });
-    },
-    /**
-     *  @brief transpose array values into the keys of a new object
-     *  
-     *  @param [in] array [array] to get values from
-     *  @return new {} object with keys from the array values
-     *  
-     *  @details Very handy transposition tool, but currently unused in core
-     */
-    object_keys_from_array_values: function (array = []){
-      var object = {};
-      for(var i=0; i<array.length; i++){
-        object[array[i]] = true
+    get_all_melded_method_order: function(object){
+      var methods_order = [], counter = 0, phase_methods = 0;
+      for(var melded_prop in object.melded){
+        if(object.melded[melded_prop] === 'method' || object.melded[melded_prop] === 'phase'){
+          methods_order.push(Doh.get_melded_method_order(object, melded_prop));
+          counter += methods_order[methods_order.length-1].length
+        }
       }
-      return object;
+      return methods_order;
+    },
+    /**
+     *  @brief send the stringified code of a melded method to the Doh log
+     *  
+     *  @param [in] object [object] a DohObject to inspect
+     *  @param [in] method [string] the name of a method to look for
+     *  @return nothing
+     *  
+     *  @details This method is only meant for debugging, is it needed in core?
+     */
+    log_melded_method_string: function(object, method){
+      var method_array = Doh.get_melded_method_order(object, method);
+      for (i in method_array){
+        Doh.log(method_array[i],object.inherited[method_array[i].split('.')[0]][method].toString());
+      }
+    },
+    /**
+     *  @brief send a clickable list of the melded methods to the Doh log
+     *  
+     *  @param [in] object [object] a DohObject to inspect
+     *  @param [in] method [string] the name of a method to look for
+     *  @return nothing
+     *  
+     *  @details This method is only meant for debugging, is it needed in core?
+     */
+    log_melded_method_source: function(object, method){
+      var method_array = Doh.get_melded_method_order(object, method);
+      for (i in method_array){
+        Doh.log(method_array[i],object.inherited[method_array[i].split('.')[0]][method]);
+      }
     },
     
-    // args.exclude_methods, args.truncate_methods, args.exclude_children
+    // USED BY: unsure? but i think these are used -CHRIS
     /**
-     *  @brief Shallow-meld multiple objects (arguments) into destination
+     *  @brief 
      *  
      *  @param [in] idea Description for idea
      *  @param [in] args Description for args
      *  @return Return description
      *  
-     *  @details 
+     *  @details args.exclude_methods, args.truncate_methods, args.exclude_children
      */
     idea_to_yaml: function(idea, args){
       var ic = this.idea_to_ideacode(idea, args);
       return jsyaml.load(ic);
     },
-
-  // AA: show how this is used, what are the args?
     /**
-     *  @brief Shallow-meld multiple objects (arguments) into destination
+     *  @brief 
      *  
      *  @param [in] idea Description for idea
      *  @param [in] args Description for args
      *  @return Return description
      *  
-     *  @details 
+     *  @details args.exclude_methods, args.truncate_methods, args.exclude_children
      */
     idea_to_ideacode: function(idea, args){
 
@@ -2417,7 +2356,7 @@ OnLoad('/doh_js/utils', function($){
       return str;
     },
     /**
-     *  @brief Shallow-meld multiple objects (arguments) into destination
+     *  @brief 
      *  
      *  @param [in] idea   Description for idea
      *  @param [in] indent Description for indent
@@ -2480,9 +2419,8 @@ OnLoad('/doh_js/utils', function($){
 
       return str;
     },
-    // AA: ?
     /**
-     *  @brief Shallow-meld multiple objects (arguments) into destination
+     *  @brief 
      *  
      *  @param [in] ideacode Description for ideacode
      *  @return Return description
@@ -2491,6 +2429,63 @@ OnLoad('/doh_js/utils', function($){
      */
     ideacode_to_source: function(ideacode){
       return 'New(' + ideacode + ');\n';
+    },
+
+    // AA: general utility?
+    // USED BY: we don't really seem to use these anymore...
+    array_move: function(array, from_index, to_index) {
+      array.splice(to_index, 0, array.splice(from_index, 1)[0]);
+      return array;
+    },
+    /**
+     *  @brief return items from array that pass (callback == !inverse)
+     *  
+     *  @param [in] array    [array] to search
+     *  @param [in] callback [function] to call for each key in array
+     *  @param [in] inverse  [bool] invert the result of each callback? defaults to false
+     *  @return Return description
+     *  
+     *  @details Old method used by array_unique for meld_arrays. No longer in use in core.
+     */
+    grep: function( array, callback, inverse ) {
+      var ret = [];
+      // Go through the array, only saving the items
+      // that pass the validator function
+      for ( var i = 0, length = array.length; i < length; i++ ) {
+        if ( !inverse !== !callback( array[ i ], i ) ) {
+          ret.push( array[ i ] );
+        }
+      }
+      return ret;
+    },
+    /**
+     *  @brief return an array filtered of duplicates
+     *  
+     *  @param [in] arr Description for arr
+     *  @return Return description
+     *  
+     *  @details Old method used by meld_arrays. No longer in use in core.
+     */
+    array_unique: function(array){
+      // reduce the array to contain no dupes via grep/in_array
+      return Doh.grep(array,function(value,key){
+          return Doh.in_array(value,array) === key;
+      });
+    },
+    /**
+     *  @brief transpose array values into the keys of a new object
+     *  
+     *  @param [in] array [array] to get values from
+     *  @return new {} object with keys from the array values
+     *  
+     *  @details Very handy transposition tool, but currently unused in core
+     */
+    object_keys_from_array_values: function (array = []){
+      var object = {};
+      for(var i=0; i<array.length; i++){
+        object[array[i]] = true
+      }
+      return object;
     },
 
   });
