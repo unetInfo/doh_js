@@ -1565,7 +1565,7 @@ OnLoad('/doh_js/core', function($){
       //*/
     },
     
-    add_melded_setter: function(object, prop, on_change_callback){
+    observe: function(object, prop, on_change_callback){
       let prop_desc;
       if(SeeIf.IsObjectObject(object)){
         if(SeeIf.IsString(prop)){
@@ -1575,7 +1575,8 @@ OnLoad('/doh_js/core', function($){
             let method_stack = [];
             let melded_method = function(new_value){
               if(val !== new_value){
-                // then set the value to the new value
+                // set the value to the new value
+                // we have to set the val first BEFORE calling the stack or we will recurse on ourself forever
                 val = new_value;
                 // this melder always does the same thing:
                 //  walk the method stack and apply each method to the bound object
@@ -1597,39 +1598,55 @@ OnLoad('/doh_js/core', function($){
               // otherwise, apply the stack we sent in
               method_stack = new_stack;
             };
+            // attach a utility method to remove melded functions from the stack
+            melded_method.remove_melded = function(method){
+              method_stack.splice(method_stack.indexOf(method), 1);
+            };
             
             Object.defineProperty(object, prop, {
               get: function(){return val;},
               set: melded_method,
-              enumerable: SeeIf.IsEnumerable(object[prop]),
+              enumerable: SeeIf.IsEnumerable(val),
               configurable: true,
             });
           }
+          // we have to get (or re-get) the prop_desc here in case the melded setter already exists
           prop_desc = Object.getOwnPropertyDescriptor(object, prop);
           prop_desc.set.meld_stack.push(on_change_callback);
+          return function(){
+            prop_desc.set.remove_melded(on_change_callback);
+          }
         }
       }
     },
     // tell two things to have their defined prop mimic the other
     // optionally provide a callback to be run when either side changes their mimicked prop
     mimic: function(my_thing, my_prop, their_thing, their_prop, on_change_callback){
-      //if(SeeIf.NotLiteral) Doh.debug('Doh.mimic tried to mimic a NotLiteral property:',...arguments);
+      
+      // syncing demands initial state to be synced BEFORE setters are defined
+      // this keeps the initial set from echoing forever
       if(my_thing[my_prop] !== their_thing[their_prop]) my_thing[my_prop] = their_thing[their_prop];
-      let my_prop_desc, their_prop_desc;
       
       let my_set = function(new_value, prop, object){
+        // i only get run if my value changed
         their_thing[their_prop] = new_value;
         if(on_change_callback) on_change_callback(my_thing, my_prop, their_thing, their_prop, new_value);
-      };
-      
-      let their_set = function(new_value){
+      },
+      their_set = function(new_value){
+        // i get run if THEIR value changed, we still have to check
+        // if the new value is actually new to us too.
         if(new_value !== my_thing[my_prop]){
+          // if it IS new to us, then setting it will trigger the setters
           my_thing[my_prop] = new_value;
         }
+      },
+      my_remover = Doh.observe(my_thing, my_prop, my_set),
+      their_remover = Doh.observe(their_thing, their_prop, their_set);
+      // return a function that can be called to remove both callbacks
+      return function(){
+        my_remover();
+        their_remover();
       };
-      
-      Doh.add_melded_setter(my_thing, my_prop, my_set);
-      Doh.add_melded_setter(their_thing, their_prop, their_set);
     },
     
     // AA:  can we develop a system for readability / discovery.   maybe things like this (that return info) should be named "get_meld_method_order" or "meld_method_order_to_array"
