@@ -1565,15 +1565,22 @@ OnLoad('/doh_js/core', function($){
       //*/
     },
     
+    // call a callback any time a property on an object changes
     observe: function(object, prop, on_change_callback){
       let prop_desc;
+      // we can only set this system up on objectobjects
       if(SeeIf.IsObjectObject(object)){
-        if(SeeIf.IsString(prop)){
+        // for now, the only valid prop indicator is a string
+        // observe requires a function for callback or the observation isn't seen
+        if(SeeIf.IsString(prop))if(SeeIf.IsFunction(on_change_callback)){
+          // check for a setter already there
           prop_desc = Object.getOwnPropertyDescriptor(object, prop);
           if(SeeIf.NotFunction(prop_desc.set)){
+            // bind the original value to a new local variable
             let val = object[prop];
             let method_stack = [];
             let melded_method = function(new_value){
+              // use the original value storage as intended, even though these closures are all that can see it
               if(val !== new_value){
                 // set the value to the new value
                 // we have to set the val first BEFORE calling the stack or we will recurse on ourself forever
@@ -1582,7 +1589,7 @@ OnLoad('/doh_js/core', function($){
                 //  walk the method stack and apply each method to the bound object
                 let len = method_stack.length;
                 for(let i=0;i<len;i++){
-                  method_stack[i](new_value, prop, object);
+                  method_stack[i](object, prop, new_value);
                 }
               }
             };
@@ -1604,15 +1611,26 @@ OnLoad('/doh_js/core', function($){
             };
             
             Object.defineProperty(object, prop, {
+              // if we have a setter, then we must have a getter
+              // our fancy getter retrieves the original value storage, which
+              // is the thing that gets updated.
               get: function(){return val;},
               set: melded_method,
+              // don't break enumerable stuff
               enumerable: SeeIf.IsEnumerable(val),
+              // don't break our ability to configure
               configurable: true,
             });
           }
           // we have to get (or re-get) the prop_desc here in case the melded setter already exists
           prop_desc = Object.getOwnPropertyDescriptor(object, prop);
+          if(!prop_desc.set.meld_stack){
+            Doh.debug('Doh.observe found a non-Doh setter for:',prop,'on object:',object,'with callback:',on_change_callback);
+            return function(){};
+          }
+          // just push our on_change onto the meld_stack. 
           prop_desc.set.meld_stack.push(on_change_callback);
+          // return a function that can be called to remove the on_change callback
           return function(){
             prop_desc.set.remove_melded(on_change_callback);
           }
@@ -1627,12 +1645,12 @@ OnLoad('/doh_js/core', function($){
       // this keeps the initial set from echoing forever
       if(my_thing[my_prop] !== their_thing[their_prop]) my_thing[my_prop] = their_thing[their_prop];
       
-      let my_set = function(new_value, prop, object){
+      let my_set = function(object, prop, new_value){
         // i only get run if my value changed
         their_thing[their_prop] = new_value;
         if(on_change_callback) on_change_callback(my_thing, my_prop, their_thing, their_prop, new_value);
       },
-      their_set = function(new_value){
+      their_set = function(object, prop, new_value){
         // i get run if THEIR value changed, we still have to check
         // if the new value is actually new to us too.
         if(new_value !== my_thing[my_prop]){
