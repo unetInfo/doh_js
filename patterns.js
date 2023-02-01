@@ -1613,12 +1613,13 @@ OnLoad('/doh_js/core', function($){
     // tell two things to have their defined prop mimic the other
     // optionally provide a callback to be run when either side changes their mimicked prop
     mimic: function(my_thing, my_prop, their_thing, their_prop, on_change_callback){
+      //if(SeeIf.NotLiteral) Doh.debug('Doh.mimic tried to mimic a NotLiteral property:',...arguments);
       if(my_thing[my_prop] !== their_thing[their_prop]) my_thing[my_prop] = their_thing[their_prop];
       let my_prop_desc, their_prop_desc;
       
       let my_set = function(new_value, prop, object){
         their_thing[their_prop] = new_value;
-        on_change_callback(new_value, prop, object);
+        if(on_change_callback) on_change_callback(my_thing, my_prop, their_thing, their_prop, new_value);
       };
       
       let their_set = function(new_value){
