@@ -608,30 +608,15 @@ OnLoad('/doh_js/core', function($){
     
     // AA: clearly another essay is needed here  
     /**
-     *  @brief Allow meld_ideas to be called with multiple ideas: _meld_ideas(dest, idea1, idea2, idea3, ...)
-     *  
-     *  @param [in] destination [object/falsey] an object to modify, or falsey/{} to create a new object and return it
-     *  @return destination
-     *  
-     *  @details 
-     */
-    _meld_ideas: function(destination){
-      for(let i in arguments){
-        if(i === 'length') continue;
-        if(arguments[i] === destination) continue;
-        Doh.meld_ideas(destination, arguments[i]);
-      }
-      return destination
-    },
-    /**
      *  @brief Use Doh's meld_ functions to meld two ideas together.
-     *    Uses destination.melded and idea.melded to define meld and data types for each property.
      *  
      *  @param [in] destination [object] to meld into
      *  @param [in] idea        [object] to meld from
+     *  @param [in] deep_melded [object] should be falsey or an object that describes melded types of properties of each idea
+     *                                    - used primarily to allow deeply melded objects without polluting them with .melded
      *  @return destination
      *  
-     *  @details 
+     *  @details Uses destination.melded and idea.melded (or deep_melded) to define meld and data types for each property.
      */
     meld_ideas:function(destination = {}, idea, deep_melded) {
       let prop_name = '', inner_melded = idea.melded, go_deep, melded_type, idea_prop, idea_melded_type, destination_melded_type;
@@ -643,7 +628,7 @@ OnLoad('/doh_js/core', function($){
         // we only want to know if the destination is going to be overwritten by the idea
         for(prop_name in inner_melded){
           idea_melded_type = inner_melded[prop_name];
-          if(SeeIf.IsObjectObject(idea_melded_type)) idea_melded_type = 'object';
+          if(SeeIf.IsSet(idea_melded_type))if(SeeIf.NotString(idea_melded_type)) idea_melded_type = 'object';
           idea_prop = idea[prop_name];
           if(destination.melded){
             // deal with destination defines a meld type that is different from idea
@@ -675,7 +660,7 @@ OnLoad('/doh_js/core', function($){
       prop_name = '';
       for(prop_name in destination.melded){
         destination_melded_type = destination.melded[prop_name];
-        if(SeeIf.IsObjectObject(destination_melded_type)) destination_melded_type = 'object';
+        if(SeeIf.IsSet(destination_melded_type))if(SeeIf.NotString(destination_melded_type)) destination_melded_type = 'object';
         idea_prop = idea[prop_name];
         // deal with idea has a property of type that is incompatible with destination melded type
         if(SeeIf.IsDefined(idea_prop))if(destination_melded_type)if(!Doh.type_match(idea_prop, destination_melded_type)){
@@ -691,7 +676,7 @@ OnLoad('/doh_js/core', function($){
       prop_name = '';
       for(prop_name in idea){
         melded_type = melded[prop_name];
-        if(SeeIf.IsObjectObject(melded_type)){
+        if(SeeIf.IsSet(melded_type))if(SeeIf.NotString(melded_type)){
           go_deep = true;
           melded_type = 'object';
         } else go_deep = false;
@@ -737,6 +722,24 @@ OnLoad('/doh_js/core', function($){
       return destination;
     },
 
+    /**
+     *  @brief Meld ideas with a special melded descriptor AND multiple ideas
+     *  
+     *  @param [in] special_melded [object] should be falsey or an object that describes melded types of properties of each idea
+     *  @param [in] destination [object/falsey] an object to modify, or falsey/{} to create a new object and return it
+     *  @param [in] arguments[] [idea(s)] to meld onto the destination, using special_melded as a melded_type map
+     *  @return destination
+     *  
+     *  @details deep_meld_ideas(special_melded, dest, idea1, idea2, idea3, ...)
+     */
+    deep_meld_ideas: function(special_melded, destination){
+      for(let i in arguments){
+        if(i == 0 || i === 'length' || arguments[i] === destination) continue;
+        Doh.meld_ideas(destination, arguments[i], special_melded);
+      }
+      return destination;
+    },
+    
     /*
 
                                                                                   
@@ -830,7 +833,7 @@ OnLoad('/doh_js/core', function($){
       let meld_type_name, meld_type_js;
       for(var prop_name in idea.melded){
         meld_type_name = idea.melded[prop_name];
-        if(SeeIf.IsObjectObject(meld_type_name)) meld_type_name = 'object';
+        if(SeeIf.IsSet(meld_type_name))if(SeeIf.NotString(meld_type_name)) meld_type_name = 'object';
         // find out if there is a type mismatch between what .melded thinks the property SHOULD be and what IT IS.
         if(SeeIf.IsDefined(idea[prop_name]))if(!Doh.type_match(idea[prop_name], meld_type_name)){
           Doh.debug('Doh.patterns(',idea.pattern,').',prop_name,' was defined as a melded',meld_type_name,' but is not a',meld_type_name,'.',idea[prop_name],idea);
@@ -1560,6 +1563,72 @@ OnLoad('/doh_js/core', function($){
       }
       return rtn;
       //*/
+    },
+    
+    add_melded_setter: function(object, prop, on_change_callback){
+      let prop_desc;
+      if(SeeIf.IsObjectObject(object)){
+        if(SeeIf.IsString(prop)){
+          prop_desc = Object.getOwnPropertyDescriptor(object, prop);
+          if(SeeIf.NotFunction(prop_desc.set)){
+            let val = object[prop];
+            let method_stack = [];
+            let melded_method = function(new_value){
+              if(val !== new_value){
+                // then set the value to the new value
+                val = new_value;
+                // this melder always does the same thing:
+                //  walk the method stack and apply each method to the bound object
+                let len = method_stack.length;
+                for(let i=0;i<len;i++){
+                  method_stack[i](new_value, prop, object);
+                }
+              }
+            };
+            // track the meld_stack so we can manipulate it
+            melded_method.meld_stack = method_stack;
+            // if we want to update the pointer, we need a closure to access the original scope
+            melded_method.update_meld_stack = function(new_stack){
+              // if we didn't pass a stack
+              if(!new_stack){
+                Doh.debug("[melded_method].update_meld_stack didn't get a new_stack");
+                return;
+              }
+              // otherwise, apply the stack we sent in
+              method_stack = new_stack;
+            };
+            
+            Object.defineProperty(object, prop, {
+              get: function(){return val;},
+              set: melded_method,
+              enumerable: SeeIf.IsEnumerable(object[prop]),
+              configurable: true,
+            });
+          }
+          prop_desc = Object.getOwnPropertyDescriptor(object, prop);
+          prop_desc.set.meld_stack.push(on_change_callback);
+        }
+      }
+    },
+    // tell two things to have their defined prop mimic the other
+    // optionally provide a callback to be run when either side changes their mimicked prop
+    mimic: function(my_thing, my_prop, their_thing, their_prop, on_change_callback){
+      if(my_thing[my_prop] !== their_thing[their_prop]) my_thing[my_prop] = their_thing[their_prop];
+      let my_prop_desc, their_prop_desc;
+      
+      let my_set = function(new_value, prop, object){
+        their_thing[their_prop] = new_value;
+        on_change_callback(new_value, prop, object);
+      };
+      
+      let their_set = function(new_value){
+        if(new_value !== my_thing[my_prop]){
+          my_thing[my_prop] = new_value;
+        }
+      };
+      
+      Doh.add_melded_setter(my_thing, my_prop, my_set);
+      Doh.add_melded_setter(their_thing, their_prop, their_set);
     },
     
     // AA:  can we develop a system for readability / discovery.   maybe things like this (that return info) should be named "get_meld_method_order" or "meld_method_order_to_array"
@@ -2831,10 +2900,6 @@ OnCoreLoaded(Doh.ApplyFixes, function(){
     append_phase:{rename:'html_phase'},
   });
 });
-
-// fix old pattern names
-//OnCoreLoaded(Doh.ApplyFixes, function(){
-//});
 
 OnLoad('/doh_js/html', function($){
   if(Doh.ApplyFixes){
