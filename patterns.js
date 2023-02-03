@@ -1,13 +1,14 @@
+"use strict"
 // this is for loading into a nodejs system
-if(typeof global != 'undefined'){
-  top = global;
-  var Doh = top.Doh = {};
-  var glob = top.glob = {};
-  var SeeIf = top.SeeIf = {};
-  var PatternModuleVictors = top.PatternModuleVictors || {};
+if(typeof global !== 'undefined'){
+  window = global;
+  Doh = window.Doh = {};
+  glob = window.glob = {};
+  SeeIf = window.SeeIf = {};
+  PatternModuleVictors = window.PatternModuleVictors || {};
 }
 
-Doh = Doh || {};
+if(!Doh) Doh = {};
 
 // This has to be very early.
 // we try not to use this now that the url paramater is working
@@ -19,7 +20,6 @@ if(typeof exports != 'undefined') {
 }
 
 /* **** Prepare Doh **** */
-// the most important function in Doh:
 /**
  *  @brief Shallow-meld multiple objects (arguments) into destination
  *  
@@ -80,7 +80,7 @@ OnLoad('/doh_js/see_if', function($){
     // NotNumber refers to values that ARE NOT a number OR ARE NaN (NotaNumber object)
     NotNumber:      (value) => {return (typeof value !== 'number' || isNaN(value)) ;},
     // array refers to values that are actual array datatype
-    IsArray:        (value) => {return Array.isArray(value) ;},
+    IsArray:        (value) => {return Array.isArray(value)?true:false ;},
     // dohobject refers to values that are a complex objectobject which was built with Doh
     IsDohObject:    (value) => {return (InstanceOf?  InstanceOf(value)  :false) ;},
     // objectobject refers to values that are complex objects with named properties. No literals or arrays. 
@@ -95,10 +95,12 @@ OnLoad('/doh_js/see_if', function($){
     IsTrue:         (value) => {return value === true ;},
     // false refers to the binary 0 state (Boolean)
     IsFalse:        (value) => {return value === false ;},
-    // truey referes to values that equal binary 1, even if represented by a different datatype. Truey values include: True, HasValue, 1...[positive numbers]
+    // truey referes to values that equal binary 1, even if represented by a different datatype. Truey values include: True, 'any string', any_object, HasValue, 1...[positive numbers]
     IsTruey:        (value) => {return value?true:false ;},
     // falsey refers to values that equal binary 0, even if represented by a different datatype. Falsey values include: Undefined, Null, False, '', 0, -1...[negative numbers]
     IsFalsey:       (value) => {return value?false:true ;},
+    // nullish refers to effectively the opposite of defined
+    IsNullish:      (value) => {return (typeof value === 'undefined' || value === null) ;},
     // arraylike refers to values that act like arrays in every way. they can be used by native array methods
     IsArrayLike:    (value) => {return (Array.isArray(value) || ((typeof value !== 'undefined' && value !== null) && typeof value[Symbol.iterator] === 'function') && typeof value.length === 'number' && typeof value !== 'string') ;},
     // iterable refers to values that define a Symbol iterator so that native methods can iterate over them
@@ -107,7 +109,7 @@ OnLoad('/doh_js/see_if', function($){
     // all objects can be iterated in a for loop and all arrays are objects too.
     IsEnumerable:   (value) => {return (typeof value === 'object' && value !== null) ;},
     // literal refers to values that are static literals. Strings, booleans, numbers, etc. Basically anything that isn't an object or array. flat values.
-    IsLiteral:      (value) => {return (typeof value !== 'object' || value === null) ;},
+    IsLiteral:      (value) => {return ((typeof value !== 'object' && typeof value !== 'function') || value === null) ;},
     // emptyobject refers to values that are objectobject or arraylike but have no properties of their own. Will return true for both {} and [], as well as IsFalsey.
     IsEmptyObject:  (value) => {
       // falsey is a form of empty
@@ -120,13 +122,15 @@ OnLoad('/doh_js/see_if', function($){
       return true;
     },
     // keysafe refers to values that are safe for use as the key name in a complex objectobject
-    IsKeySafe:      (value) => {return (typeof value === 'string' || (typeof value === 'number' && !isNaN(value)) || value === null) ;},
+    IsKeySafe:      (value) => {return (typeof value === 'string' && value !== '') ;},
     // emptystring refers to values that are string literals with no contents
     IsEmptyString:  (value) => {return value === '' ;},
     // hasvalue refers to values that are defined and notemptystring. specifically this includes 0 and negative numbers where truey does not.
     HasValue:       (value) => {return ((typeof value !== 'undefined' && value !== null) && value !== '') ;},
     // anything refers to values of any type. it is specifically useful when SeeIf is being used as a filtering library.
     IsAnything:     (value) => {return true ;},
+    
+    IsStringAndHasValue: (value)=>{return (typeof value === 'string' && value !== '') ;},
     
     // Not conditions, interestingly different
     NotUndefined:   (value) => {return typeof value !== 'undefined' ;},
@@ -152,17 +156,19 @@ OnLoad('/doh_js/see_if', function($){
   // some aliases
   Doh.meld_objects(SeeIf, {
     NotDefined:SeeIf.IsUndefined,
+    NotNullish:SeeIf.IsDefined,
     NotFalsey:SeeIf.IsTruey,
     NotTruey:SeeIf.IsFalsey,
     IsSet:SeeIf.IsDefined,
     NotSet:SeeIf.IsUndefined,
   });
+  
 }, 'SeeIf');
 
 OnLoad('/doh_js/core', function($){
   
   // if included, we remove SeeIf. It should not be added to
-  if(top.DohWatch)if(DohWatch.SeeIf){
+  if(window?.DohWatch)if(DohWatch.SeeIf){
     DohWatch.SeeIf = false;
     delete DohWatch.SeeIf;
   }
@@ -172,7 +178,7 @@ OnLoad('/doh_js/core', function($){
     // in nodejs, the normal OnLoad is replaced with a far simpler one that needs this set for core.
     ModuleCurrentlyRunning: '/doh_js/core',
     // this remains to be updated, Doh still hasn't really grasped versioning
-    Version:'2.0a',
+    Version:'2.0.2a',
     // allow storage of patterns
     Patterns: {},
     // keyed by pattern, the name of the module that made it (or false if made after load)
@@ -186,13 +192,14 @@ OnLoad('/doh_js/core', function($){
      *  with it's contents
      */
     MeldedTypeMatch: {
-      'method':SeeIf.IsFunction,
-        'phase':SeeIf.IsFunction,
-      'exclusive':SeeIf.IsAnything,
-      'static_reference':SeeIf.IsEnumerable,
-      'object':SeeIf.IsObjectObject,
-        'idea':SeeIf.IsObjectObject,
-      'array':SeeIf.IsArray,
+      'method':           SeeIf.IsFunction,
+        'phase':            SeeIf.IsFunction,
+      'object':           SeeIf.IsObjectObject,
+        'idea':             SeeIf.IsObjectObject,
+      'array':            SeeIf.IsArray,
+      //'static_reference': SeeIf.IsEnumerable,
+      'static': SeeIf.IsAnything,
+      'exclusive':          SeeIf.IsAnything,
     },
     /**
      *  Default values used by New to provide automatic defaults for melded properties
@@ -395,8 +402,7 @@ OnLoad('/doh_js/core', function($){
      *  @param [in] array [array] to search
      *  @return true if item is in array
      *  
-     *  @details Used by Doh.array_unique to filter arrays of duplicates
-     *           NOTE: array_unique is required by meld_arrays
+     *  @details Used by Doh.meld_arrays to filter arrays of duplicates
      */
     in_array: function( item, array ) {
       
@@ -445,7 +451,7 @@ OnLoad('/doh_js/core', function($){
     },
     
     /**
-     *  @brief similar to meld_arrays but always melds onto a fresh array.
+     *  @brief similar to meld_arrays but always melds onto a new array.
      *  
      *  @param [in] ...arguments arrays or values that will be flattened into a new array
      *  @return new melded array
@@ -453,7 +459,7 @@ OnLoad('/doh_js/core', function($){
      *  @details specifically differs from regular meld_arrays because it doesn't modify either argument
      */
     meld_into_array: function(){
-      /*
+      /* This single line is very potent, let's break it down:
       // Set is unique by default, it is also order-of-insertion.
       // arguments isn't a real array, it's a gimped one with no methods, so we have to use Array.prototype to get .flat()
       // flat() takes an array of arrays or values and flattens into a single array of all the values in each nest.
@@ -478,9 +484,10 @@ OnLoad('/doh_js/core', function($){
      *  ['pattern_name_1', 'pattern_name_2']
      *  {0:'pattern_name_1', 1:'pattern_name_2'}
      *  {'pattern_name_1':true, 'pattern_name_2':true}
+     *  {'pattern_name_1':true, 'pattern_name_2':'other truey value'}
      *  
-     *  *RESULTS IN:* {'pattern_name_1':true, 'pattern_name_2':true}
-     *  *OR* {}
+     *  *RESULTS IN:* {'pattern_name_1':true, 'pattern_name_2':'other truey value'}
+     *  *OR* at least:{} if nothing valid is sent in
      **/
     meld_into_objectobject: function(){
       // we always need a new object
@@ -598,7 +605,6 @@ OnLoad('/doh_js/core', function($){
     },
 
     /*
-
                                ,,        ,,     ,,        ,,                           
                              `7MM      `7MM     db      `7MM                           
                                MM        MM               MM                           
@@ -607,11 +613,8 @@ OnLoad('/doh_js/core', function($){
       MM    MM    MM 8M""""""  MM 8MI    MM     MM 8MI    MM 8M""""""  ,pm9MM  `YMMMa. 
       MM    MM    MM YM.    ,  MM `Mb    MM     MM `Mb    MM YM.    , 8M   MM  L.   I8 
     .JMML  JMML  JMML.`Mbmmd'.JMML.`Wbmd"MML. .JMML.`Wbmd"MML.`Mbmmd' `Moo9^Yo.M9mmmP' 
-
-
-  */        
-    
-    // AA: clearly another essay is needed here  
+    */
+    // the most important function in Doh:
     /**
      *  @brief Use Doh's meld_ functions to meld two ideas together.
      *  
@@ -645,7 +648,7 @@ OnLoad('/doh_js/core', function($){
               if(destination.melded[prop_name] != idea_melded_type){
                 Doh.debug('Doh.meld_ideas(',destination,',',idea,'). destination.melded[',prop_name,']:',destination.melded[prop_name],'will be overwritten by idea.melded[',prop_name,']:',idea_melded_type);
               }
-              if(idea_melded_type === 'exclusive' || idea_melded_type === 'static_reference'){
+              if(idea_melded_type === 'exclusive' || idea_melded_type === 'static'){
                 // if we made it here then the check above has ensured we agree on the melded type.
                 // However!! destination already reserved it, this is an error.
                 Doh.debug('Doh.meld_ideas(',destination,',',idea,') found that a destination and idea both want the same property:',prop_name,'to be ',idea_melded_type,'.');
@@ -691,7 +694,7 @@ OnLoad('/doh_js/core', function($){
         } else go_deep = false;
         idea_prop = idea[prop_name];
         if(idea_prop !== undefined && idea_prop !== destination[prop_name]){
-          if(melded_type === 'method' || melded_type === 'phase' || melded_type === 'exclusive' || melded_type === 'static_reference'){
+          if(melded_type === 'method' || melded_type === 'phase' || melded_type === 'exclusive' || melded_type === 'static'){
             // melded methods and phases will be updated outside of meld. our job is just to copy idea onto destination.
             // exclusive properties only come from first idea that claims it, this 'ownership' is resolved with thrown errors above, so we always copy.
             destination[prop_name] = idea_prop;
@@ -799,6 +802,7 @@ OnLoad('/doh_js/core', function($){
       if(!idea) idea = {};
       // otherwise the arguments are as indicated
       
+      // allow doh to watch the pattern name and replace it if needed
       if(Doh.ApplyFixes){
         if(Doh.WatchedPatternNames[name]){
           idea.pattern = name = Doh.look_at_pattern_name(name);
@@ -872,7 +876,6 @@ OnLoad('/doh_js/core', function($){
       return idea;
     },
     
-    // AA: Describe how it might be used by a developer?
     /**
      *  @brief Mix a pattern from Patterns into destination
      *  
@@ -900,6 +903,25 @@ OnLoad('/doh_js/core', function($){
           
           // this section is only run if we are mixing into an already built object
           if(destination.machine){
+            /*
+            // before we update methods, lets find out about phases that have run
+            let type;
+            for(let prop_name in destination.melded){
+              type = destination.melded[prop_name];
+              if(type === 'phase'){
+                // meld_ideas validates melded types so we don't have to.
+                if(destination.inherited[pattern][prop_name]){
+                  // the newly inherited pattern has a phase
+                  if(destination.machine.completed[prop_name]){
+                    // the machine has already run this phase
+                    // NOTE: late mixins will ignore pre_ methods on phases that have already run
+                    destination.inherited[pattern][prop_name].apply(this);
+                  }
+                  // otherwise, now that we are mixed in, we will participate in phases
+                }
+              }
+            }
+            */
             // we only want to update melds if the object is already built
             // inherited is only present on instances, patterns don't have it
             // and neither do plain ideas
@@ -911,8 +933,7 @@ OnLoad('/doh_js/core', function($){
       }
       return destination;
     },
-        
-    // AA: Surely this merits a small dissertation
+
     /**
      *  @brief Return a collection of all ancestor dependencies for [inherits]
      *  
@@ -1376,7 +1397,7 @@ OnLoad('/doh_js/core', function($){
       // update the meld methods to include the inherited idea we just added
       Doh.update_meld_methods(object);
       
-      // now we can add the handlers, since the object is finished being constructed and is ready to go through phases
+      // now we can add the debug handlers, since the object is finished being constructed and is ready to go through phases
       if(Doh.DebugMode){
         if(proxy){
           // use a fancy melded_method to apply our stack of setters to each set call
@@ -1450,7 +1471,7 @@ OnLoad('/doh_js/core', function($){
                 //  walk the method stack and apply each method to the bound object
                 let len = method_stack.length;
                 for(let i=0;i<len;i++){
-                  method_stack[i](object, prop, new_value);
+                  method_stack[i].apply(object, [object, prop, new_value]);
                 }
               }
             };
@@ -1520,7 +1541,7 @@ OnLoad('/doh_js/core', function($){
       let my_set = function(object, prop, new_value){
         // i only get run if my value changed
         their_thing[their_prop] = new_value;
-        if(on_change_callback) on_change_callback(my_thing, my_prop, their_thing, their_prop, new_value);
+        if(on_change_callback) on_change_callback.apply(my_thing, my_thing, my_prop, their_thing, their_prop, new_value);
       },
       their_set = function(object, prop, new_value){
         // i get run if THEIR value changed, we still have to check
@@ -1709,9 +1730,9 @@ OnLoad('/doh_js/core', function($){
     
   });
   /* **** Doh Object Ready **** */
-  Patterns = Doh.Patterns;
-  Pattern = Doh.pattern;
-  New = Doh.New;
+  window.Patterns = Doh.Patterns;
+  window.Pattern = Doh.pattern;
+  window.New = Doh.New;
   /**
    *  @brief determine if an object has had a pattern mixed into it
    *  
@@ -1722,7 +1743,7 @@ OnLoad('/doh_js/core', function($){
    *  @details 
 
    */
-  InstanceOf = Doh.InstanceOf = function(object, pattern){
+  window.InstanceOf = Doh.InstanceOf = function(object, pattern){
     pattern = pattern || 'object';
     if(object)if(object.inherited)if(object.inherited[pattern]) return true;
     return false;
@@ -1752,23 +1773,44 @@ OnLoad('/doh_js/core', function($){
     },
     // ensure that we are the base object phase
     object_phase: function() {
-      // find any properties that are ideas
+      let this_prop
+      // object phase needs a final chance to loop over it's properties before everyone gets to go
       for(var prop_name in this) {
         if(prop_name === 'prototype' || prop_name === '__proto__') continue; // sometimes these pop up. iterating 'this' is dangerous for some reason
+        this_prop = this[prop_name];
+        // Check for properties that are themselves ideas waiting to be built
         // nest the if's for speed
         // it has to exist, have .pattern, not have .machine and not have .skip_auto_build.
         // check existance, check for pattern, check for if we have been built already, check for wanting to be ignored
-        if(this[prop_name])if(this[prop_name].pattern)if(this[prop_name].pattern !== 'idea')if(!this[prop_name].machine)if(!this[prop_name].skip_auto_build){
+        if(this_prop)if(this_prop.pattern)if(this_prop.pattern !== 'idea')if(!this_prop.machine)if(!this_prop.skip_auto_build){
           // only things that have auto_built should have this
           this.auto_built = this.auto_built || {};
           // tell the thing that we are auto building it. this allows the thing to react to being auto_built if needed
-          this[prop_name]._auto_built_by = this;
+          this_prop._auto_built_by = this;
           // tell the thing how to reference itself from it's auto-built parent (thing._auto_built_by[thing._auto_built_by_name] = thing)
-          this[prop_name]._auto_built_by_name = prop_name;
+          this_prop._auto_built_by_name = prop_name;
           // for instance, auto_building only runs to object phase. if further or 'final' phase is desired, run .machine_properties(phase)
-          this[prop_name] = New(this[prop_name], 'object_phase');
+          this_prop = New(this_prop, 'object_phase');
           // add our new reference to auto_built
-          this.auto_built[prop_name] = this[prop_name];
+          this.auto_built[prop_name] = this_prop;
+        }
+        
+        // check for static properties and connect them to their respective pattern statics
+        if(this.melded[prop_name] === 'static'){
+          // someone wanted us to eventually sync with a pattern static
+          for(let pattern in this.inherited){
+            if(pattern === 'idea'){
+              Doh.debug("You can't set static in an idea. Nothing else will follow it.");
+              continue;
+            }
+            // this only works if the value is not undefined
+            if(SeeIf.IsSet(this.inherited[pattern][prop_name])){
+              // make me mimic the pattern static
+              Doh.mimic(this, prop_name, this.inherited[pattern], prop_name);
+              // no need to carry on, there can only be one pattern to claim a static or exclusive
+              break;
+            }
+          }
         }
       }
     },
@@ -1784,7 +1826,6 @@ OnLoad('/doh_js/core', function($){
                                                                  
                                                              
     */                                                                                                          
-    // change param name to inherits to indicate a inherits type array
     /**
      *  @brief reduce an object to it's 'ideal' state based on a list of
      *         patterns it inherits from
@@ -1832,6 +1873,20 @@ OnLoad('/doh_js/core', function($){
         }
       }
       return new_idea;
+    },
+    toIdea: function(inherits) {
+      // try to turn this into an idea
+      // compile the inherited ideas into a gimped default object
+      let new_idea = {}, prop_name, prop;
+      
+      inherits = Doh.meld_into_objectobject(inherits || this.inherited);
+      for(let pattern in inherits){
+        prop_name = '';
+        for(prop_name in this.inherited[pattern]){
+          prop = this.inherited[pattern][prop_name];
+          
+        }
+      }
     },
     
     /**
@@ -2020,7 +2075,7 @@ OnLoad('/doh_js/core', function($){
       // we need to populate the children ideas prior to building
       let old_melded = this.melded;
       this.melded = {};
-      for(prop_name in old_melded){
+      for(let prop_name in old_melded){
         if(prop_name == 'parenting_phase') this.melded.fab_phase = 'phase';
         if(prop_name == 'fab_phase') continue;
         this.melded[prop_name] = old_melded[prop_name];
@@ -3401,7 +3456,7 @@ OnLoad('/doh_js/html', function($){
       Doh.warn('Tried to start a "false" animation queue. (i.e.: Doh.run_animation_queue(). A queue_name is required)');
       return;
     }
-    queue = Doh.AnimationQueues[queue_name];
+    let queue = Doh.AnimationQueues[queue_name];
     if(Doh._AnimationQueues[queue_name]){
 
       if(!Doh._AnimationQueues[queue_name][0]){

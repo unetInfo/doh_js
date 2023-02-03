@@ -1,12 +1,13 @@
+"use strict"
 console.group('Doh Core');
 // simply add a property to DohWatch with a reference to the object you want "watched"
 // DohWatch.MyWatchedName = MyWatchedObject;
-var DohWatch = DohWatch || {top:top};
+var DohWatch = DohWatch || {window:window};
 // A global store of diffs between each DohWatchUpdate()
 // keyed by MyWatchedName
 var DohWatchDiffs = {};
 
-PatternModuleVictors = {
+window.PatternModuleVictors = {
   'left_labelled_check2_settings':'/modules/tamper/tamper_ui_core',
   'sim_ui_select_settings':'/modules/tamper/tamper_ui_core',
 };
@@ -28,7 +29,7 @@ var DohWatchUpdate = function(name){
     DohWatchDiffs[watching] = DohWatchDiffs[watching] || {};
     DohWatchDiffs[watching][diffName] = {};
     
-    // get last and current entries for top
+    // get last and current entries for window
     lastWatchEntry = DohWatchUpdate.Cache[watching][DohWatchUpdate.PreviousName];
     // this is where we make the new cache entry
     currentWatchEntry = DohWatchUpdate.Cache[watching][diffName] = Object.assign({}, DohWatch[watching]);
@@ -37,13 +38,13 @@ var DohWatchUpdate = function(name){
     if(lastWatchEntry){
       for (var propName in currentWatchEntry){
         if(typeof lastWatchEntry[propName] === 'undefined'){
-          // current top has a property that last top doesn't
+          // current window has a property that last window doesn't
           DohWatchDiffs[watching][diffName][propName] = currentWatchEntry[propName];
           continue;
         }
         if(lastWatchEntry[propName] != currentWatchEntry[propName]){
-          // current top has changed a property since last top.
-          // we need this because all writes to top is what we are watching
+          // current window has changed a property since last window.
+          // we need this because all writes to window is what we are watching
           DohWatchDiffs[watching][diffName][propName] = currentWatchEntry[propName];
         }
       }
@@ -62,18 +63,19 @@ DohWatchUpdate.PreviousName = '';
 
 
 // this is fast and will impact nothing
-DohWatchUpdate = function(){};
+// uncomment to ignore DohWatch
+//DohWatchUpdate = function(){};
 
 // 
 DohWatchUpdate('init');
 
 // hand populate the initial cache diff with our DohWatch stuff since we can't record it until after it's happened
-//DohWatchDiffs.top['1 init'] = {DohWatch:DohWatch,DohWatchDiffs:DohWatchDiffs,DohWatchUpdate:DohWatchUpdate};
+DohWatchDiffs.window['1 init'] = {DohWatch:DohWatch,DohWatchDiffs:DohWatchDiffs,DohWatchUpdate:DohWatchUpdate};
 
 /*
  * Libraries and Polyfills related to deploy.js
  */
-
+/*
 // poly-fill a Function.bind() method because without it, we don't work.
 if (!Function.prototype.bind) {
   Function.prototype.bind = function (oThis) {
@@ -98,6 +100,7 @@ if (!Function.prototype.bind) {
     return fBound;
   };
 }
+*/
 
 /**
  * Script loading is difficult thanks to IE. We need callbacks to fire
@@ -369,7 +372,7 @@ window.LoadDohFrom = window.LoadDohFrom || '';
 // that to prep Doh. This allows apps to pre-load
 // their own bundles and disable core features.
 // we enclose this in a self-calling function to keep local vars from
-// polluting top
+// polluting window
 (function(){
   var LDB = window.LoadDohBundles,
   default_bundles = {
@@ -405,11 +408,12 @@ window.LoadDohFrom = window.LoadDohFrom || '';
   // exist and we had to create it
   // after this, it will be an object of bundles or a malformed object
 })();
-top.Doh_Start_Time = performance.now();
+
+window.Doh_Start_Time = performance.now();
 // Create the Doh Global Object. This should be a plain object in the global scope
-// do NOT put this directly on top, let it bubble up.
+// do NOT put this directly on window, let it bubble up.
 // do NOT allow this to be overloaded, create it explicitly here.
-Doh = {
+let Doh = window.Doh = {
   // show more errors and warnings, allow debug logs to throw breakpoints and most importantly...
   // Proxy DohObjects.
   DebugMode: false,
@@ -726,7 +730,6 @@ Doh.load_css = Doh.load_script;
 let paramString = location.href.split('?')[1],
 queryString = new URLSearchParams(paramString),
 param_key, param_value;
-
 for (let pair of queryString.entries()) {
   param_key = pair[0];
   param_value = pair[1];
@@ -909,14 +912,14 @@ window.OnLoad.require = function(module_name, src, callback){
 
 // append LoadDohFrom, if defined, to paths.
 // This is the "Doh Root Path" or "Doh Root Slash"
-DohPath = function(p) {
+window.DohPath = function(p) {
   return (window.LoadDohFrom?(window.LoadDohFrom + p):p);
 }
 
-// helper method for top cleanup
-ShowTopCacheDamage = function() {
+// helper method for window cleanup
+window.ShowTopCacheDamage = function() {
   DohWatchUpdate('current');
-  console.log('top has ',Object.keys(top).length,'entries!');
+  console.log('window has ',Object.keys(window).length,'entries!');
 }
 
 // A global that allow us to skip the load_doh() call below
