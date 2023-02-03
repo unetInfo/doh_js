@@ -1541,7 +1541,7 @@ OnLoad('/doh_js/core', function($){
       let my_set = function(object, prop, new_value){
         // i only get run if my value changed
         their_thing[their_prop] = new_value;
-        if(on_change_callback) on_change_callback.apply(my_thing, my_thing, my_prop, their_thing, their_prop, new_value);
+        if(on_change_callback) on_change_callback.apply(my_thing, [my_thing, my_prop, their_thing, their_prop, new_value]);
       },
       their_set = function(object, prop, new_value){
         // i get run if THEIR value changed, we still have to check
