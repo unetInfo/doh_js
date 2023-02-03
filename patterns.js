@@ -1790,9 +1790,9 @@ OnLoad('/doh_js/core', function($){
           // tell the thing how to reference itself from it's auto-built parent (thing._auto_built_by[thing._auto_built_by_name] = thing)
           this_prop._auto_built_by_name = prop_name;
           // for instance, auto_building only runs to object phase. if further or 'final' phase is desired, run .machine_properties(phase)
-          this_prop = New(this_prop, 'object_phase');
+          this[prop_name] = New(this_prop, 'object_phase');
           // add our new reference to auto_built
-          this.auto_built[prop_name] = this_prop;
+          this.auto_built[prop_name] = this[prop_name];
         }
         
         // check for static properties and connect them to their respective pattern statics
