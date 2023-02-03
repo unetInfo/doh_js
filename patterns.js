@@ -2002,6 +2002,24 @@ OnLoad('/doh_js/core', function($){
         this.children[i] = New(this.children[i], phase);
       }
     },
+    parentalFunction: function(function_name) {
+      let par = this.parent;
+      while(par) {
+        if(SeeIf.IsFunction(par[function_name]))
+          return par[function_name].bind(par);
+        par = par.parent;
+      }
+      return function(){Doh.warn('no parental function:',function_name)};
+    },
+    parentalProperty: function(property_name) {
+      let par = this.parent;
+      while(par) {
+        if(SeeIf.IsDefined(par[property_name]))
+          return par[property_name];
+        par = par.parent;
+      }
+      return function(){Doh.warn('no parental property:',property_name)};
+    },    
   });
 
   //fab_iterator = null;
