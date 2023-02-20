@@ -27,12 +27,8 @@ if(typeof exports != 'undefined') {
  *  @param [in] ...arguments  [object]        all additional paramaters will be added in the order they are passed so that the last passed will override everyone else.
  *  @return destination
  *  
- *  @details meld_objects is special for a few specific reasons:
- *           1. destination is both modified and returned. This means that passing a plain object 
- *              or falsey value first will make a new shallow-copy of all other paramaters
- *           2. it doesn't loop over destination. This means that meld_objects(object1, object1, object1) will
- *              have no loops and simply return object
- *           3. it has no other special call outs or references, making it very efficient.
+ *  @details Over the years, meld_objects has been wholly replaced with the more optimized Object.assign.
+ *           They are identical in purpose and implementation.
  */
 Doh.meld_objects = Object.assign;
 
@@ -198,7 +194,7 @@ OnLoad('/doh_js/core', function($){
         'idea':             SeeIf.IsObjectObject,
       'array':            SeeIf.IsArray,
       //'static_reference': SeeIf.IsEnumerable,
-      'static': SeeIf.IsAnything,
+      'static':           SeeIf.IsAnything,
       'exclusive':          SeeIf.IsAnything,
     },
     /**
@@ -211,7 +207,6 @@ OnLoad('/doh_js/core', function($){
         'idea':{},
       'array':[],
     },
-    
     /**
      *  @brief return the SeeIf primative for value
      *  
@@ -251,7 +246,6 @@ OnLoad('/doh_js/core', function($){
       throw Doh.error("SeeIf couldn't find a type for:'",value,"'");
       return undefined;
     },
-    
     /**
      *  @brief Match value against melded types and SeeIf to find out if it matches
      *         a melded type or SeeIf method
@@ -270,7 +264,6 @@ OnLoad('/doh_js/core', function($){
 
       return false;
     },
-
     /**
      *  @brief produce a list of all SeeIf results for value
      *  
@@ -420,7 +413,6 @@ OnLoad('/doh_js/core', function($){
 
       return -1;
     },
-    
     /**
      *  @brief Concatenate array onto destination, removing duplicates from array.
      *  
@@ -449,7 +441,6 @@ OnLoad('/doh_js/core', function($){
       }
       return destination;
     },
-    
     /**
      *  @brief similar to meld_arrays but always melds onto a new array.
      *  
@@ -467,7 +458,7 @@ OnLoad('/doh_js/core', function($){
       // Soooo... flatten all the arguments into a single array, then use Set to make it unique, starting with order-inserted
       //   then spread all remaining values into a new array.
       */
-      return [...new Set(Array.prototype.flat.apply(arguments))];
+      return [...new Set(Array.prototype.flat.apply(arguments, [1]))];
     },
 
     /**
@@ -536,7 +527,6 @@ OnLoad('/doh_js/core', function($){
       }
       return pre_meld_method_order.concat(meld_method_order);
     },
-    
     /**
      *  @brief return a closure for object[method_name] that will call each function in method_stack
      *  
@@ -580,7 +570,6 @@ OnLoad('/doh_js/core', function($){
       };
       return melded_method;
     },
-    
     /**
      *  @brief Update ALL meld_methods and phases of object
      *  
@@ -643,9 +632,11 @@ OnLoad('/doh_js/core', function($){
           if(SeeIf.IsSet(idea_melded_type))if(SeeIf.NotString(idea_melded_type)) idea_melded_type = 'object';
           idea_prop = idea[prop_name];
           if(destination.melded){
+            destination_melded_type = destination.melded[prop_name];
+            if(SeeIf.IsSet(destination_melded_type))if(SeeIf.NotString(destination_melded_type)) destination_melded_type = 'object';
             // deal with destination defines a meld type that is different from idea
-            if(destination.melded[prop_name]){
-              if(destination.melded[prop_name] != idea_melded_type){
+            if(destination_melded_type){
+              if(destination_melded_type != idea_melded_type){
                 Doh.debug('Doh.meld_ideas(',destination,',',idea,'). destination.melded[',prop_name,']:',destination.melded[prop_name],'will be overwritten by idea.melded[',prop_name,']:',idea_melded_type);
               }
               if(idea_melded_type === 'exclusive' || idea_melded_type === 'static'){
@@ -716,9 +707,16 @@ OnLoad('/doh_js/core', function($){
             continue;
           }
           // stack the ifs for speed
-          if(idea_prop.pattern)if(!idea_prop.machine)if(!idea_prop.skip_auto_build){
+          if(idea_prop.pattern)if(!idea_prop.machine)if(!idea_prop.skip_being_built){
             // it's an auto-build property, auto-meld it below
-            destination.melded[prop_name] = melded[prop_name] = 'idea';
+            //destination.melded[prop_name] = 
+            melded[prop_name] = 'idea';
+            if(destination.melded)if(destination.melded[prop_name] !== melded[prop_name]){
+              destination.melded[prop_name] = melded[prop_name];
+            }
+            // CONTROVERSIAL: modify the melded set passed in?
+            // so far this is the only way to allow special melded collections to contain auto-built properties
+            if(inner_melded) inner_melded[prop_name] = melded[prop_name];
           }
           if(melded_type === 'idea'){
             destination[prop_name] = destination[prop_name] || {};
@@ -733,7 +731,6 @@ OnLoad('/doh_js/core', function($){
 
       return destination;
     },
-
     /**
      *  @brief Meld ideas with a special melded descriptor AND multiple ideas
      *  
@@ -822,11 +819,6 @@ OnLoad('/doh_js/core', function($){
         // otherwise just warn about a pattern being replaced
         Doh.warn('(',name,') pattern is being overwritten.\nOriginal Module:',Doh.PatternModule[name],'\nNew Module:',Doh.ModuleCurrentlyRunning);
       }
-      // ApplyFixes tells us to look at pattern creation
-      if(Doh.ApplyFixes){
-        // just generates a bunch of warns and stuff with a few possible fixes. Should not be used in production.
-        Doh.look_at_pattern_keys(idea);
-      }
 
       // clean up the various ways that inherits may be passed
       idea.inherits = Doh.meld_into_objectobject(idea.inherits, inherits);
@@ -872,10 +864,14 @@ OnLoad('/doh_js/core', function($){
         Doh.ModulePatterns[Doh.ModuleCurrentlyRunning] = Doh.ModulePatterns[Doh.ModuleCurrentlyRunning] || [];
         Doh.ModulePatterns[Doh.ModuleCurrentlyRunning].push(name);
       }
+      // ApplyFixes tells us to look at pattern creation
+      if(Doh.ApplyFixes){
+        // just generates a bunch of warns and stuff with a few possible fixes. Should not be used in production.
+        Doh.look_at_pattern_keys(idea);
+      }
       // return the new pattern
       return idea;
     },
-    
     /**
      *  @brief Mix a pattern from Patterns into destination
      *  
@@ -933,7 +929,6 @@ OnLoad('/doh_js/core', function($){
       }
       return destination;
     },
-
     /**
      *  @brief Return a collection of all ancestor dependencies for [inherits]
      *  
@@ -977,7 +972,6 @@ OnLoad('/doh_js/core', function($){
       // instantiate our new class the first and only time it will make an object
       return new DohObject();
     },
-    
     /*
                                    
        ,,                    ,,    ,,        ,,  
@@ -1137,9 +1131,11 @@ OnLoad('/doh_js/core', function($){
       keys, watcher,
       // when we find the functions that watch an object, push to stack so the melder will pick it up
       set_stack = [], get_stack = [];
-      
-      // just generates a bunch of warns and stuff with a few possible fixes. Should not be used in production.
-      Doh.look_at_pattern_keys(idea);
+        
+      // this comes before melding the idea so we can catch watched keys on the way in to apply fixes consistently
+      if(Doh.ApplyFixes)
+        // just generates a bunch of warns and stuff with a few possible fixes. Should not be used in production.
+        Doh.look_at_pattern_keys(idea);
         
       // Do stuff that only happens in DebugMode
       if(Doh.DebugMode){
@@ -1342,7 +1338,7 @@ OnLoad('/doh_js/core', function($){
                     break;
                   case 'run':
                     // run a function if we see the phase, change phase to the return of the function, notify once per pattern
-                    if(!Doh.SeenPhases[watched_phase][object.pattern]) Doh.warn('Watched Phase:',watched_phase,'will run:',command_value,object);
+                    //if(!Doh.SeenPhases[watched_phase][object.pattern]) Doh.warn('Watched Phase:',watched_phase,'will run:',command_value,object);
                     phase = command_value(object, phase);
                     break;
                   case 'log':
@@ -1439,6 +1435,49 @@ OnLoad('/doh_js/core', function($){
     },
 
     /**
+     *  @brief Turn a dot delimited name into a deep reference on 'object'
+     *
+     *  @param [in] object        The object to get a deep reference to
+     *                            Pass true to 'object' and it will return the last key of the split
+     *                            Pass false to 'object' to return the split array
+     *  @param [in] property_str  A dot-delimited string of the nested property on object
+     *  @param [in] count_back    return a reference count_back from the end of the property_str names array
+     *  @return A deep reference into 'object' or the last key of the split
+     *  
+     *  @details Also used by /utils/ajax
+     *            
+     *            
+     *  
+     *            Can also handle arrays in the nested flow. (e.g.: myproperty.subprop.subarray.3.property_of_object_on_an_array.etc
+     *                                                     becomes: myproperty.subprop.subarray[3].property_of_object_on_an_array.etc)
+     */
+    parse_reference: function(object, property_str, count_back = 0){
+      let current_reference = object, current_prop,
+      property_names_array = new String(property_str).split('.');
+      // pass true to 'object' and it will return the last key of the split
+      if(object===true) return property_names_array[property_names_array.length-1];
+      // pass false to 'object' and it will return the split array
+      if(object===false) return property_names_array;
+      // otherwise, use the array to try and walk the reference nesting
+      let num_props = property_names_array.length+count_back;
+      for(let i=0; i < num_props; i++){
+        current_prop = property_names_array[i];
+        if(SeeIf.IsUndefined(current_reference[current_prop])){
+          Doh.debug('Doh.parse_reference(',object,',',property_str,"couldn't find: '",current_prop,"' on the object:",current_reference);
+        }
+        current_reference = current_reference[current_prop];
+    
+        if(SeeIf.IsUndefined(current_reference)){
+          // is it an array? if so, the key could be a number
+          if(SeeIf.IsNumber(Number(current_prop)))
+            current_reference = current_reference[Number(current_prop)]
+        }
+      }
+
+      return current_reference;
+    },
+
+    /**
      *  @brief call a callback any time a property on an object changes
      *  
      *  @param [in] object             [object] the object to watch
@@ -1459,9 +1498,15 @@ OnLoad('/doh_js/core', function($){
           prop_desc = Object.getOwnPropertyDescriptor(object, prop);
           if(SeeIf.NotFunction(prop_desc.set)){
             // bind the original value to a new local variable
-            let val = object[prop];
-            let method_stack = [];
-            let melded_method = function(new_value){
+            // IMPORANT: this 'let val ...' statement creates a closure around 'val' and essentially
+            //           turns it into the actual value storage for this property. The getter gets this
+            //           internal val, and the setter sets it. This allows the property to both store it's own value
+            //           as well as have both getter and setter for access and retrieval.
+            let val = object[prop],
+            // create a local closure for the method stack as well
+            method_stack = [],
+            // and the melded method that we will assign to the setter
+            melded_method = function(new_value){
               // use the original value storage as intended, even though these closures are all that can see it
               if(val !== new_value){
                 // set the value to the new value
@@ -1504,7 +1549,7 @@ OnLoad('/doh_js/core', function($){
               configurable: true,
             });
           }
-          // we have to get (or re-get) the prop_desc here in case the melded setter already exists
+          // we have to get (or re-get) the prop_desc here in case the melded setter already exists or we just made one
           prop_desc = Object.getOwnPropertyDescriptor(object, prop);
           if(!prop_desc.set.meld_stack){
             Doh.debug('Doh.observe found a non-Doh setter for:',prop,'on object:',object,'with callback:',on_change_callback);
@@ -1519,9 +1564,8 @@ OnLoad('/doh_js/core', function($){
         }
       }
     },
-    
     /**
-     *  @brief tell two things to have their defined prop mimic the other
+     *  @brief tell two things to have a property mimic the other
      *  
      *  @param [in] my_thing           [object] the object the callback is relative to
      *  @param [in] my_prop            [string] name of the prop on my_thing to sync
@@ -1530,19 +1574,23 @@ OnLoad('/doh_js/core', function($){
      *  @param [in] on_change_callback [function] optionally a function to run when my_thing[my_prop] is changed
      *  @return a function that will remove the mimic that was just created when called
      *  
-     *  @details optionally provide a callback to be run when either side changes their mimicked prop
+     *  @details shockingly simple
      */
     mimic: function(my_thing, my_prop, their_thing, their_prop, on_change_callback){
       
       // syncing demands initial state to be synced BEFORE setters are defined
-      // this keeps the initial set from echoing forever
+      // IMPORTANT: this keeps the initial set from echoing forever
       if(my_thing[my_prop] !== their_thing[their_prop]) my_thing[my_prop] = their_thing[their_prop];
       
+      // make a setter for our value that will call the on_change_callback when we change
       let my_set = function(object, prop, new_value){
         // i only get run if my value changed
-        their_thing[their_prop] = new_value;
+        // only make their setter system run when actually needed
+        if(their_thing[their_prop] !== new_value) their_thing[their_prop] = new_value;
+        // unlike Doh.observe(), .mimic() does something with the observed value, so the change callback isn't mandatory since it's being wrapped anyway.
         if(on_change_callback) on_change_callback.apply(my_thing, [my_thing, my_prop, their_thing, their_prop, new_value]);
       },
+      // make a setter for their value that will set me if needed, triggering my own observers 
       their_set = function(object, prop, new_value){
         // i get run if THEIR value changed, we still have to check
         // if the new value is actually new to us too.
@@ -1633,11 +1681,15 @@ OnLoad('/doh_js/core', function($){
      */
     look_at_pattern_keys: function(idea){
       let logger_method = 'warn', idea_prop, pattern_prop, command, command_value;
+      // track when we see phases so we can mute flooding the console
+      Doh.SeenKeys = Doh.SeenKeys || {};
       for(pattern_prop in Doh.WatchedKeys){
         idea_prop = '';
         for(idea_prop in idea){
           if(idea_prop === pattern_prop){
-            // this idea_prop is deprecated, log it and run the list of commands to try and fix it
+            // note that we have seen a phase ever on any object
+            Doh.SeenKeys[pattern_prop] = Doh.SeenKeys[pattern_prop] || {};
+            // this idea_prop is being watched, log it and run the list of commands to try and fix it
             command = '';
             command_value = '';
             for(command in Doh.WatchedKeys[pattern_prop]){
@@ -1647,14 +1699,14 @@ OnLoad('/doh_js/core', function($){
                 case 'warn':
                 case 'error':
                 case 'throw':
-                  Doh[command]('WatchedKeys:',pattern_prop,'wants to',command,':',command_value,idea);
+                  if(!Doh.SeenKeys[pattern_prop][idea.pattern]) Doh[command]('WatchedKeys:',pattern_prop,'wants to',command,':',command_value,idea);
                   break;
                 case 'run':
-                  Doh[logger_method]('WatchedKeys:',pattern_prop,'will run:',command_value,idea);
+                  //if(!Doh.SeenKeys[pattern_prop][idea.pattern]) Doh[logger_method]('WatchedKeys:',pattern_prop,'will run a custom command');
                   command_value(idea);
                   break;
                 case 'rename':
-                  Doh[logger_method]('WatchedKeys:',pattern_prop,'has been renamed:',command_value,idea);
+                  if(!Doh.SeenKeys[pattern_prop][idea.pattern]) Doh[logger_method]('WatchedKeys:',pattern_prop,'has been renamed:',command_value,idea);
                   if(idea.melded?.[pattern_prop]){
                     idea.melded[command_value] = idea.melded[pattern_prop];
                     idea.melded[pattern_prop] = null;
@@ -1664,9 +1716,8 @@ OnLoad('/doh_js/core', function($){
                   idea[command_value] = idea[pattern_prop];
                   break;
                 case 'remove':
-                  Doh[logger_method]('WatchedKeys:',pattern_prop,'will be removed.',idea);
+                  if(!Doh.SeenKeys[pattern_prop][idea.pattern]) Doh[logger_method]('WatchedKeys:',pattern_prop,'will be removed.',idea);
                   if(idea.melded?.[pattern_prop]){
-                    idea.melded[command_value] = idea.melded[pattern_prop];
                     idea.melded[pattern_prop] = null;
                     delete idea.melded[pattern_prop];
                   }
@@ -1675,6 +1726,9 @@ OnLoad('/doh_js/core', function($){
                   break;
               }
             }
+            // now that we've run all the commands once, we have "seen" it, so we don't need to blast the console
+            /// notify once per pattern that we have encountered watched phases
+            Doh.SeenKeys[pattern_prop][idea.pattern] = true;
             // we found the thing we were looking for, just bail to the next pattern_prop
             break;
           }
@@ -1682,7 +1736,6 @@ OnLoad('/doh_js/core', function($){
       }
       return idea;
     },
-
     /**
      *  @brief inspect and alter a passed-in pattern name
      *  
@@ -1710,7 +1763,7 @@ OnLoad('/doh_js/core', function($){
                 Doh[command]('WatchedPatternNames:',pattern_name,'wants to',command,':',command_value);
                 break;
               case 'run':
-                Doh[logger_method]('WatchedPatternNames:',pattern_name,'will run:',command_value);
+                //Doh[logger_method]('WatchedPatternNames:',pattern_name,'will run:',command_value);
                 rtn = command_value(pattern_or_name, pattern_name, pattern);
                 break;
               case 'rename':
@@ -1728,6 +1781,38 @@ OnLoad('/doh_js/core', function($){
       //*/
     },
     
+    collect_built: function(object, melded, builder, parsable_reference_from_builder){
+      let this_prop;
+      // object phase needs a final chance to loop over it's properties before everyone gets to go
+      for(let prop_name in object) {
+        if(prop_name === 'prototype' || prop_name === '__proto__') continue; // sometimes these pop up. iterating 'this' is dangerous for some reason
+        this_prop = object[prop_name];
+        // Check for properties that are themselves ideas waiting to be built
+        // nest the if's for speed
+        // it has to exist, have .pattern, not have .machine and not have .skip_being_built.
+        // check existance, check for pattern, check for if we have been built already, check for wanting to be ignored
+        if(SeeIf.IsObjectObject(melded[prop_name])){
+          // this is a special melded object, we need the collector to recurse one more time
+          Doh.collect_built(this_prop, melded[prop_name], builder, parsable_reference_from_builder?parsable_reference_from_builder+'.'+prop_name:prop_name);
+        } else {
+          if(this_prop)if(this_prop.pattern)if(this_prop.pattern !== 'idea')if(!this_prop.machine)if(!this_prop.skip_being_built){
+            // only things that are builders should have this
+            builder.built = builder.built || {};
+            builder.machine_built_to = builder.machine_built_to || 'builder_phase';
+            // tell the thing that we are auto building it. this allows the thing to react to being built if needed
+            this_prop.builder = builder;
+            // tell the thing how to reference itself from it's builder (thing.builder[thing.my_property_on_builder] === thing)
+            //this_prop.my_property_on_builder = prop_name;
+            this_prop.my_property_on_builder = parsable_reference_from_builder?parsable_reference_from_builder+'.'+prop_name:prop_name;
+            // for instance, auto_building only runs to object phase. if further or 'final' phase is desired, run .machine_built(phase)
+            // don't build just yet, we need to control nesting so we don't hit max execution depth
+            // object[prop_name] = New(this_prop, builder.machine_built_to);
+            // add our name to built. this is used to know which properties are sub-objects
+            builder.built[parsable_reference_from_builder?parsable_reference_from_builder+'.'+prop_name:prop_name] = object[prop_name];
+          }
+        }
+      }
+    },
   });
   /* **** Doh Object Ready **** */
   window.Patterns = Doh.Patterns;
@@ -1749,13 +1834,24 @@ OnLoad('/doh_js/core', function($){
     return false;
   }
 
-  // AA: It might be worth crafting a small ode to the elegance of this
   /**
+   *  The 'idea' pattern is a special ephemeral pattern that is used when filtering object.inherited.
+   *  This empty pattern allows the final, anonymous idea sent into New() to be called 'idea' and added to object.inherited.
+   *  Then, later, when validation or type checking are used to understand the final idea, it validates as a Pattern.
+   *  This subsequently makes it possible to reference the final idea by it's pattern name of 'idea' in object.inherited, knowing
+   *    that the pattern is not techincally a pattern, any mmore than a pattern is not techincally an idea. 
+   *  
+   *  In other words:
+   *  
+   *  - Patterns are really just validated ideas with a specific name in the Patterns collection (namespace).
+   *  
+   *  - An idea is just an anonymous pattern.
+   *  
+   *  - So the "idea" pattern is just an empty placeholder for the anonymous pattern that will be sent in at the last minute.
    *  
    *  NOTE: DO NOT INHERIT THIS PATTERN
    */
   Pattern('idea');
-  
   /**
    *  set the prototype for the object constructor
    */
@@ -1766,6 +1862,7 @@ OnLoad('/doh_js/core', function($){
       melded:'object',
       // mark object_phase as a phase
       object_phase:'phase',
+      builder_phase:'phase',
       // mark idealize and perspective as exclusive
       // this will indicate that we want the builder to ignore anyone setting it except us
       idealize:'exclusive',
@@ -1773,28 +1870,8 @@ OnLoad('/doh_js/core', function($){
     },
     // ensure that we are the base object phase
     object_phase: function() {
-      let this_prop
       // object phase needs a final chance to loop over it's properties before everyone gets to go
-      for(var prop_name in this) {
-        if(prop_name === 'prototype' || prop_name === '__proto__') continue; // sometimes these pop up. iterating 'this' is dangerous for some reason
-        this_prop = this[prop_name];
-        // Check for properties that are themselves ideas waiting to be built
-        // nest the if's for speed
-        // it has to exist, have .pattern, not have .machine and not have .skip_auto_build.
-        // check existance, check for pattern, check for if we have been built already, check for wanting to be ignored
-        if(this_prop)if(this_prop.pattern)if(this_prop.pattern !== 'idea')if(!this_prop.machine)if(!this_prop.skip_auto_build){
-          // only things that have auto_built should have this
-          this.auto_built = this.auto_built || {};
-          // tell the thing that we are auto building it. this allows the thing to react to being auto_built if needed
-          this_prop._auto_built_by = this;
-          // tell the thing how to reference itself from it's auto-built parent (thing._auto_built_by[thing._auto_built_by_name] = thing)
-          this_prop._auto_built_by_name = prop_name;
-          // for instance, auto_building only runs to object phase. if further or 'final' phase is desired, run .machine_properties(phase)
-          this[prop_name] = New(this_prop, 'object_phase');
-          // add our new reference to auto_built
-          this.auto_built[prop_name] = this[prop_name];
-        }
-        
+      for(let prop_name in this.melded) {
         // check for static properties and connect them to their respective pattern statics
         if(this.melded[prop_name] === 'static'){
           // someone wanted us to eventually sync with a pattern static
@@ -1814,6 +1891,69 @@ OnLoad('/doh_js/core', function($){
         }
       }
     },
+    // me as a builder phase
+    machine_built: function(phase){
+      // loop through the built and attempt to machine them
+      let deep_this, deep_prop_name;
+      for(let prop_name in this.built) {
+        if(prop_name === 'length') continue;
+        //this.built[prop_name].machine(phase);
+        if(SeeIf.NotUndefined(this[prop_name])){
+          this[prop_name] = this.built[prop_name] = New(this[prop_name], phase);
+        } else if(prop_name.indexOf('.') !== -1){
+          // parse ref
+          //                              obj,  deep ref,  count_back from the last reference
+          deep_this = Doh.parse_reference(this, prop_name, -1);
+                                            // true to get back the last reference in prop_name
+          deep_prop_name = Doh.parse_reference(true, prop_name);
+          // the above lets us alter the deep reference to our newly built/machined value
+          deep_this[deep_prop_name] = this.built[prop_name] = New(this.built[prop_name], phase);
+        } else {
+          this.built[prop_name] = New(this.built[prop_name], phase);
+        }
+      }
+    },
+
+    builder_phase: function() {
+      
+      // iterate over this, using this.melded as the melded, assign this as the builder, blank reference from builder because
+      // the first layer is directly attached to builder
+      //                obj,  melded,      builder, parsable_reference_from_builder
+      Doh.collect_built(this, this.melded, this,    '');
+      
+      // we built stuff, now we need to be able to support it:
+      // if we are in a built-chain, we need these
+      if(this.built || this.builder){
+        this.builder_method = function(method_name) {
+          let bld = this.builder;
+          while(bld) {
+            if(SeeIf.IsFunction(bld[method_name]))
+              return bld[method_name].bind(bld);
+            bld = bld.builder;
+          }
+          return function(){Doh.warn('no builder method:',method_name)};
+        };
+        this.builder_property = function(prop_name) {
+          let bld = this.builder;
+          while(bld) {
+            if(SeeIf.IsDefined(bld[prop_name]))
+              return bld[prop_name];
+            bld = bld.builder;
+          }
+          return function(){Doh.warn('no builder property:',prop_name)};
+        };
+      }
+      
+      // now do the actual building
+      if(this.built){
+        this.machine_built(this.machine_built_to);
+      }
+      
+      if(Doh.ApplyFixes){
+        this.machine.completed.parenting_phase = true;
+      }
+    },
+
     /*                                                 
       ,,        ,,                     ,,    ,,                  
       db      `7MM                   `7MM    db                  
@@ -2002,79 +2142,30 @@ OnLoad('/doh_js/core', function($){
   // AA: talk about the relationship of this to html, the role of the children array
 
   Pattern('parenting', 'object', {
-    // parent should be a Doh Object or false
-    parent: false,
     // list of child objects to build
     children: [],
-    // advance the children machine to this phase when building
-    machine_children_to: 'parenting_phase',
     // extend the children array
     melded:{
       children: 'array',
-      // setup our phases for building children and controls
-      parenting_phase: 'phase',
     },
-    // create a phase to build children
-    parenting_phase: function(){
-      // loop through the children and attempt to build them
+    object_phase:function(){
+      this.builder = this.builder || 'body';
+      
+      // we are basically deprecating parent by doing this.
+      this.parent = this.builder;
+      Doh.mimic(this, 'parent', this, 'builder');
+    },
+    pre_builder_phase: function(){
+      // loop through the children and add them to the builder
       var i = '', child = false, prop_name = false;
       for(i in this.children) {
         if(i === 'length') continue;
+        this.built = this.built || {};
         child = this.children[i];
-        // if the child is a string then check if a property with that name is an idea that wants to be auto-built
-        if(typeof child === 'string'){
-          if(this.auto_built[child]){
-            // if the child string points to a valid auto-built property, then suck it up here and keep it from being auto-built more
-            this.auto_built[child] = null;
-            delete this.auto_built[child];
-            // store a copy of our property name from our parent
-            //NOTE: deprecate this?
-            this[child].parental_name = this[child]._auto_built_by_name;
-            // make the thing we are working on the parent property that our string points to
-            child = this[child];
-          }
-        }
-        // meld ourselves as the parent for the child, unless it has a better idea
-        this.children[i] = Doh.meld_objects({parent:this}, child);
-      }
-      if(SeeIf.NotEmptyObject(this.auto_built)){
-        prop_name = '';
-        for(prop_name in this.auto_built) {
-          // auto build remaining property ideas at the end
-          this.children.push(Doh.meld_objects({parent:this}, this.auto_built[prop_name]));
-          // always remove ourself from any known system that we are replacing.
-          // object only machines through object_phase, we are required to machine our own properties
-          this.auto_built[prop_name] = null;
-          delete this.auto_built[prop_name];
-        }
-      }
-      this.machine_children(this.machine_children_to);
-    },
-    machine_children: function(phase){
-      // loop through the children and attempt to machine them
-      for(var i in this.children) {
-        if(i === 'length') continue;
-        this.children[i] = New(this.children[i], phase);
+        // make ourself the builder
+        this.built['children.'+i] = Doh.meld_objects(child, {builder:this});
       }
     },
-    parentalFunction: function(function_name) {
-      let par = this.parent;
-      while(par) {
-        if(SeeIf.IsFunction(par[function_name]))
-          return par[function_name].bind(par);
-        par = par.parent;
-      }
-      return function(){Doh.warn('no parental function:',function_name)};
-    },
-    parentalProperty: function(property_name) {
-      let par = this.parent;
-      while(par) {
-        if(SeeIf.IsDefined(par[property_name]))
-          return par[property_name];
-        par = par.parent;
-      }
-      return function(){Doh.warn('no parental property:',property_name)};
-    },    
   });
 
   //fab_iterator = null;
@@ -2228,9 +2319,11 @@ OnLoad('/doh_js/utils', function($){
     // will be added by dict
     each:true,
     // may be added by object during object_phase
-    auto_built:true,
-    _auto_built_by:true,
-    _auto_built_by_name:true,
+    built:true,
+    builder:true,
+    my_property_on_builder:true,
+    machine_built:true,
+    machine_built_to:true,
     // may be added by debug mode during New
     watch:true,
   });
@@ -2239,26 +2332,6 @@ OnLoad('/doh_js/utils', function($){
    *  A place to house things that we no longer want in core, but don't yet have another home
    */
   Doh.meld_objects(Doh, {
-    // USED BY: /utils/ajax
-    /**
-     *  @brief Turn a dot delimited name into a deep reference on 'base'
-     *
-     *  @param [in] base    The object to get a deep reference to
-     *                      pass TRUE to 'base' and it will return the last key of the split
-     *  @param [in] var_str A dot-delimited string
-     *  @return A deep reference into 'base' or the last key of the split
-     */
-    parse_reference: function(base, var_str){
-      var values = base;
-      var var_arr = new String(var_str).split('.');
-      // pass TRUE to 'base' and it will return the last key of the split
-      if(base===true) return var_arr[var_arr.length-1];
-      for(var i=0; i < var_arr.length; i++)
-      values = values[var_arr[i]];
-
-      return values;
-    },
-
     // USED BY: /utils/node (node is horribly named)
     /**
      *  @brief Get a new id
@@ -3005,6 +3078,31 @@ OnCoreLoaded(Doh.ApplyFixes, function(){
   });
 });
 
+// fix old parenting system
+OnCoreLoaded(Doh.ApplyFixes, function(){
+  Doh.meld_objects(Doh.WatchedKeys, {
+    skip_auto_build:    {rename:'skip_being_built'},
+    
+    auto_built:         {rename:'built'},
+    _auto_built_by:     {rename:'builder'},
+    _auto_built_by_name:{rename:'my_property_on_builder'},
+    
+    machine_children:   {rename:'machine_built'},
+    machine_children_to:{rename:'machine_built_to'},
+    
+    parent:             {rename:'builder'},
+    
+    parenting_phase:    {rename:'builder_phase'},
+    pre_parenting_phase:{rename:'pre_builder_phase'},
+    children:           {run:function(idea){
+      if(!Doh.SeenKeys['children'][idea.pattern])Doh.warn('"',idea.pattern,'" has children. (module:',Doh.PatternModule[idea.pattern],')');
+    }},
+  });
+  Doh.meld_objects(Doh.WatchedPhases, {
+    parenting_phase:{rename:'builder_phase'},
+  });
+});
+
 OnLoad('/doh_js/html', function($){
   if(Doh.ApplyFixes){
     /*
@@ -3042,7 +3140,7 @@ OnLoad('/doh_js/html', function($){
           // test raising warning
           else{
             Doh.warn('Doh.get_dobj(',e,") found a jQuery object that we didn't build.");
-            object = New({pattern:'element', e:object, parent:object.parent()}, 'parenting_phase');
+            object = New({pattern:'element', e:object, builder:object.parent()}, 'builder_phase');
           }
         }
         // the jQuery selector object is empty, we didn't find an actual element
@@ -3096,13 +3194,13 @@ OnLoad('/doh_js/html', function($){
     // if the object is not of doh, then return false
     //NOTE: this keeps controls from cascading past their defined parents (e.g.: into vanilla html that contaiins them)
     if(!InstanceOf(object)) return false;
-    if(object.parent){
+    if(object.builder){
       //if the parent is a controller, use that
-      if(object.parent.is_controller) return object.parent;
+      if(object.builder.is_controller) return object.builder;
       //otherwise, if the parent HAS a controller, use that
-      if(object.parent.controller) return object.parent.controller;
+      if(object.builder.controller) return object.builder.controller;
       //otherwise, search for a controller
-      return Doh.find_controller(object.parent);
+      return Doh.find_controller(object.builder);
     }
     // we have no parent, or we found no controller
     return false;
@@ -3111,15 +3209,15 @@ OnLoad('/doh_js/html', function($){
 
   // AA:  A good place for an essay about the control system
   
-  Pattern('control', 'parenting', {
+  Pattern('control', 'object', {
     // advance the children machine to this phase when building
-    machine_children_to: 'control_phase',
+    machine_built_to: 'control_phase',
     // setup our phases for building controls
     melded:{
       control_phase:'phase'
     },
     control_phase: function(){
-      if(!this.control)if(this.parental_name) this.control = this.parental_name;
+      if(!this.control)if(this.my_property_on_builder) this.control = this.my_property_on_builder;
       // if we have a control name
       if(this.control){
         // find the controller
@@ -3129,16 +3227,14 @@ OnLoad('/doh_js/html', function($){
           this.controller = controller;
         } else {
           // otherwise, use the parent with warning
-          Doh.warn('hierarchy control:', this, 'could not find a controller. Use the parent:', this.parent, 'instead.');
-          this.controller = this.parent;
+          Doh.warn('control:', this, 'could not find a controller. Use the builder:', this.builder, 'instead.');
+          this.controller = this.builder;
         }
         // ensure that our newly assigned controller has controls storage
         this.controller.controls = this.controller.controls || {};
         // add ourself to it
         this.controller.controls[this.control] = this;
       }
-      // make our children keep up with us in the phases
-      //if(this.machine_children_to === 'control_phase') this.machine_children(this.machine_children_to);
     },
   });
   
@@ -3232,8 +3328,7 @@ OnLoad('/doh_js/html', function($){
   }
 
   // AA:  A discussion of the interface between DOM elements and the html pattern should go here
-  
-  Pattern('html', 'control', {
+  Pattern('html', ['parenting','control'], {
     melded:{
       classes:'array',
       css:'object',
@@ -3255,18 +3350,14 @@ OnLoad('/doh_js/html', function($){
     css: {},
     // html content to be added before appending children
     html: '',
-
+    
     object_phase:function(){
-      // if our auto-built properties don't have a parent, make us the parent
-      if(this._auto_built_by) {
-        this.parent = this.parent || this._auto_built_by;
-      }
       // ensure that the parent is a setting, already set,
       // or the body
-      this.parent = this.parent || 'body';
+      this.builder = this.builder || 'body';
       // convert to DohObject if we are a string selector
-      if( typeof this.parent === 'string' ) {
-        this.parent = Doh.get_dobj(this.parent);
+      if( typeof this.builder === 'string' ) {
+        this.builder = Doh.get_dobj(this.builder);
       }
       // ensure that the element is a setting, already set, or a new jQuery element using this.tag
       this.e = this.e || $('<'+this.tag+'>');
@@ -3284,7 +3375,7 @@ OnLoad('/doh_js/html', function($){
         else { this.id = 'dobj_'+Doh.new_id(); }
       }
     },
-    pre_parenting_phase:function() {
+    pre_builder_phase:function() {
       if(this.e) {
         // set style before css so it doesn't blow the css away
         if(this.style) this.set_style(this.style);
@@ -3313,20 +3404,20 @@ OnLoad('/doh_js/html', function($){
         if(this.e.length === 1 && this.id) this.e.attr('id', this.id);
         // we rely on children waiting to be appended,
         // stash the intended machine state and use 'control_phase'
-        if(this.machine_children_to !== 'control_phase'){
-          this._machine_children_to = this.machine_children_to;
-          this.machine_children_to = 'control_phase';
+        if(this.machine_built_to !== 'control_phase'){
+          this._machine_built_to = this.machine_built_to;
+          this.machine_built_to = 'control_phase';
         }
       }
     },
-    parenting_phase:function(){
-      if(this._machine_children_to){
+    builder_phase:function(){
+      if(this._machine_built_to){
         // if we stashed the intended state, restore it here
-        this.machine_children_to = this._machine_children_to;
+        this.machine_built_to = this._machine_built_to;
         // if this is already past then we need to be append phase
       } else {
         // tell the append to machine children to html_phase
-        this.machine_children_to = 'html_phase';
+        this.machine_built_to = 'html_phase';
       }
     },
     html_phase:function(){
@@ -3334,9 +3425,9 @@ OnLoad('/doh_js/html', function($){
       if(!this.machine.completed.html_phase) {
         
         // convert the parent to a doh object if not already one
-        if( typeof this.parent === 'string' || this.parent instanceof Doh.jQuery) {
-          Doh.warn('html_phase found a parent:',this.parent,'that was a string or jQuery instance');
-          this.parent = Doh.get_dobj(this.parent);
+        if( typeof this.builder === 'string' || this.builder instanceof Doh.jQuery) {
+          Doh.warn('html_phase found a builder:',this.builder,'that was a string or jQuery instance');
+          this.builder = Doh.get_dobj(this.builder);
         }
         
         // if this is a string, convert it to a jQuery object
@@ -3347,14 +3438,14 @@ OnLoad('/doh_js/html', function($){
         }
       }
       // every time html phase is called:
-      if(!this.parent.e){
-        Doh.warn('html_phase found a parent:',this.parent,'that has no .e:',this.parent.e);
-        this.parent = Doh.get_dobj(this.parent);
+      if(!this.builder.e){
+        Doh.warn('html_phase found a parent:',this.builder,'that has no .e:',this.builder.e);
+        this.builder = Doh.get_dobj(this.builder);
       }
       // put in parent (can be used to relocate as well)
-      this.parent.e.append(this.e);
+      this.builder.e.append(this.e);
 
-      this.machine_children(this.machine_children_to);
+      if(this.built) this.machine_built(this.machine_built_to);
       
       if(this.control && !this.attrs.title && ! this.e.attr('title')){
         Doh.UntitledControls = Doh.UntitledControls || {};
@@ -3453,7 +3544,7 @@ OnLoad('/doh_js/html', function($){
   Doh.animation_functionalizer = function(oThat, oAnim){
     var that = oThat, anim = oAnim;
 
-    var opts = $.extend({},{duration:400},that.animation_options);
+    var opts = Doh.meld_objects({},{duration:400},that.animation_options);
 
     if(typeof anim === 'string'){
       if(anim === 'delay') return function(next){that.machine('animation_phase');setTimeout(next, opts.duration)};
@@ -3522,7 +3613,7 @@ OnLoad('/doh_js/html', function($){
   });
 
   Pattern('animated_element', ['element','animation_queue'], {
-    machine_children_to: 'animation_phase'
+    machine_built_to: 'animation_phase'
   });
 
   // AA:  It's a small thing, but I would move these html primitive upwards, so they are directly below 'html' itself.
@@ -3535,7 +3626,7 @@ OnLoad('/doh_js/html', function($){
 
   Pattern('input_value', {
     available_properties:{'value':'string to put in the value HTML attribute'},
-    pre_parenting_phase: function(){
+    pre_builder_phase: function(){
       if (typeof this.value !== 'undefined') this.attrs.value = this.value;
     }
   });
@@ -3586,7 +3677,7 @@ OnLoad('/doh_js/html', function($){
     available_properties: {'value':'label of the button', 'button_options':'jQuery UI Button options object'},
     melded:{button_options:'object'},
     button_options: {},
-    pre_parenting_phase: function(){
+    pre_builder_phase: function(){
       if (typeof this.value !== 'undefined' && typeof this.button_options.label == 'undefined') this.button_options.label = this.value;
     },
     html_phase: function(){
@@ -3647,15 +3738,8 @@ OnLoad('/doh_js/html', function($){
     required_properties:{'options':'object array of options keyed by option title, value used as option value'},
     available_properties:{'value':'string of the option value that should be default selected'},
     tag: 'select',
-    pre_parenting_phase: function() {
-      for(var i in this.options){
-        this.children.push({
-          pattern: 'option',
-          html: i,
-          value: this.options[i]
-        });
-      }
-    },
+    // special melding will handle special building too.
+    options:{},
     html_phase: function () {
       if (this.value) {
         this.e.find("[value='" + this.value + "']").attr({
@@ -4069,7 +4153,7 @@ OnLoad('/doh_js/html', function($){
   });
 
   var jBody = Doh.jQuery('body');
-  Doh.body = New('html',{tag:'body',e:jBody,parent:jBody.parent()}, 'parenting_phase');                 
+  Doh.body = New('html',{tag:'body',e:jBody,builder:jBody.parent()}, 'object_phase');                 
 });
 
 OnLoad('/doh_js/element', function($){Pattern('element', 'html');});
