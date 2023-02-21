@@ -55,8 +55,9 @@ Doh.old_meld_objects = function(destination = {}){
 //Doh.meld_objects = Doh.old_meld_objects;
 
 OnLoad('/doh_js/see_if', function($){
+  let SeeIf = window.SeeIf || {};
   // enshrine the definitions of variable states in the SeeIf library
-  Doh.meld_objects(SeeIf, {
+  Object.assign(SeeIf, {
     /*
      * These have to be in this order because they are the base types for type_of
      * When we loop over SeeIf, we will always catch one of these, so these are the most primitive types
@@ -150,7 +151,7 @@ OnLoad('/doh_js/see_if', function($){
     LacksValue:     (value) => {return (typeof value === 'undefined' || value === null || value === '') ;},
   });
   // some aliases
-  Doh.meld_objects(SeeIf, {
+  Object.assign(SeeIf, {
     NotDefined:SeeIf.IsUndefined,
     NotNullish:SeeIf.IsDefined,
     NotFalsey:SeeIf.IsTruey,
@@ -160,6 +161,147 @@ OnLoad('/doh_js/see_if', function($){
   });
   
 }, 'SeeIf');
+
+OnLoad('/doh_js/setter', function($){
+  let Setter = window.Setter || {};
+  Object.assign(Setter, {
+    /**
+     *  @brief call a callback any time a property on an object changes
+     *  
+     *  @param [in] object             [object] the object to watch
+     *  @param [in] prop               [string] the property name to watch
+     *  @param [in] on_change_callback [function] the callback to fire when the value of prop changes
+     *  @return a function that clears the observing
+     *  
+     *  @details callback parameter signature: on_change_callback(object, prop, new_value){this === object;}
+     */
+    observe: function(object, prop, on_change_callback){
+      let prop_desc;
+      // we can only set this system up on objectobjects     not triple equal on purpose
+      if(typeof object === 'object' && toString.call(object) == '[object Object]'){
+        // for now, the only valid prop indicator is a string
+        // observe requires a function for callback or the observation isn't seen
+        if(typeof prop === 'string')if(typeof on_change_callback === 'function'){
+          // check for a setter already there
+          prop_desc = Object.getOwnPropertyDescriptor(object, prop);
+          if(typeof prop_desc.set !== 'function'){
+            // bind the original value to a new local variable
+            // IMPORANT: this 'let val ...' statement creates a closure around 'val' and essentially
+            //           turns it into the actual value storage for this property. The getter gets this
+            //           internal val, and the setter sets it. This allows the property to both store it's own value
+            //           as well as have both getter and setter for access and retrieval.
+            let val = object[prop],
+            // create a local closure for the method stack as well
+            method_stack = [],
+            // and the melded method that we will assign to the setter
+            melded_method = function(new_value){
+              // use the original value storage as intended, even though these closures are all that can see it
+              if(val !== new_value){
+                // set the value to the new value
+                // we have to set the val first BEFORE calling the stack or we will recurse on ourself forever
+                val = new_value;
+                // this melder always does the same thing:
+                //  walk the method stack and apply each method to the bound object
+                let len = method_stack.length;
+                for(let i=0;i<len;i++){
+                  method_stack[i].apply(object, [object, prop, new_value]);
+                }
+              }
+            };
+            // track the meld_stack so we can manipulate it
+            melded_method.meld_stack = method_stack;
+            // if we want to update the pointer, we need a closure to access the original scope
+            melded_method.update_meld_stack = function(new_stack){
+              // if we didn't pass a stack
+              if(!new_stack){
+                Doh.debug("[melded_method].update_meld_stack didn't get a new_stack");
+                return;
+              }
+              // otherwise, apply the stack we sent in
+              method_stack = new_stack;
+            };
+            // attach a utility method to remove melded functions from the stack
+            melded_method.remove_melded = function(method){
+              method_stack.splice(method_stack.indexOf(method), 1);
+            };
+            
+            Object.defineProperty(object, prop, {
+              // if we have a setter, then we must have a getter
+              // our fancy getter retrieves the original value storage, which
+              // is the thing that gets updated.
+              get: function(){return val;},
+              set: melded_method,
+              // don't break enumerable stuff
+              enumerable: (typeof val === 'object' && val !== null),
+              // don't break our ability to configure
+              configurable: true,
+            });
+          }
+          // we have to get (or re-get) the prop_desc here in case the melded setter already exists or we just made one
+          prop_desc = Object.getOwnPropertyDescriptor(object, prop);
+          if(!prop_desc.set.meld_stack){
+            console.warn('Setter.observe found a different setter for:',prop,'on object:',object,'with callback:',on_change_callback);
+            return function(){};
+          }
+          // just push our on_change onto the meld_stack. 
+          prop_desc.set.meld_stack.push(on_change_callback);
+          // return a function that can be called to remove the on_change callback
+          return function(){
+            prop_desc.set.remove_melded(on_change_callback);
+          }
+        }
+      }
+    },
+    /**
+     *  @brief tell two things to have a property mimic the other
+     *  
+     *  @param [in] my_thing           [object] the object the callback is relative to
+     *  @param [in] my_prop            [string] name of the prop on my_thing to sync
+     *  @param [in] their_thing        [object] the object to sync with
+     *  @param [in] their_prop         [string] name of the prop on their_thing to sync with
+     *  @param [in] on_change_callback [function] optionally a function to run when my_thing[my_prop] is changed
+     *  @return a function that will remove the mimic that was just created when called
+     *  
+     *  @details shockingly simple
+     *  
+     *    on_change_callback(my_thing, my_prop, their_thing, their_prop, new_value){this === my_thing;}
+     */
+    mimic: function(my_thing, my_prop, their_thing, their_prop, on_change_callback){
+      
+      // syncing demands initial state to be synced BEFORE setters are defined
+      // IMPORTANT: this keeps the initial set from echoing forever
+      if(my_thing[my_prop] !== their_thing[their_prop]) my_thing[my_prop] = their_thing[their_prop];
+      
+      // make a setter for our value that will call the on_change_callback when we change
+      let my_set = function(object, prop, new_value){
+        // i only get run if my value changed
+        // only make their setter system run when actually needed
+        if(their_thing[their_prop] !== new_value) their_thing[their_prop] = new_value;
+        // unlike Setter.observe(), .mimic() does something with the observed value, so the change callback isn't mandatory since it's being wrapped anyway.
+        if(on_change_callback) on_change_callback.apply(my_thing, [my_thing, my_prop, their_thing, their_prop, new_value]);
+      },
+      // make a setter for their value that will set me if needed, triggering my own observers 
+      their_set = function(object, prop, new_value){
+        // i get run if THEIR value changed, we still have to check
+        // if the new value is actually new to us too.
+        if(new_value !== my_thing[my_prop]){
+          // if it IS new to us, then setting it will trigger the setters
+          my_thing[my_prop] = new_value;
+        }
+      },
+      my_remover = Setter.observe(my_thing, my_prop, my_set),
+      their_remover = Setter.observe(their_thing, their_prop, their_set);
+      // return a function that can be called to remove both callbacks
+      return function(){
+        my_remover();
+        their_remover();
+      };
+    },
+  });
+  
+  Object.assign(Doh, Setter);
+    
+}, 'Setter');
 
 OnLoad('/doh_js/core', function($){
   
@@ -174,7 +316,7 @@ OnLoad('/doh_js/core', function($){
     // in nodejs, the normal OnLoad is replaced with a far simpler one that needs this set for core.
     ModuleCurrentlyRunning: '/doh_js/core',
     // this remains to be updated, Doh still hasn't really grasped versioning
-    Version:'2.0.2a',
+    Version:'2.0.3a',
     // allow storage of patterns
     Patterns: {},
     // keyed by pattern, the name of the module that made it (or false if made after load)
@@ -193,9 +335,8 @@ OnLoad('/doh_js/core', function($){
       'object':           SeeIf.IsObjectObject,
         'idea':             SeeIf.IsObjectObject,
       'array':            SeeIf.IsArray,
-      //'static_reference': SeeIf.IsEnumerable,
-      'static':           SeeIf.IsAnything,
-      'exclusive':          SeeIf.IsAnything,
+      'static':           SeeIf.IsDefined,
+      'exclusive':        SeeIf.IsAnything,
     },
     /**
      *  Default values used by New to provide automatic defaults for melded properties
@@ -399,7 +540,7 @@ OnLoad('/doh_js/core', function($){
      */
     in_array: function( item, array ) {
       
-      if ( typeof array == 'undefined') return -1;
+      if ( typeof array === 'undefined') return -1;
       
       if ( array.indexOf ) {
         return array.indexOf( item );
@@ -458,9 +599,8 @@ OnLoad('/doh_js/core', function($){
       // Soooo... flatten all the arguments into a single array, then use Set to make it unique, starting with order-inserted
       //   then spread all remaining values into a new array.
       */
-      return [...new Set(Array.prototype.flat.apply(arguments, [1]))];
+      return [...new Set([].flat.call(arguments, 1))];
     },
-
     /**
      *  @brief meld all the ways we can format a list of args into a set of object keys
      *            NOTE: always melds into a new {}. No argument is altered.
@@ -473,7 +613,6 @@ OnLoad('/doh_js/core', function($){
      *  @details
      *  'pattern_name_1'
      *  ['pattern_name_1', 'pattern_name_2']
-     *  {0:'pattern_name_1', 1:'pattern_name_2'}
      *  {'pattern_name_1':true, 'pattern_name_2':true}
      *  {'pattern_name_1':true, 'pattern_name_2':'other truey value'}
      *  
@@ -481,34 +620,20 @@ OnLoad('/doh_js/core', function($){
      *  *OR* at least:{} if nothing valid is sent in
      **/
     meld_into_objectobject: function(){
-      // we always need a new object
-      let object = {}, list, item;
-      for(let arg in arguments){
-        // walk through all arguments
-        list = arguments[arg];
-        // allow value to be a string
-        if (typeof list === 'string')
-          //NOTE: we can expand this to accept limited depth and complexity
-          //      like, CSV or dot-notated (this.that.theother)
-          object[list] = true;
-        // or an object (array and object, technically)
-        else if (SeeIf.IsEnumerable(list)){
-          item = '';
-          for(item in list){
-            if (item !== 'length'){
-              // allow the array structure to have the list in key (Key is not a number)
-              //NOTE .is key safe?
-              if(isNaN(item)) object[item] = list[item];
-              // or in the list
-              else object[list[item]] = true;
-            }
-          }
-        }
-      }
-      // send what we found, even if empty
+      // always land in a new object
+      let object = {};
+      // call the array prototype method forEach to iterate arguments
+      [].forEach.call(arguments, arg => {
+        // use strings to set keys to true
+        if(typeof arg === 'string') return object[arg] = true;
+        // use arrays to set lists of keys to true
+        if(Array.isArray(arg)) return arg.forEach(subkey => {object[subkey] = true;});
+        // just meld in any objects we pass that aren't arrays handled above.
+        if(typeof arg === 'object') return Object.assign(object, arg);
+      });
+      
       return object;
     },
-
     /**
      *  @brief Given an object and method name, return an array of function references
      *         for inherited patterns that implement the named method
@@ -691,7 +816,7 @@ OnLoad('/doh_js/core', function($){
             destination[prop_name] = idea_prop;
             continue;
           }
-          if(melded_type === 'object' || (typeof idea_prop == 'object' && !Array.isArray(idea_prop) && SeeIf.IsEmptyObject(idea_prop))){
+          if(melded_type === 'object' || (typeof idea_prop === 'object' && !Array.isArray(idea_prop) && SeeIf.IsEmptyObject(idea_prop))){
             // it's a melded object or an empty default
             if(deep_melded || go_deep) {
               destination[prop_name] = destination[prop_name] || {};
@@ -966,6 +1091,7 @@ OnLoad('/doh_js/core', function($){
     
     // MANDATORY FOR OBJECTS TO BE SINGLETON CLASSES
     Prototype: function(){
+      // return Object.create(null);
       // create a new object as a function that can be used as a class
       // use var to keep the class from ever being 'new' again
       var DohObject = function(){};
@@ -1442,11 +1568,9 @@ OnLoad('/doh_js/core', function($){
      *                            Pass false to 'object' to return the split array
      *  @param [in] property_str  A dot-delimited string of the nested property on object
      *  @param [in] count_back    return a reference count_back from the end of the property_str names array
-     *  @return A deep reference into 'object' or the last key of the split
+     *  @return A deep reference into 'object' or the last key of the split or the whole split array
      *  
      *  @details Also used by /utils/ajax
-     *            
-     *            
      *  
      *            Can also handle arrays in the nested flow. (e.g.: myproperty.subprop.subarray.3.property_of_object_on_an_array.etc
      *                                                     becomes: myproperty.subprop.subarray[3].property_of_object_on_an_array.etc)
@@ -1477,137 +1601,6 @@ OnLoad('/doh_js/core', function($){
       return current_reference;
     },
 
-    /**
-     *  @brief call a callback any time a property on an object changes
-     *  
-     *  @param [in] object             [object] the object to watch
-     *  @param [in] prop               [string] the property name to watch
-     *  @param [in] on_change_callback [function] the callback to fire when the value of prop changes
-     *  @return a function that clears the observing
-     *  
-     *  @details 
-     */
-    observe: function(object, prop, on_change_callback){
-      let prop_desc;
-      // we can only set this system up on objectobjects
-      if(SeeIf.IsObjectObject(object)){
-        // for now, the only valid prop indicator is a string
-        // observe requires a function for callback or the observation isn't seen
-        if(SeeIf.IsString(prop))if(SeeIf.IsFunction(on_change_callback)){
-          // check for a setter already there
-          prop_desc = Object.getOwnPropertyDescriptor(object, prop);
-          if(SeeIf.NotFunction(prop_desc.set)){
-            // bind the original value to a new local variable
-            // IMPORANT: this 'let val ...' statement creates a closure around 'val' and essentially
-            //           turns it into the actual value storage for this property. The getter gets this
-            //           internal val, and the setter sets it. This allows the property to both store it's own value
-            //           as well as have both getter and setter for access and retrieval.
-            let val = object[prop],
-            // create a local closure for the method stack as well
-            method_stack = [],
-            // and the melded method that we will assign to the setter
-            melded_method = function(new_value){
-              // use the original value storage as intended, even though these closures are all that can see it
-              if(val !== new_value){
-                // set the value to the new value
-                // we have to set the val first BEFORE calling the stack or we will recurse on ourself forever
-                val = new_value;
-                // this melder always does the same thing:
-                //  walk the method stack and apply each method to the bound object
-                let len = method_stack.length;
-                for(let i=0;i<len;i++){
-                  method_stack[i].apply(object, [object, prop, new_value]);
-                }
-              }
-            };
-            // track the meld_stack so we can manipulate it
-            melded_method.meld_stack = method_stack;
-            // if we want to update the pointer, we need a closure to access the original scope
-            melded_method.update_meld_stack = function(new_stack){
-              // if we didn't pass a stack
-              if(!new_stack){
-                Doh.debug("[melded_method].update_meld_stack didn't get a new_stack");
-                return;
-              }
-              // otherwise, apply the stack we sent in
-              method_stack = new_stack;
-            };
-            // attach a utility method to remove melded functions from the stack
-            melded_method.remove_melded = function(method){
-              method_stack.splice(method_stack.indexOf(method), 1);
-            };
-            
-            Object.defineProperty(object, prop, {
-              // if we have a setter, then we must have a getter
-              // our fancy getter retrieves the original value storage, which
-              // is the thing that gets updated.
-              get: function(){return val;},
-              set: melded_method,
-              // don't break enumerable stuff
-              enumerable: SeeIf.IsEnumerable(val),
-              // don't break our ability to configure
-              configurable: true,
-            });
-          }
-          // we have to get (or re-get) the prop_desc here in case the melded setter already exists or we just made one
-          prop_desc = Object.getOwnPropertyDescriptor(object, prop);
-          if(!prop_desc.set.meld_stack){
-            Doh.debug('Doh.observe found a non-Doh setter for:',prop,'on object:',object,'with callback:',on_change_callback);
-            return function(){};
-          }
-          // just push our on_change onto the meld_stack. 
-          prop_desc.set.meld_stack.push(on_change_callback);
-          // return a function that can be called to remove the on_change callback
-          return function(){
-            prop_desc.set.remove_melded(on_change_callback);
-          }
-        }
-      }
-    },
-    /**
-     *  @brief tell two things to have a property mimic the other
-     *  
-     *  @param [in] my_thing           [object] the object the callback is relative to
-     *  @param [in] my_prop            [string] name of the prop on my_thing to sync
-     *  @param [in] their_thing        [object] the object to sync with
-     *  @param [in] their_prop         [string] name of the prop on their_thing to sync with
-     *  @param [in] on_change_callback [function] optionally a function to run when my_thing[my_prop] is changed
-     *  @return a function that will remove the mimic that was just created when called
-     *  
-     *  @details shockingly simple
-     */
-    mimic: function(my_thing, my_prop, their_thing, their_prop, on_change_callback){
-      
-      // syncing demands initial state to be synced BEFORE setters are defined
-      // IMPORTANT: this keeps the initial set from echoing forever
-      if(my_thing[my_prop] !== their_thing[their_prop]) my_thing[my_prop] = their_thing[their_prop];
-      
-      // make a setter for our value that will call the on_change_callback when we change
-      let my_set = function(object, prop, new_value){
-        // i only get run if my value changed
-        // only make their setter system run when actually needed
-        if(their_thing[their_prop] !== new_value) their_thing[their_prop] = new_value;
-        // unlike Doh.observe(), .mimic() does something with the observed value, so the change callback isn't mandatory since it's being wrapped anyway.
-        if(on_change_callback) on_change_callback.apply(my_thing, [my_thing, my_prop, their_thing, their_prop, new_value]);
-      },
-      // make a setter for their value that will set me if needed, triggering my own observers 
-      their_set = function(object, prop, new_value){
-        // i get run if THEIR value changed, we still have to check
-        // if the new value is actually new to us too.
-        if(new_value !== my_thing[my_prop]){
-          // if it IS new to us, then setting it will trigger the setters
-          my_thing[my_prop] = new_value;
-        }
-      },
-      my_remover = Doh.observe(my_thing, my_prop, my_set),
-      their_remover = Doh.observe(their_thing, their_prop, their_set);
-      // return a function that can be called to remove both callbacks
-      return function(){
-        my_remover();
-        their_remover();
-      };
-    },
-    
     // AA: Explain how to use / where you should set these things (maybe templates belong on OnCoreLoaded?) 
     /**
      *  
