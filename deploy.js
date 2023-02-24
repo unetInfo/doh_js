@@ -400,7 +400,7 @@ window.LoadDohFrom = window.LoadDohFrom || '';
     // we need it to be an object full of default core bundles, so we build that here
     window.LoadDohBundles = {};
     for(var i in default_bundles){
-      if(LDB.indexOf('SKIP'+i) == -1) window.LoadDohBundles[i] = default_bundles[i];
+      if(LDB.indexOf('SKIP'+i) === -1) window.LoadDohBundles[i] = default_bundles[i];
     }
   }
   // by this point, LoadDohBundles will have existed before as a string of skips, or 
@@ -411,7 +411,6 @@ window.LoadDohFrom = window.LoadDohFrom || '';
 
 window.Doh_Start_Time = performance.now();
 // Create the Doh Global Object. This should be a plain object in the global scope
-// do NOT put this directly on window, let it bubble up.
 // do NOT allow this to be overloaded, create it explicitly here.
 let Doh = window.Doh = {
   // show more errors and warnings, allow debug logs to throw breakpoints and most importantly...
@@ -655,7 +654,7 @@ let Doh = window.Doh = {
     if(this.ModuleIsLoaded[module_name] === true){
       //console.log('Doh.when_module_has_loaded:', module_name, 'has already loaded');
       // the module has loaded
-      setTimeout(callback,1);
+      setTimeout(callback);
       //callback();
     } else if(!this.ModuleIsLoaded[module_name] || this.ModuleIsLoaded[module_name] === false){
       //console.log('Doh.when_module_has_loaded:', module_name, 'has not yet loaded');
@@ -733,10 +732,12 @@ param_key, param_value;
 for (let pair of queryString.entries()) {
   param_key = pair[0];
   param_value = pair[1];
-  // if we send debug=false, change the value to be boolean. anything else will be true anyway
-  if(param_value === 'false') param_value = false;
-  // pass the value through to DebugMode so we can eventually set debug levels
-  if(param_key === 'debug') Doh.DebugMode = param_value;
+  if(param_key === 'debug'){
+    // if we send debug=false, change the value to be boolean. anything else will be true anyway
+    if(param_value === 'false') param_value = false;
+    // pass the value through to DebugMode so we can eventually set debug levels
+    Doh.DebugMode = param_value;
+  }
 }
 
 // We always add Doh and glob to DohWatch. It was created to expose global namespace pollution.      
@@ -747,7 +748,7 @@ DohWatch.Doh = Doh;
 Doh.OnCoreLoadedQueue = [];
 window.OnCoreLoaded = window.OnCoreLoaded || function(condition, callback){
   // if we didn't send a callback, then the condition is the callback
-  // since a function as condition truey and true is the default, carry on
+  // since a function as condition is truey and true is the default, carry on
   if(!callback) callback = condition;
   // if the condition is truey
   if(condition){
@@ -790,19 +791,18 @@ window.OnLoad = window.OnLoad || function(module_name, requires, callback, globa
   // or an array-like object
   else if (typeof globals !== 'undefined'){
     for(var i in globals){
-      if (i !== 'length'){
-        // allow the array structure to have the pattern name in key
-        if(isNaN(i)){
-          Doh.Globals[i] = true;
-          Doh.Globals[i] = Doh.Globals[i] || {};
-          window[i] = DohWatch[i] = Doh.Globals[i];
-        }
-        // or in the value
-        else {
-          Doh.Globals[globals[i]] = true;
-          Doh.Globals[globals[i]] = Doh.Globals[globals[i]] || {};
-          window[globals[i]] = DohWatch[globals[i]] = Doh.Globals[globals[i]];
-        }
+      if (i !== 'length') continue;
+      // allow the array structure to have the pattern name in key
+      if(isNaN(i)){
+        Doh.Globals[i] = true;
+        Doh.Globals[i] = Doh.Globals[i] || {};
+        window[i] = DohWatch[i] = Doh.Globals[i];
+      }
+      // or in the value
+      else {
+        Doh.Globals[globals[i]] = true;
+        Doh.Globals[globals[i]] = Doh.Globals[globals[i]] || {};
+        window[globals[i]] = DohWatch[globals[i]] = Doh.Globals[globals[i]];
       }
     }
   }
@@ -860,7 +860,7 @@ window.OnLoad = window.OnLoad || function(module_name, requires, callback, globa
   // core modules MUST live in /doh_js/
   // core modules MUST NOT have requirements
   if(Doh.IsLoaded || module_name.indexOf('/doh_js/') === 0){
-    setTimeout(module_callback,1);
+    setTimeout(module_callback);
   } else { // Doh is not loaded
     // stash our function for later
     Doh.ModuleWasDeferred[module_name] = module_callback;

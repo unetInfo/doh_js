@@ -1774,9 +1774,9 @@ OnLoad('/doh_js/core', function($){
       //*/
     },
     
-    collect_built: function(object, melded, builder, parsable_reference_from_builder){
+    collect_buildable_ideas: function(object, melded, builder, parsable_reference_from_builder){
       let this_prop;
-      // object phase needs a final chance to loop over it's properties before everyone gets to go
+      // find properties of an object that could be built
       for(let prop_name in object) {
         if(prop_name === 'prototype' || prop_name === '__proto__') continue; // sometimes these pop up. iterating 'this' is dangerous for some reason
         this_prop = object[prop_name];
@@ -1786,7 +1786,7 @@ OnLoad('/doh_js/core', function($){
         // check existance, check for pattern, check for if we have been built already, check for wanting to be ignored
         if(SeeIf.IsObjectObject(melded[prop_name])){
           // this is a special melded object, we need the collector to recurse one more time
-          Doh.collect_built(this_prop, melded[prop_name], builder, parsable_reference_from_builder?parsable_reference_from_builder+'.'+prop_name:prop_name);
+          Doh.collect_buildable_ideas(this_prop, melded[prop_name], builder, parsable_reference_from_builder?parsable_reference_from_builder+'.'+prop_name:prop_name);
         } else {
           if(this_prop)if(this_prop.pattern)if(this_prop.pattern !== 'idea')if(!this_prop.machine)if(!this_prop.skip_being_built){
             // only things that are builders should have this
@@ -1884,35 +1884,13 @@ OnLoad('/doh_js/core', function($){
         }
       }
     },
-    // me as a builder phase
-    machine_built: function(phase){
-      // loop through the built and attempt to machine them
-      let deep_this, deep_prop_name;
-      for(let prop_name in this.built) {
-        if(prop_name === 'length') continue;
-        //this.built[prop_name].machine(phase);
-        if(SeeIf.NotUndefined(this[prop_name])){
-          this[prop_name] = this.built[prop_name] = New(this[prop_name], phase);
-        } else if(prop_name.indexOf('.') !== -1){
-          // parse ref
-          //                              obj,  deep ref,  count_back from the last reference
-          deep_this = Doh.parse_reference(this, prop_name, -1);
-                                            // true to get back the last reference in prop_name
-          deep_prop_name = Doh.parse_reference(true, prop_name);
-          // the above lets us alter the deep reference to our newly built/machined value
-          deep_this[deep_prop_name] = this.built[prop_name] = New(this.built[prop_name], phase);
-        } else {
-          this.built[prop_name] = New(this.built[prop_name], phase);
-        }
-      }
-    },
 
     builder_phase: function() {
       
       // iterate over this, using this.melded as the melded, assign this as the builder, blank reference from builder because
       // the first layer is directly attached to builder
-      //                obj,  melded,      builder, parsable_reference_from_builder
-      Doh.collect_built(this, this.melded, this,    '');
+      //                          obj,  melded,      builder, parsable_reference_from_builder
+      Doh.collect_buildable_ideas(this, this.melded, this,    '');
       
       // we built stuff, now we need to be able to support it:
       // if we are in a built-chain, we need these
@@ -1939,6 +1917,28 @@ OnLoad('/doh_js/core', function($){
       
       // now do the actual building
       if(this.built){
+        // me as a builder phase
+        this.machine_built = function(phase){
+          // loop through the built and attempt to machine them
+          let deep_this, deep_prop_name;
+          for(let prop_name in this.built) {
+            if(prop_name === 'length') continue;
+            //this.built[prop_name].machine(phase);
+            if(SeeIf.NotUndefined(this[prop_name])){
+              this[prop_name] = this.built[prop_name] = New(this[prop_name], phase);
+            } else if(prop_name.indexOf('.') !== -1){
+              // parse ref
+              //                              obj,  deep ref,  count_back from the last reference
+              deep_this = Doh.parse_reference(this, prop_name, -1);
+                                                // true to get back the last reference in prop_name
+              deep_prop_name = Doh.parse_reference(true, prop_name);
+              // the above lets us alter the deep reference to our newly built/machined value
+              deep_this[deep_prop_name] = this.built[prop_name] = New(this.built[prop_name], phase);
+            } else {
+              this.built[prop_name] = New(this.built[prop_name], phase);
+            }
+          }
+        };
         this.machine_built(this.machine_built_to);
       }
       
@@ -2013,10 +2013,10 @@ OnLoad('/doh_js/core', function($){
       let new_idea = {}, prop_name, prop;
       
       inherits = Doh.meld_into_objectobject(inherits || this.inherited);
-      for(let pattern in inherits){
+      for(let pattern_name in inherits){
         prop_name = '';
-        for(prop_name in this.inherited[pattern]){
-          prop = this.inherited[pattern][prop_name];
+        for(prop_name in this.inherited[pattern_name]){
+          prop = this.inherited[pattern_name][prop_name];
           
         }
       }
