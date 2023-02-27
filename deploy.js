@@ -794,13 +794,11 @@ window.OnLoad = window.OnLoad || function(module_name, requires, callback, globa
       if (i !== 'length') continue;
       // allow the array structure to have the pattern name in key
       if(isNaN(i)){
-        Doh.Globals[i] = true;
         Doh.Globals[i] = Doh.Globals[i] || {};
         window[i] = DohWatch[i] = Doh.Globals[i];
       }
       // or in the value
       else {
-        Doh.Globals[globals[i]] = true;
         Doh.Globals[globals[i]] = Doh.Globals[globals[i]] || {};
         window[globals[i]] = DohWatch[globals[i]] = Doh.Globals[globals[i]];
       }
