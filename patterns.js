@@ -3480,10 +3480,7 @@ OnLoad('/doh_js/html', function($){
             // defining the setter means Doh is setting up the handlers for the first time
             Doh.observe(_css, prop, function(object, prop_name, new_value){
               // we need to watch for changes and do something?
-              let is_ = _css[prop], value;
-              if(is_) value = is_;
-              else value = that.e.css(prop);
-              if(value == new_value) return;
+              if(that.e.css(prop) == new_value) return;
               // if _css is different from the dom, try to change it once
               // use the .e.css because we are inside .css already
               that.e.css(prop, new_value);
