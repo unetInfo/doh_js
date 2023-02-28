@@ -3404,43 +3404,47 @@ OnLoad('/doh_js/html', function($){
       
       Doh.meld_objects(_attr, this.attr);
       
-      // store the live CSSStyleDeclaration
-      //computed_style = window.getComputedStyle(this.domobj);
       // make our new .css property into a proxy that handles all our different use cases
       this.css = new Proxy(_css, {
         // since we proxy a function, we can be used as one.
+        // css({prop:val}) OR css(prop, val) OR css("prop:val;") or
         apply: function(target, thisArg, argumentsList){
           if(argumentsList.length){
             // we need to correct for the setters being affected by this call
             let prop = argumentsList[0], value = argumentsList[1];
-            // a value indicates a set
+             // a value indicates a set, tell our setters
             if(value) _css[prop] = value;
-            // otherwise, if prop is enumerable, then it's a setter object
-            else if(typeof prop === 'object'){
+            // a string means that:
+            //    we want it converted to a setter object first
+            //    or we want to get the value
+            else if(typeof prop === 'string') {
+              if(prop.indexOf(':') > 0){
+                argumentsList[0] = prop = that.get_css_from_style(prop);
+              }
+              // if we don't convert prop above, then it won't be iterated below, which is correct for a get.
+            }
+            // if prop is enumerable, then it's a setter object
+            if(typeof prop === 'object'){
               for(let prop_name in prop){
-                // trigger setters for everything
+                // trigger setters for everything inside, they do their own comparing.
                 _css[prop_name] = prop[prop_name];
               }
             }
             // finally call css and apply the args
+            // jQuery still does so much for us, we just can't get away from it.
             return that.e.css.apply(that.e, argumentsList);
           } else return;
         },
         get: function(target, prop, receiver) {
           // this Symbol needs us to tell it what kind of thing this is
+          // this needs to return 'Object' to be compatible with .observe and .mimic
           if(prop === Symbol.toStringTag) return 'Object';
-          // try to get the value from the style. This is the list of directly edited things.
-          // the style will be in sync with the computed value.
-          let current_css = that.domobj.style;
-          if(current_css[prop]) return current_css[prop];
           // otherwise, get the computed value
-          else return that.e.css(prop);
+          return that.e.css(prop);
         },
         set: function(obj, prop, value) {
-          // set _css so setters will be triggered
-          _css[prop] = value;
-          
-          that.e.css(prop, value);
+          // call our own .css handler so setters will be triggered
+          that.css(prop, value);
           return true;
         },
         ownKeys: function(target){
@@ -3459,13 +3463,10 @@ OnLoad('/doh_js/html', function($){
               return prop_desc;
             }
             // otherwise our shortcut will work
-            let current_css = that.domobj.style, value;
-            if(current_css[prop]) value = current_css[prop];
-            else value = that.e.css(prop);
             return {
               enumerable: true,
               configurable: true,
-              value: value
+              value: that.domobj.style[prop]
             };
           }
           // prototype is special and needs to match up with the original or it complains
@@ -3477,11 +3478,7 @@ OnLoad('/doh_js/html', function($){
           if(descriptor.set){
             // defining the setter means Doh is setting up the handlers for the first time
             Doh.observe(_css, prop, function(object, prop_name, new_value){
-              // we need to watch for changes and do something?
-              let current_css = that.domobj.style, value;
-              if(current_css[prop]) value = current_css[prop];
-              else value = that.e.css(prop);
-              if(value == new_value) return;
+              if(that.e.css(prop) == new_value) return;
               // if _css is different from the dom, try to change it once
               // use the .e.css because we are inside .css already
               that.e.css(prop, new_value);
@@ -3579,20 +3576,16 @@ OnLoad('/doh_js/html', function($){
         // is the thing that gets updated.
         get: function(){
           let rtn = '',
-              styles = that.get_css_from_style(),
-              collection = styles;
+              styles = that.get_css_from_style();
           Object.keys(styles).forEach((prop_name) => {
-            // if we know about the property, use that cause it's prettier, this is controversial
-            if(_css[prop_name]) collection = _css;
-            
-            rtn += prop_name+':'+collection[prop_name]+';';
+            rtn += prop_name+':'+styles[prop_name]+';';
           });
           return rtn;
         },
         set: function(new_value){
           // we *could* just set the value, but we want to update our cache and
           // trigger setters for each property in the string.
-          if(typeof new_value === 'string') that.css(that.get_css_from_style(new_value));
+          if(typeof new_value === 'string') that.css(new_value);
           // we have to return true or it complains
           return true;
         },
@@ -3778,15 +3771,9 @@ OnLoad('/doh_js/html', function($){
     },
     // set_css({prop:val}) OR set_css(prop, val) OR set_css("prop:val;")
     set_css: function(o, p = undefined) {
-      if(typeof p !== 'undefined') {
-        Doh.warn('.set_css(',o,',',p,') is deprecated. Use .css(',o,',',p,') instead',this.idealize());
-        this.css(o,p);
-      } else if(typeof o === 'string') {
-        Doh.warn('.set_css(',o,') is deprecated. Use .style(',o,') instead',this.idealize());
-        this.style = o;
-      }
+      Doh.warn('.set_css(',o,',',p,') is deprecated. Use .css(',o,',',p,') instead',this.idealize());
+      return this.css(...arguments);
     },
-
   });
   
 // AA:  we never use this.  is it the future or is it further entanglement with jquery?
