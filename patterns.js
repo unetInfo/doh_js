@@ -232,7 +232,7 @@ OnLoad('/doh_js/setter', function($){
               get: function(){return val;},
               set: melded_method,
               // don't break enumerable stuff
-              enumerable: (typeof val === 'object' && val !== null),
+              enumerable: prop_desc.enumerable,
               // don't break our ability to configure
               configurable: true,
             });
@@ -3429,12 +3429,11 @@ OnLoad('/doh_js/html', function($){
         get: function(target, prop, receiver) {
           // this Symbol needs us to tell it what kind of thing this is
           if(prop === Symbol.toStringTag) return 'Object';
-          // otherwise, use the live style to get property value for [prop]
-          //return computed_style.getPropertyValue(prop);
-          // we need the return to stabilize so we use .css to get as well as set.
-          // if we have a cached version, it's actually prettier, though this is debatable as it de-syncs us, technically
-          let is_ = _css[prop];
-          if(is_) return is_;
+          // try to get the value from the style. This is the list of directly edited things.
+          // the style will be in sync with the computed value.
+          let current_css = that.domobj.style;
+          if(current_css[prop]) return current_css[prop];
+          // otherwise, get the computed value
           else return that.e.css(prop);
         },
         set: function(obj, prop, value) {
@@ -3460,13 +3459,12 @@ OnLoad('/doh_js/html', function($){
               return prop_desc;
             }
             // otherwise our shortcut will work
-            let is_ = _css[prop], value;
-            if(is_) value = is_;
+            let current_css = that.domobj.style, value;
+            if(current_css[prop]) value = current_css[prop];
             else value = that.e.css(prop);
             return {
               enumerable: true,
               configurable: true,
-              writable: true,
               value: value
             };
           }
@@ -3480,7 +3478,10 @@ OnLoad('/doh_js/html', function($){
             // defining the setter means Doh is setting up the handlers for the first time
             Doh.observe(_css, prop, function(object, prop_name, new_value){
               // we need to watch for changes and do something?
-              if(that.e.css(prop) == new_value) return;
+              let current_css = that.domobj.style, value;
+              if(current_css[prop]) value = current_css[prop];
+              else value = that.e.css(prop);
+              if(value == new_value) return;
               // if _css is different from the dom, try to change it once
               // use the .e.css because we are inside .css already
               that.e.css(prop, new_value);
@@ -3608,7 +3609,7 @@ OnLoad('/doh_js/html', function($){
         this.style = this.initial_style;
       }
       
-      // merge in initial css
+      // merge in idea css
       if(idea_css) this.css(idea_css);
       // apply initial attributes
       if(this.initial_attr) this.attr(this.initial_attr);
