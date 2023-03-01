@@ -13,6 +13,7 @@ if(!Doh) Doh = {};
 // This has to be very early.
 // we try not to use this now that the url paramater is working
 //Doh.DebugMode = true;
+Doh.ReduceWarnings = !Doh.DebugMode;
 
 // this is for being required by a nodejs module
 if(typeof exports != 'undefined') {
@@ -129,6 +130,8 @@ OnLoad('/doh_js/see_if', function($){
     
     IsStringAndHasValue: (value)=>{return (typeof value === 'string' && value !== '') ;},
     
+    IsOnlyNumbers:  (value) => {return (/^\d*\.?\d+$/.test(value));},
+    
     // Not conditions, interestingly different
     NotUndefined:   (value) => {return typeof value !== 'undefined' ;},
     NotDefined:     (value) => {return (typeof value === 'undefined' || value === null) ;},
@@ -240,7 +243,7 @@ OnLoad('/doh_js/setter', function($){
           // we have to get (or re-get) the prop_desc here in case the melded setter already exists or we just made one
           prop_desc = Object.getOwnPropertyDescriptor(object, prop);
           if(!prop_desc.set.meld_stack){
-            console.warn('Setter.observe found a different setter for:',prop,'on object:',object,'with callback:',on_change_callback);
+            console.warn('Setter.observe found a different kind of setter for:',prop,'on object:',object,'with callback:',on_change_callback);
             return function(){};
           }
           // just push our on_change onto the meld_stack. 
@@ -325,6 +328,7 @@ OnLoad('/doh_js/core', function($){
     PatternInheritedBy: {},
     // keyed by module, a list of patterns it creates
     ModulePatterns: {},
+    HasReported: {},
     /**
      *  a collection of functions to validate compatibility of a melded property
      *  with it's contents
@@ -2154,7 +2158,8 @@ OnLoad('/doh_js/core', function($){
       //Doh.mimic(this, 'parent', this, 'builder');
       Doh.mimic(this, 'builder', this, 'parent', function(){
         // this means that someone set parent, and it changes builder
-        Doh.warn('.parent is deprecated, please use builder instead', this.idealize());
+        if(!Doh.ReduceWarnings || !Doh.HasReported['parent']) Doh.warn('.parent is deprecated, please use builder instead', this.idealize());
+        Doh.HasReported['parent'] = true;
       });
     },
     pre_builder_phase: function(){
@@ -3097,7 +3102,8 @@ OnCoreLoaded(Doh.ApplyFixes, function(){
     parenting_phase:    {rename:'builder_phase'},
     pre_parenting_phase:{rename:'pre_builder_phase'},
     children:           {run:function(idea){
-      if(!Doh.SeenKeys['children'][idea.pattern])Doh.warn('"',idea.pattern,'" has children. (module:',Doh.PatternModule[idea.pattern],')');
+      if(!Doh.SeenKeys['children'][idea.pattern] && (!Doh.HasReported['children'] || !Doh.ReduceWarnings)) Doh.warn('"',idea.pattern,'" has children. (module:',Doh.PatternModule[idea.pattern],')');
+      Doh.HasReported.children = true;
     }},
   });
   Doh.meld_objects(Doh.WatchedPhases, {
@@ -3341,31 +3347,47 @@ OnLoad('/doh_js/html', function($){
   // AA:  A discussion of the interface between DOM elements and the html pattern should go here
   Pattern('html', ['parenting','control'], {
     melded:{
+      // make classes unique during construction
       classes:'array',
+      // NOTE: css passed in by patterns will be sent to the pattern class
       css:'object',
       attr:'object',
       initial_css:'object',
+      // ignore this. should be a meld type?
       stylesheet_class:'exclusive',
       html_phase:'phase'
     },
     // e should be a jQuery [Element/Array]
     // or false for using a passed in selector
     e: false,
+    // attr will be deep copied so it is safe to send in to any element modifier
+    // this will become an observer-compatible Proxy system for traping .attr mechanics
+    // currently implemented are: apply, get, set, has, ownKeys, getOwnPropertyDescriptor, defineProperty
+    attr: {},
     // used when e = false and we are generating a new element
     tag: 'div',
     // provided for selectors
+    // will be mimicked to .attr.id
     id: '',
-    // attributes to set on the element by name:key
-    attr: {},
     // should always be a number keyed array of classes, will be uniqued.
+    // will be replaced with an array-like Proxy that sync's with the live DOM
+    // most array operations are supported except sorting and splicing/slicing.
+    // can be looped over, iterated, called as a function to add...
     classes: ['doh'],
-    
+    // this will become a .observe system that watches the value change to update the dom
+    // it will have an additional getter added to it that always retrieves the latest value from the dom
+    //style: '',
+    // a link to the stylesheet class from $.stylesheet that controls pattern style classes.
+    // needs to be false, since this is not available to instances
     stylesheet_class: false,
-    
     // css will be deep copied so it is safe to send in to any element modifier
+    // this will become an observer-compatible Proxy system for traping .css mechanics
+    // currently implemented are: apply, get, set, has, ownKeys, getOwnPropertyDescriptor, defineProperty
     css: {},
     // html content to be added before appending children
-    html: '',
+    // this will become a .observe system that watches the value change to update the dom
+    // it will have an additional getter added to it that always retrieves the latest value from the dom
+    //html: '',
     
     object_phase:function(){
       let that = this;
@@ -3388,21 +3410,182 @@ OnLoad('/doh_js/html', function($){
       // stash ourself on the DOM object for the Doh.get_dobj() function later
       this.domobj.dobj = this;
 
-      // patterns don't use css anymore, so this must be from the idea
+          // patterns don't use css anymore, so this must be from the idea
       let idea_css = this.css,
-      // create references for the proxies
+          clist = that.domobj.classList,
+          // create references for the proxies
+          initial_classes = this.classes,
+          initial_html = '',
+          _classes = function(){},
           _css = function(){},
           _attr = function(){};
       
       // store the css and attributes coming in from idea phase
       // css may already be there from the patterns converting css to classes
-      Doh.meld_objects(this.initial_css, idea_css);
+      if(SeeIf.NotEmptyObject(idea_css)){
+        Doh.meld_objects(this.initial_css, idea_css);
+      }
       // store the initial attr's set by the patterns and idea
-      this.initial_attr = this.attr;
-          
-      Doh.meld_objects(_css, idea_css);
+      if(SeeIf.NotEmptyObject(this.attr)) {
+        this.initial_attr = this.attr;
+      }
       
-      Doh.meld_objects(_attr, this.attr);
+      // make our new .classes property into a proxy that handles all our different use cases
+      this.classes = new Proxy(_classes, {
+        apply: function(target, thisArg, argumentsList){
+          for(let i in argumentsList){
+            _classes[argumentsList[i]] = argumentsList[i];
+          }
+          return clist.add(...argumentsList);
+        },
+        get: function(target, prop, receiver) {
+          // this Symbol needs us to tell it what kind of thing this is
+          // this needs to return 'Object' to be compatible with .observe and .mimic
+          switch(prop){
+            case Symbol.toStringTag:
+              // trap the class toStringTag symbol and identify as an Array
+              return 'Array';
+              break;
+            case Symbol.iterator:
+              return clist.values();
+              break;
+            case 'prototype':
+            case '__proto__':
+              return [][prop];
+              break;
+            case 'push':
+            case 'unshift':
+              // trap the push/unshift and do our own:
+              return function(){
+                that.classes(...arguments);
+                return clist.length;
+              };
+              break;
+            case 'pop':
+              // trap the toString and do our own:
+              return function(){
+                let token = clist[clist.length-1];
+                delete that.classes[token]
+                //clist.remove(token);
+                return token;
+              };
+              break;
+            case 'shift':
+              // trap the toString and do our own:
+              return function(){
+                let token = clist[0];
+                delete that.classes[token]
+                //clist.remove(token);
+                return token;
+              };
+              break;
+            case 'toString':
+            case Symbol.toPrimitive:
+              // trap the toString and do our own:
+              return function(){
+                return clist.value;
+              };
+              break;
+          }
+          // otherwise, get the value from the dom
+          if(clist[prop]){
+            return clist[prop];
+          }
+          // or pass it through to the array
+          if(typeof [][prop] === 'function') return [][prop].bind(clist);
+          
+          // or we are asking about a class?
+          if(clist.contains(prop)){
+            return true;
+          }
+          // or just let it bubble
+          return Reflect.get(...arguments);
+        },
+        set: function(obj, prop, value) {
+          // only actually set if the property is a number, everything else is not a value, but a property
+          if(SeeIf.IsOnlyNumbers(prop)){
+            that.classes(value);
+            return true;
+          }
+          // if the prop is a string with value, then add that
+          if(SeeIf.IsStringAndHasValue(prop)){
+            // if the value is truey, then we add
+            if(value) that.classes(prop);
+            // but if it's falsey, then we remove.
+            else //clist.remove(prop);
+                 delete that.classes[prop];
+            return true;
+          }
+          return Reflect.set(obj, prop, value);
+        },
+        ownKeys: function(target){
+          // ownKeys wants an array with our properties and 'prototype'
+          let rtn = Object.keys(Doh.meld_into_objectobject(that.domobj.classList));
+          // custom ownKeys on anonymous functions need to passthrough the prototype but...
+          // the engine seems to clip it off though, when we do things like iterate for loops
+          rtn.push('length');
+          rtn.push('prototype');
+          return rtn;
+        },
+        getOwnPropertyDescriptor: function(target, prop) { // called for every property
+          if(prop !== 'prototype' && prop !== 'length'){
+            // detect forwarded properties from _classes and retrieve them instead
+            if(SeeIf.IsStringAndHasValue(prop)){
+              let prop_desc = Object.getOwnPropertyDescriptor(_classes, prop);
+              if(prop_desc)if(prop_desc.set){
+                return prop_desc;
+              }
+            }
+            // otherwise our shortcut will work
+            return {
+              enumerable: true,
+              configurable: true,
+              value: clist[prop]
+            };
+          }
+          // prototype is special and needs to match up with the original or it complains
+          else return Reflect.getOwnPropertyDescriptor(target, prop);
+        },
+        defineProperty: function(target, prop, descriptor) {
+          // forward property setters to _classes
+          if(SeeIf.IsStringAndHasValue(prop)){
+            let rtn = Object.defineProperty(_classes, prop, descriptor);
+            if(descriptor.set){
+              // defining the setter means Doh is setting up the handlers for the first time
+              Doh.observe(_classes, prop, function(object, prop_name, new_value){
+                
+                
+                if(that.e.css(prop) == new_value) return;
+                // if _css is different from the dom, try to change it once
+                // use the .e.css because we are inside .css already
+                that.e.css(prop, new_value);
+                
+                
+              });
+            }
+            return rtn;
+          }
+        },
+        has: function(target, prop){
+          return clist.contains(prop);
+        },
+        deleteProperty: function(target, prop){
+          if(SeeIf.IsOnlyNumbers(prop)){
+            let classname = clist[Number(prop)];
+            delete _classes[classname];
+            clist.remove(classname);
+          }
+          else if(SeeIf.IsStringAndHasValue(prop)){
+            delete _classes[prop];
+            clist.remove(prop);
+          }
+        },
+        getPrototypeOf: function(target) {
+          return Array;
+        }
+      });
+      
+      Doh.meld_arrays(this.classes, initial_classes);
       
       // make our new .css property into a proxy that handles all our different use cases
       this.css = new Proxy(_css, {
@@ -3412,6 +3595,11 @@ OnLoad('/doh_js/html', function($){
           if(argumentsList.length){
             // we need to correct for the setters being affected by this call
             let prop = argumentsList[0], value = argumentsList[1];
+            if(SeeIf.IsEmptyString(value)){
+              // an empty string means delete the property
+              // update our cache to match this
+              delete _css[prop];
+            }
              // a value indicates a set, tell our setters
             if(value) _css[prop] = value;
             // a string means that:
@@ -3427,7 +3615,13 @@ OnLoad('/doh_js/html', function($){
             if(typeof prop === 'object'){
               for(let prop_name in prop){
                 // trigger setters for everything inside, they do their own comparing.
-                _css[prop_name] = prop[prop_name];
+                if(SeeIf.IsEmptyString(prop[prop_name])){
+                  // an empty string means delete the property
+                  // update our cache to match this
+                  delete _css[prop_name];
+                } else {
+                  _css[prop_name] = prop[prop_name];
+                }
               }
             }
             // finally call css and apply the args
@@ -3489,11 +3683,21 @@ OnLoad('/doh_js/html', function($){
         has: function(target, prop){
           return (prop in that.get_css_from_style());
         },
+        deleteProperty: function(target, prop){
+          that.css(prop, '');
+        },
       });
       this.attr = new Proxy(_attr, {
         apply: function(target, thisArg, argumentsList){
           if(argumentsList.length){
             let prop = argumentsList[0], value = argumentsList[1];
+            if(SeeIf.IsEmptyString(value) || value === null){
+              // an empty string means delete the property
+              // update our cache to match this
+              delete _attr[prop];
+              // attr needs null, so we fix it
+              value = argumentsList[1] = null;
+            }
             if(value) _attr[prop] = value;
             else if(typeof prop === 'object'){
               for(let prop_name in prop){
@@ -3509,8 +3713,7 @@ OnLoad('/doh_js/html', function($){
         },
         set: function(obj, prop, value) {
           // set _attr so setters will be triggered
-          _attr[prop] = value;
-          return that.e.attr(prop, value);
+          return that.attr(prop, value);
         },
         ownKeys: function(target){
           let domobj = that.domobj, rtn = [];
@@ -3561,6 +3764,9 @@ OnLoad('/doh_js/html', function($){
         has: function(target, key){
           return that.domobj.hasAttribute(key);
         },
+        deleteProperty: function(target, prop){
+          that.attr(prop, null);
+        },
       });
       
       // stash any initial style
@@ -3568,34 +3774,26 @@ OnLoad('/doh_js/html', function($){
         //initial_style
         this.initial_style = this.style;
       }
+      // clear the property so it will trigger the new setter and actually set our initial styles
+      this.style = '';
       // style is an old idea, lets fix it so that it's more useful
       // turn style into a getter/setter so it can be more handy for us
+      Doh.observe(this, 'style', function(object, prop, new_value){
+        // we *could* just set the value, but we want to update our cache and
+        // trigger .css setters for each property in the string.
+        if(typeof new_value === 'string') that.css(new_value);
+      });
       Object.defineProperty(this, 'style', {
         // if we have a setter, then we must have a getter
         // our fancy getter retrieves the original value storage, which
         // is the thing that gets updated.
         get: function(){
-          let rtn = '',
-              styles = that.get_css_from_style();
-          Object.keys(styles).forEach((prop_name) => {
-            rtn += prop_name+':'+styles[prop_name]+';';
-          });
-          return rtn;
+          return that.domobj.style.cssText;
         },
-        set: function(new_value){
-          // we *could* just set the value, but we want to update our cache and
-          // trigger setters for each property in the string.
-          if(typeof new_value === 'string') that.css(new_value);
-          // we have to return true or it complains
-          return true;
-        },
-        // don't break enumerable stuff
-        // though, we could opt to not include style in enumeration now that it's superfluous
-        enumerable: true,
-        // don't break our ability to configure
+        // make this not enumerable because the data is technically duplicated from .css which is more reliable and useful
+        enumerable: false,
         configurable: true,
       });
-      
       // set style before css so it doesn't blow the css away
       if(this.initial_style){
         // now use our super useful property
@@ -3621,6 +3819,38 @@ OnLoad('/doh_js/html', function($){
         }
       }
       
+      // stash initial html, if any
+      if(this.html) initial_html = this.html;
+      // clear the property so it will trigger the new setter and actually set our initial html
+      this.html = '';
+      // .html is an old idea, lets fix it so that it's more useful
+      // turn style into a getter/setter so it can be more handy for us
+      Doh.observe(this, 'html', function(object, prop, new_value){
+        // only try and set html if it's actually set to something
+        if(SeeIf.NotEmptyString(new_value)){
+          // ... and there aren't already children
+          if(that.e.children().length > 0) {
+            // set inner text
+            // WARNING: this will overwrite children
+            Doh.warn(`html object overwrote children with: "${new_value}"`,'\n',this.idealize());
+          }
+          if(that.e.html() != new_value) that.e.html(new_value);
+        }
+      });
+      Object.defineProperty(this, 'html', {
+        // if we have a setter, then we must have a getter
+        // our fancy getter retrieves the original value storage, which
+        // is the thing that gets updated.
+        get: function(){
+          return that.e.html();
+        },
+        // techincally this is duplicate data, but that's for you to figure out.
+        enumerable: false,
+        configurable: true,
+      });
+      // now use our super useful property
+      if(initial_html) this.html = initial_html;
+      
       
       
       Doh.mimic(this, 'attrs', this, 'attr');
@@ -3638,7 +3868,7 @@ OnLoad('/doh_js/html', function($){
               // pretrim part 1 (the value)
               part[1] = part[1].trim();
               // if the value is only a number or float, convert it to that, so it can be converted later if numbers are allowed
-              rtn[part[0].trim()] = (/^\d*\.?\d+$/.test(part[1])?Number(part[1]):part[1]);
+              rtn[part[0].trim()] = (SeeIf.IsOnlyNumbers(part[1])?Number(part[1]):part[1]);
             }
           }
         });
@@ -3646,29 +3876,11 @@ OnLoad('/doh_js/html', function($){
       return rtn;
     },
     pre_builder_phase:function() {
-      if(this.e) {
-        // add any classes
-        this.e.addClass(this.classes.join(' '));
-          
-          
-        // only try and set html if it's actually set to something
-        if(SeeIf.NotEmptyString(this.html)){
-          // ... and there aren't already children
-          if(this.e.children().length < 1) {
-            // set inner text
-            // WARNING: this will overwrite children
-            this.e.html(this.html);
-          } else {
-            Doh.warn(`html object tried to overwrite children with: "${this.html}"`,'\n',this);
-          }
-        }
-        
-        // we rely on children waiting to be appended,
-        // stash the intended machine state and use 'control_phase'
-        if(this.machine_built_to !== 'control_phase'){
-          this._machine_built_to = this.machine_built_to;
-          this.machine_built_to = 'control_phase';
-        }
+      // we rely on children waiting to be appended,
+      // stash the intended machine state and use 'control_phase'
+      if(this.machine_built_to !== 'control_phase'){
+        this._machine_built_to = this.machine_built_to;
+        this.machine_built_to = 'control_phase';
       }
     },
     builder_phase:function(){
@@ -3771,7 +3983,8 @@ OnLoad('/doh_js/html', function($){
     },
     // set_css({prop:val}) OR set_css(prop, val) OR set_css("prop:val;")
     set_css: function(o, p = undefined) {
-      Doh.warn('.set_css(',o,',',p,') is deprecated. Use .css(',o,',',p,') instead',this.idealize());
+      if(!Doh.ReduceWarnings || !Doh.HasReported['set_css']) Doh.warn('.set_css(',o,',',p,') is deprecated. Use .css(',o,',',p,') instead',this.idealize());
+      Doh.HasReported['set_css'] = true;
       return this.css(...arguments);
     },
   });
