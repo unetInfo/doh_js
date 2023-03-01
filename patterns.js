@@ -3433,8 +3433,11 @@ OnLoad('/doh_js/html', function($){
       // make our new .classes property into a proxy that handles all our different use cases
       this.classes = new Proxy(_classes, {
         apply: function(target, thisArg, argumentsList){
+          let classname;
           for(let i in argumentsList){
-            _classes[argumentsList[i]] = argumentsList[i];
+            classname = argumentsList[i];
+            _classes[classname] = classname;
+            //Object.defineProperty(_classes, classname, {enumerable:true,configurable:true});
           }
           return clist.add(...argumentsList);
         },
@@ -3443,8 +3446,8 @@ OnLoad('/doh_js/html', function($){
           // this needs to return 'Object' to be compatible with .observe and .mimic
           switch(prop){
             case Symbol.toStringTag:
-              // trap the class toStringTag symbol and identify as an Array
-              return 'Array';
+              // trap the class toStringTag symbol and identify as an Object
+              return 'Object';
               break;
             case Symbol.iterator:
               return clist.values();
@@ -3512,15 +3515,17 @@ OnLoad('/doh_js/html', function($){
             // if the value is truey, then we add
             if(value) that.classes(prop);
             // but if it's falsey, then we remove.
-            else //clist.remove(prop);
-                 delete that.classes[prop];
+            else {
+              _classes[prop] = undefined;
+              clist.remove(prop);
+            }
             return true;
           }
           return Reflect.set(obj, prop, value);
         },
         ownKeys: function(target){
           // ownKeys wants an array with our properties and 'prototype'
-          let rtn = Object.keys(Doh.meld_into_objectobject(that.domobj.classList));
+          let rtn = Object.keys(Doh.meld_into_objectobject(clist));
           // custom ownKeys on anonymous functions need to passthrough the prototype but...
           // the engine seems to clip it off though, when we do things like iterate for loops
           rtn.push('length');
@@ -3555,11 +3560,13 @@ OnLoad('/doh_js/html', function($){
               Doh.observe(_classes, prop, function(object, prop_name, new_value){
                 
                 
-                if(that.e.css(prop) == new_value) return;
-                // if _css is different from the dom, try to change it once
-                // use the .e.css because we are inside .css already
-                that.e.css(prop, new_value);
-                
+                if(new_value){
+                  // if _css is different from the dom, try to change it once
+                  // use the .e.css because we are inside .css already
+                  clist.add(prop);
+                } else {
+                  clist.remove(prop);
+                }
                 
               });
             }
@@ -3570,15 +3577,15 @@ OnLoad('/doh_js/html', function($){
           return clist.contains(prop);
         },
         deleteProperty: function(target, prop){
+          let classname;
           if(SeeIf.IsOnlyNumbers(prop)){
-            let classname = clist[Number(prop)];
-            delete _classes[classname];
-            clist.remove(classname);
+            classname = clist[Number(prop)];
           }
           else if(SeeIf.IsStringAndHasValue(prop)){
-            delete _classes[prop];
-            clist.remove(prop);
+            classname = prop;
           }
+          _classes[classname] = undefined;
+          clist.remove(classname);
         },
         getPrototypeOf: function(target) {
           return Array;
@@ -3598,7 +3605,7 @@ OnLoad('/doh_js/html', function($){
             if(SeeIf.IsEmptyString(value)){
               // an empty string means delete the property
               // update our cache to match this
-              delete _css[prop];
+              _css[prop] = undefined;
             }
              // a value indicates a set, tell our setters
             if(value) _css[prop] = value;
@@ -3618,7 +3625,7 @@ OnLoad('/doh_js/html', function($){
                 if(SeeIf.IsEmptyString(prop[prop_name])){
                   // an empty string means delete the property
                   // update our cache to match this
-                  delete _css[prop_name];
+                  _css[prop_name] = undefined;
                 } else {
                   _css[prop_name] = prop[prop_name];
                 }
@@ -3694,14 +3701,21 @@ OnLoad('/doh_js/html', function($){
             if(SeeIf.IsEmptyString(value) || value === null){
               // an empty string means delete the property
               // update our cache to match this
-              delete _attr[prop];
+              _attr[prop] = undefined;
               // attr needs null, so we fix it
               value = argumentsList[1] = null;
             }
             if(value) _attr[prop] = value;
             else if(typeof prop === 'object'){
               for(let prop_name in prop){
-                _attr[prop_name] = prop[prop_name];
+                // trigger setters for everything inside, they do their own comparing.
+                if(SeeIf.IsEmptyString(prop[prop_name]) || value === null){
+                  // an empty string means delete the property
+                  // update our cache to match this
+                  _attr[prop_name] = undefined;
+                } else {
+                  _attr[prop_name] = prop[prop_name];
+                }
               }
             }
             return that.e.attr.apply(that.e, argumentsList);
