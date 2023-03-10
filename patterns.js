@@ -56,6 +56,53 @@ Doh.old_meld_objects = function(destination = {}){
 //Doh.meld_objects = Doh.old_meld_objects;
 
 OnLoad('/doh_js/see_if', function($){
+  /**
+   *  This is a library of utility functions that can be used for type checking and conditional operations 
+   *  in JavaScript. The functions are all defined in the SeeIf object, which is first defined as an empty 
+   *  object and then extended with the various functions.
+   *  
+   *  The functions cover a range of type checks, including checking whether a value is:
+   *  undefined, 
+   *  null, 
+   *  a string, 
+   *  a function, 
+   *  a boolean, 
+   *  a number (excluding NaN), 
+   *  an array, 
+   *  a Doh object (a complex object built with Doh), 
+   *  or an object with named properties (i.e., not an array or literal).
+   *  
+   *  In addition to these basic type checks, the library also includes functions for checking whether a 
+   *  value is:
+   *  "defined" (usable), 
+   *  "true" (binary 1), 
+   *  "false" (binary 0), 
+   *  "truey" (values that equal binary 1, even if represented by a different data type), 
+   *  "falsey" (values that equal binary 0, even if represented by a different data type), 
+   *  "nullish" (effectively the opposite of "defined"), 
+   *  "arraylike" (values that act like arrays in every way), 
+   *  "iterable" (values that define a Symbol iterator so that native methods can iterate over them), 
+   *  "enumerable" (values that can be iterated over in a for/in loop), 
+   *  "literal" (values that are static literals, i.e., not objects or arrays), and 
+   *  "emptyobject" (values that are object objects or arraylike but have no properties of their own).
+   *  
+   *  Many of the functions are fairly straightforward, but some require a bit more explanation. 
+   *  For example, the IsNull function checks whether a value is null, which seems straightforward, 
+   *  but it's worth noting that null is a special value in JavaScript that represents the intentional 
+   *  absence of any object value. It is distinct from undefined, which is used to represent variables 
+   *  that have not been initialized, parameters that have not been provided, or missing properties on 
+   *  objects.
+   *  
+   *  Similarly, the NotNumber function checks whether a value is not a number or is NaN (Not a Number), 
+   *  which is another special value in JavaScript that indicates an unrepresentable value resulting from 
+   *  an operation. NaN is unique in that it is not equal to any value, including itself, so it requires 
+   *  a specific check to identify it.
+   *  
+   *  Overall, the SeeIf library provides a powerful set of functions for checking the types of values and 
+   *  executing conditional operations based on those types. By using these functions, JavaScript developers 
+   *  can write more robust and error-resistant code that can handle a wider range of possible values and 
+   *  data types.
+   */
   let SeeIf = window.SeeIf || {};
   // enshrine the definitions of variable states in the SeeIf library
   Object.assign(SeeIf, {
@@ -130,7 +177,7 @@ OnLoad('/doh_js/see_if', function($){
     
     IsStringAndHasValue: (value)=>{return (typeof value === 'string' && value !== '') ;},
     
-    IsOnlyNumbers:  (value) => {return (/^\d*\.?\d+$/.test(value));},
+    IsOnlyNumbers:  (value) => {return (/^-?\d*\.?\d+$/.test(value));},
     
     // Not conditions, interestingly different
     NotUndefined:   (value) => {return typeof value !== 'undefined' ;},
@@ -310,10 +357,8 @@ OnLoad('/doh_js/core', function($){
   
   // if included, we remove SeeIf. It should not be added to
   if(window?.DohWatch)if(DohWatch.SeeIf){
-    DohWatch.SeeIf = false;
     delete DohWatch.SeeIf;
   }
-  
   // build the core!
   Doh.meld_objects(Doh, {
     // in nodejs, the normal OnLoad is replaced with a far simpler one that needs this set for core.
@@ -477,9 +522,11 @@ OnLoad('/doh_js/core', function($){
      *  @details Creates a collapsed stack trace for each log entry
      *  Doh.log('error message', object1, 'some string', objectN, ...);
      */
+    log: console.log.bind(console, 'Doh:'),
+    /*
     log: function(){
       Doh._log(arguments, 'Doh:', 'trace');
-    },
+    },*/
     /**
      *  @brief log a custom warning to Doh
      *
@@ -489,9 +536,11 @@ OnLoad('/doh_js/core', function($){
      *  @details
      *  Doh.warn('error message', object1, 'some string', objectN, ...);
      */
+    warn: console.warn.bind(console, 'Doh Warning:'),
+    /*
     warn: function(){
       Doh._log(arguments, 'Doh Warning:', 'warn');
-    },
+    },*/
     /**
      *  @brief log a custom error to Doh
      *
@@ -501,9 +550,11 @@ OnLoad('/doh_js/core', function($){
      *  @details
      *  Doh.error('error message', object1, 'some string', objectN, ...);
      */
+    error: console.error.bind(console, 'Doh ERROR:'),
+    /*
     error: function(){
       Doh._log(arguments, 'Doh ERROR:', 'error');
-    },
+    },*/
     /**
      *  @brief log a debug error to Doh
      *
@@ -515,10 +566,12 @@ OnLoad('/doh_js/core', function($){
      *  
      *  Doh.debug('error message', object1, 'some string', objectN, ...);
      */
+    debug: (Doh.DebugMode?function(){throw console.error('Doh ERROR:', ...arguments);}:console.error.bind(console, 'Doh DEBUG:')),
+    /*
     debug: function(){
       if(Doh.DebugMode) throw Doh._log(arguments, 'Doh DEBUG:', 'error');
       Doh._log(arguments, 'Doh DEBUG:', 'error');
-    },
+    },*/
     /**
      *  @brief throw and log an error to Doh
      *
@@ -649,10 +702,15 @@ OnLoad('/doh_js/core', function($){
      *  @details NOTE: also prepares and prepends the list of pre_{method} functions
      */
     find_meld_method_stack: function(object, method_name){
-      let meld_method_order = [], pre_meld_method_order = [], ilist = object.inherited;
-      for(let i in ilist){
-        if(object.inherited[i]['pre_'+method_name]) pre_meld_method_order.push(object.inherited[i]['pre_'+method_name]);
-        if(object.inherited[i][method_name]) meld_method_order.push(object.inherited[i][method_name]);
+      let meld_method_order = [], 
+          pre_meld_method_order = [], 
+          inherited_patterns = object.inherited, 
+          inherited_pattern;
+      
+      for(let i in inherited_patterns){
+        inherited_pattern = inherited_patterns[i];
+        if(inherited_pattern['pre_'+method_name]) pre_meld_method_order.push(inherited_pattern['pre_'+method_name]);
+        if(inherited_pattern[method_name]) meld_method_order.push(inherited_pattern[method_name]);
       }
       return pre_meld_method_order.concat(meld_method_order);
     },
@@ -707,10 +765,14 @@ OnLoad('/doh_js/core', function($){
      *  
      *  @details operates on object, replaces melded method keys with actual method melders
      */
-    update_meld_methods: function(object){
-      for(let melded_prop in object.melded){
+    update_meld_methods: function(object, deep_melded, builder){
+      let melded_prop = '', inner_melded = object.melded, melded_value;
+      if(deep_melded) inner_melded = deep_melded;
+      for(melded_prop in inner_melded){
+        melded_value = inner_melded[melded_prop];
+        // if the melded_value
         // look for melded methods and phases on object
-        if(object.melded[melded_prop] === 'method' || object.melded[melded_prop] === 'phase'){
+        if(inner_melded[melded_prop] === 'method' || inner_melded[melded_prop] === 'phase'){
           // conditionally update only the method stack if the method was melded before
           if(typeof object[melded_prop] === 'function')if(typeof object[melded_prop].update_meld_stack === 'function'){
             object[melded_prop].update_meld_stack();
@@ -718,7 +780,9 @@ OnLoad('/doh_js/core', function($){
           }
           // otherwise, do a fresh meld
           object[melded_prop] = Doh.meld_method(object, melded_prop);
+          continue;
         }
+        //if(object.melded
       }
     },
 
@@ -808,6 +872,7 @@ OnLoad('/doh_js/core', function($){
       prop_name = '';
       for(prop_name in idea){
         melded_type = melded[prop_name];
+        if(!melded_type)if(melded['*']) melded_type = melded['*'];
         if(SeeIf.IsSet(melded_type))if(SeeIf.NotString(melded_type)){
           go_deep = true;
           melded_type = 'object';
@@ -1082,7 +1147,7 @@ OnLoad('/doh_js/core', function($){
           if(pattern_name !== 'idea')if(Doh.PatternModule[pattern_name].indexOf('/doh_js/') == 0){
             //Doh.log('Doh.extend_inherits() is skipping core and found a core pattern:', pattern_name, 'from module:', Doh.PatternModule[pattern_name]);
             // this is a core module because the string starts with /doh_js/
-            inherits[pattern_name] = null;
+            //inherits[pattern_name] = null;
             delete inherits[pattern_name]
             continue;
           }
@@ -1711,7 +1776,7 @@ OnLoad('/doh_js/core', function($){
                   if(!Doh.SeenKeys[pattern_prop][idea.pattern]) Doh[logger_method]('WatchedKeys:',pattern_prop,'has been renamed:',command_value,idea);
                   if(idea.melded?.[pattern_prop]){
                     idea.melded[command_value] = idea.melded[pattern_prop];
-                    idea.melded[pattern_prop] = null;
+                    //idea.melded[pattern_prop] = null;
                     delete idea.melded[pattern_prop];
                   }
                   // make our new reference to the contents
@@ -1720,10 +1785,10 @@ OnLoad('/doh_js/core', function($){
                 case 'remove':
                   if(!Doh.SeenKeys[pattern_prop][idea.pattern]) Doh[logger_method]('WatchedKeys:',pattern_prop,'will be removed.',idea);
                   if(idea.melded?.[pattern_prop]){
-                    idea.melded[pattern_prop] = null;
+                    //idea.melded[pattern_prop] = null;
                     delete idea.melded[pattern_prop];
                   }
-                  idea[pattern_prop] = null;
+                  //idea[pattern_prop] = null;
                   delete idea[pattern_prop];
                   break;
               }
@@ -3306,6 +3371,10 @@ OnLoad('/doh_js/html', function($){
         newPattern.style = '';
       }
       
+      newPattern.melded = Doh.meld_objects(newPattern.melded || {}, {
+        initial_css: 'object'
+      });
+      
     }
     return newPattern;
   }
@@ -3352,9 +3421,6 @@ OnLoad('/doh_js/html', function($){
       // NOTE: css passed in by patterns will be sent to the pattern class
       css:'object',
       attr:'object',
-      initial_css:'object',
-      // ignore this. should be a meld type?
-      stylesheet_class:'exclusive',
       html_phase:'phase'
     },
     // e should be a jQuery [Element/Array]
@@ -3379,7 +3445,7 @@ OnLoad('/doh_js/html', function($){
     //style: '',
     // a link to the stylesheet class from $.stylesheet that controls pattern style classes.
     // needs to be false, since this is not available to instances
-    stylesheet_class: false,
+    //stylesheet_class: false,
     // css will be deep copied so it is safe to send in to any element modifier
     // this will become an observer-compatible Proxy system for traping .css mechanics
     // currently implemented are: apply, get, set, has, ownKeys, getOwnPropertyDescriptor, defineProperty
@@ -3388,6 +3454,7 @@ OnLoad('/doh_js/html', function($){
     // this will become a .observe system that watches the value change to update the dom
     // it will have an additional getter added to it that always retrieves the latest value from the dom
     //html: '',
+    
     
     object_phase:function(){
       let that = this;
@@ -3399,7 +3466,7 @@ OnLoad('/doh_js/html', function($){
         this.builder = Doh.get_dobj(this.builder);
       }
       // ensure that the element is a setting, already set, or a new jQuery element using this.tag
-      this.e = this.e || $('<'+this.tag+'>');
+      this.e = this.e || $(document.createElement(this.tag));
       if( typeof this.e === 'string' ) {
         // if it's a string, then it's a jquery selector
         this.e = $(this.e);
@@ -3410,20 +3477,24 @@ OnLoad('/doh_js/html', function($){
       // stash ourself on the DOM object for the Doh.get_dobj() function later
       this.domobj.dobj = this;
 
+      if(this.stylesheet_class) this.stylesheet_class = false;
+
           // patterns don't use css anymore, so this must be from the idea
       let idea_css = this.css,
           clist = that.domobj.classList,
           // create references for the proxies
           initial_classes = this.classes,
           initial_html = '',
+          //initial_when = this.when || {},
           _classes = function(){},
           _css = function(){},
-          _attr = function(){};
+          _attr = function(){},
+          _when = function(){};
       
       // store the css and attributes coming in from idea phase
       // css may already be there from the patterns converting css to classes
       if(SeeIf.NotEmptyObject(idea_css)){
-        Doh.meld_objects(this.initial_css, idea_css);
+        this.initial_css = Doh.meld_objects(this.initial_css || {}, idea_css);
       }
       // store the initial attr's set by the patterns and idea
       if(SeeIf.NotEmptyObject(this.attr)) {
@@ -3431,6 +3502,23 @@ OnLoad('/doh_js/html', function($){
       }
       
       // make our new .classes property into a proxy that handles all our different use cases
+      /**
+       *  Classes can be added in the following ways:
+       *    idea.classes[newClass1] = true;
+       *    idea.classes[0] = newClass1;
+       *    idea.classes(newClass1, newClass2, etc...);
+       *    idea.classes.push(newClass1, newClass2, etc...);
+       *    idea.classes.unshift(newClass1, newClass2, etc...);
+       *  
+       *  Classes can be checked in the following ways:
+       *    if(newClass1 in idea.classes))
+       *    if(idea.classes.indexOf(newClass1) > -1)
+       *    if(idea.classes[newClass1] == true)
+       *  
+       *  Classes can be removed in the following ways:
+       *    delete idea.classes[newClass1];
+       *    delete idea.classes[0 (or index of class you want to delete)];
+       */
       this.classes = new Proxy(_classes, {
         apply: function(target, thisArg, argumentsList){
           let classname;
@@ -3694,6 +3782,7 @@ OnLoad('/doh_js/html', function($){
           that.css(prop, '');
         },
       });
+
       this.attr = new Proxy(_attr, {
         apply: function(target, thisArg, argumentsList){
           if(argumentsList.length){
@@ -3814,7 +3903,7 @@ OnLoad('/doh_js/html', function($){
         this.style = this.initial_style;
       }
       
-      // merge in idea css
+      // merge in idea css ( Don't move this, it needs to be after style is set )
       if(idea_css) this.css(idea_css);
       // apply initial attributes
       if(this.initial_attr) this.attr(this.initial_attr);
@@ -3865,7 +3954,134 @@ OnLoad('/doh_js/html', function($){
       // now use our super useful property
       if(initial_html) this.html = initial_html;
       
-      
+      /**
+       *  
+       *  resizing
+       *  moving
+       *  
+       *  idling
+       *  
+       *  approaching
+       *  hovering
+       *  pressing    holding
+       *  releasing
+       *  leaving
+       *  
+       *  
+       *  actStart
+       *  acted
+       *  actEnd
+       *  
+       *  pressStart
+       *  pressed
+       *  pressEnd
+       *  
+       *  moveStart
+       *  moved
+       *  moveEnd
+       *  
+       *  resizeStart
+       *  resized
+       *  resizeEnd
+       *  
+       *  hoverOver
+       *  hovered
+       *  hoverOut
+       *  
+       *  dblpushed
+       *  
+       */
+      /*
+      this.when = new Proxy(_when, {
+        apply: function(target, thisArg, argumentsList){
+          if(argumentsList.length){
+            let prop = argumentsList[0], value = argumentsList[1];
+            if(SeeIf.IsEmptyString(value) || value === null){
+              // an empty string means delete the property
+              // update our cache to match this
+              _when[prop] = undefined;
+              // attr needs null, so we fix it
+              value = argumentsList[1] = null;
+            }
+            if(value) _when[prop] = value;
+            else if(typeof prop === 'object'){
+              for(let prop_name in prop){
+                // trigger setters for everything inside, they do their own comparing.
+                if(SeeIf.IsEmptyString(prop[prop_name]) || value === null){
+                  // an empty string means delete the property
+                  // update our cache to match this
+                  _when[prop_name] = undefined;
+                } else {
+                  _when[prop_name] = prop[prop_name];
+                }
+              }
+            }
+            return that.e.on.apply(that.e, argumentsList);
+          } else return;
+        },
+        get: function(target, prop, receiver) {
+          if(prop === Symbol.toStringTag) return 'Object';
+          return that.e.attr(prop);
+        },
+        set: function(obj, prop, value) {
+          // set _when so setters will be triggered
+          return that.when(prop, value);
+        },
+        ownKeys: function(target){
+          let domobj = that.domobj, rtn = [];
+          if(domobj.hasAttributes()){
+            let attrs = domobj.attributes;
+            for(let attribute of attrs){
+              rtn.push(attribute.name)
+            }
+          }
+          // custom ownKeys on anonymous functions need to passthrough the prototype but...
+          // the engine seems to clip it off for us when we do things like iterate for loops
+          rtn.push('prototype');
+          return rtn;
+        },
+        getOwnPropertyDescriptor: function(target, prop) { // called for every property
+          if(prop !== 'prototype'){
+            // detect forwarded properties from _when and retrieve them instead
+            let prop_desc = Object.getOwnPropertyDescriptor(_when, prop);
+            if(prop_desc)if(prop_desc.set){
+              return prop_desc;
+            }
+            // otherwise our shortcut will work
+            return {
+              enumerable: true,
+              configurable: true,
+              writable: true,
+              value: that.e.attr(prop)
+            };
+          }
+          // prototype is special and needs to match up with the original or it complains
+          else return Reflect.getOwnPropertyDescriptor(target, prop);
+        },
+        defineProperty: function(target, prop, descriptor) {
+          // forward property setters to _when
+          let rtn = Object.defineProperty(_when, prop, descriptor);
+          if(descriptor.set){
+            // defining the setter means Doh is setting up the handlers for the first time
+            Doh.observe(_when, prop, function(object, prop_name, new_value){
+              // we need to watch for changes and do something?
+              if(that.e.attr(prop) == new_value) return;
+              // if _when is different from the dom, try to change it once
+              // use the .e.attr because we are inside .attr already
+              that.e.attr(prop, new_value);
+            });
+          }
+          return rtn;
+        },
+        has: function(target, key){
+          return that.domobj.hasAttribute(key);
+        },
+        deleteProperty: function(target, prop){
+          that.attr(prop, null);
+        },
+      });
+      Doh.meld_objects(this.when, initial_when);
+      //*/
       
       Doh.mimic(this, 'attrs', this, 'attr');
     },

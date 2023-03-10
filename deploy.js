@@ -64,13 +64,13 @@ DohWatchUpdate.PreviousName = '';
 
 // this is fast and will impact nothing
 // uncomment to ignore DohWatch
-//DohWatchUpdate = function(){};
+DohWatchUpdate = function(){};
 
 // 
 DohWatchUpdate('init');
 
 // hand populate the initial cache diff with our DohWatch stuff since we can't record it until after it's happened
-DohWatchDiffs.window['1 init'] = {DohWatch:DohWatch,DohWatchDiffs:DohWatchDiffs,DohWatchUpdate:DohWatchUpdate};
+//DohWatchDiffs.window['1 init'] = {DohWatch:DohWatch,DohWatchDiffs:DohWatchDiffs,DohWatchUpdate:DohWatchUpdate};
 
 /*
  * Libraries and Polyfills related to deploy.js
@@ -451,6 +451,37 @@ let Doh = window.Doh = {
   
   Globals:{},
   
+  document_ready: function(callback) {
+    /**
+     * Calls the given callback function when the document is ready.
+     */
+    function on_ready() {
+      // Remove the event listener to avoid multiple calls
+      document.removeEventListener("DOMContentLoaded", on_ready);
+      // Call the callback function
+      callback();
+    }
+
+    // Check if the document is already loaded
+    if (document.readyState !== "loading") {
+      callback();
+    } else {
+      // Add a DOMContentLoaded event listener to the document
+      document.addEventListener("DOMContentLoaded", on_ready);
+    }
+
+/*     // Add a load event listener to the window to ensure that all assets have loaded
+    window.addEventListener("load", function() {
+      // Call the callback function
+      callback();
+    }); */
+
+    // Add an error event listener to the window to ensure that exceptions don't prevent subsequent handlers from executing
+    window.addEventListener("error", function() {
+      Doh.error(...arguments); // Do nothing
+    }, true);
+  },
+
   // turn an array of script source paths into a loadable bundle of bundles
   create_load_bundle_from_array: function(arr, name){
     name = name || 'Array';
@@ -480,8 +511,6 @@ let Doh = window.Doh = {
     },
     // use an internal callback to note the script having been loaded
     internal_callback = function(){
-      // call the callback_wrapper
-      //setTimeout(callback_wrapper,1);
       //Doh.ScriptIsLoaded will be false because we are the callback from script loading.
       // we set it to false to indicate that the script is loading.
       if(Doh.ScriptIsLoaded[src] === false){
@@ -555,27 +584,33 @@ let Doh = window.Doh = {
 
   // Accept a list of bundles (bundle of bundles) and try to load them, in order
   load_bundles: function(bundles, callback){
-    var last_bundle = false, 
+    var previous_bundle = false, 
     current_bundle = false, 
     next_is_current = false, 
     callback_has_run = false,
     run_next_bundle = function(){
       next_is_current = false;
       for(let bundle in bundles){
-        if(last_bundle === false){
-          //console.log('last is false');
+        // previous bundle only is false when we start
+        if(previous_bundle === false){
+          //console.log('first bundle');
           current_bundle = bundle;
-        } else {
-          if(bundle === last_bundle){
-            //console.log(bundle, 'is last_bundle');
+        } else { // otherwise we are past the first bundle
+          // if we end up back in here after already being here,
+          // tell ourself that the next bundle is actually the one we want
+          if(bundle === previous_bundle){
+            //console.log(bundle, 'is previous_bundle');
             next_is_current = true;
             continue;
+          // othewise we just told ourself that the next bundle is the one we want
           } else if(next_is_current){
             //console.log(bundle, 'is next_is_current');
             current_bundle = bundle;
           }
         }
+        // once we've figured out which bundle we are working on
         if(bundle === current_bundle){
+          // if it's JQUERYCORE, note the jQuery path
           if(bundle === 'JQUERYCORE') {
             console.log('Doh is auto-loading jQuery: ', Object.keys(bundles[bundle])[0]);
           }
@@ -600,9 +635,9 @@ let Doh = window.Doh = {
               });
             }
           }
-          //console.log('setting', bundle, 'to last_bundle');
+          //console.log('setting', bundle, 'to previous_bundle');
           current_bundle = false;
-          last_bundle = bundle;
+          previous_bundle = bundle;
           return true;
         }
       }
@@ -684,7 +719,7 @@ let Doh = window.Doh = {
       return;
     }
     
-    Doh.jQuery(function($){
+    Doh.document_ready(function(){
       DohWatchUpdate('After Doh core has loaded');
       // run OnCoreLoadedQueue
       for(let i in Doh.OnCoreLoadedQueue){
@@ -813,37 +848,26 @@ window.OnLoad = window.OnLoad || function(module_name, requires, callback, globa
       DohWatchUpdate('--------------- Between ' + DohWatchUpdate.PreviousName + ' and ' + module_name);
       Doh.ModuleCurrentlyRunning = module_name;
       // at this point, Doh is loaded and we are now going through the modules
-      //try{
-        if(!Doh.jQuery){
-          // find our jQuery version
-          Doh.jQuery = jQuery;
-          console.log('Doh was given jQuery version: ', Doh.jQuery.fn.jquery);
-        }
-        callback(Doh.jQuery);
-        Doh.ModuleCurrentlyRunning = false;
-        DohWatchUpdate(module_name);
-      /*} catch (err) {
-        Doh.ModuleCurrentlyRunning = false;
-        DohWatchUpdate(module_name);
-        throw console.error('OnLoad: running original callback for', module_name, 'failed with error', err);
-        // don't carry on with callbacks for dependents because we failed to be dependable.
-        return;
-      }*/
+      if(!Doh.jQuery){
+        // find our jQuery version
+        Doh.jQuery = jQuery;
+        console.log('Doh was given jQuery version: ', Doh.jQuery.fn.jquery);
+      }
+      callback(Doh.jQuery);
       Doh.ModuleCurrentlyRunning = false;
-      //setTimeout(function(){
+      DohWatchUpdate(module_name);
+      Doh.ModuleCurrentlyRunning = false;
         //console.log('Running Doh.ModuleIsLoadedQueue for:', module_name, Doh.ModuleIsLoadedQueue[module_name]);
-        if(Doh.ModuleIsLoadedQueue[module_name]){
-          for(var i in Doh.ModuleIsLoadedQueue[module_name]){
-            if(i != 'length'){
-              //setTimeout(Doh.ModuleIsLoadedQueue[module_name][i],1);
-              Doh.ModuleIsLoadedQueue[module_name][i]();
-            }
+      if(Doh.ModuleIsLoadedQueue[module_name]){
+        for(var i in Doh.ModuleIsLoadedQueue[module_name]){
+          if(i != 'length'){
+            Doh.ModuleIsLoadedQueue[module_name][i]();
           }
-          Doh.ModuleIsLoadedQueue[module_name] = [];
         }
-        //console.log('Loaded module:', module_name);
-        Doh.ModuleIsLoaded[module_name] = true;
-      //},2);
+        Doh.ModuleIsLoadedQueue[module_name] = [];
+      }
+      //console.log('Loaded module:', module_name);
+      Doh.ModuleIsLoaded[module_name] = true;
     }
   };
   // if we are requiring an array of things, use the Require method
