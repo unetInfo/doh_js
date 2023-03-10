@@ -8,6 +8,7 @@ if(typeof global !== 'undefined'){
   PatternModuleVictors = window.PatternModuleVictors || {};
 }
 
+
 if(!Doh) Doh = {};
 
 // This has to be very early.
