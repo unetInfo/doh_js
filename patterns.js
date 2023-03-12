@@ -3936,7 +3936,8 @@ OnLoad('/doh_js/html', function($){
           if(that.e.children().length > 0) {
             // set inner text
             // WARNING: this will overwrite children
-            Doh.warn(`html object overwrote children with: "${new_value}"`,'\n',this.idealize());
+            //Doh.warn(`html object overwrote children with: "${new_value}"`,'\n',this.idealize());
+            Doh.warn(`html object overwrote children`,'\n');
           }
           if(that.e.html() != new_value) that.e.html(new_value);
         }
