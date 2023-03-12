@@ -477,9 +477,9 @@ let Doh = window.Doh = {
     }); */
 
     // Add an error event listener to the window to ensure that exceptions don't prevent subsequent handlers from executing
-    window.addEventListener("error", function() {
-      Doh.error(...arguments); // Do nothing
-    }, true);
+    // window.addEventListener("error", function() {
+    //   Doh.error(...arguments); // Do nothing
+    // }, true);
   },
 
   // turn an array of script source paths into a loadable bundle of bundles
