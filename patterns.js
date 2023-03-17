@@ -523,7 +523,7 @@ OnLoad('/doh_js/core', function($){
      *  @details Creates a collapsed stack trace for each log entry
      *  Doh.log('error message', object1, 'some string', objectN, ...);
      */
-    log: console.log.bind(console, 'Doh:'),
+    log: console.log.bind(console, ''),
     /*
     log: function(){
       Doh._log(arguments, 'Doh:', 'trace');
@@ -537,7 +537,7 @@ OnLoad('/doh_js/core', function($){
      *  @details
      *  Doh.warn('error message', object1, 'some string', objectN, ...);
      */
-    warn: console.warn.bind(console, 'Doh Warning:'),
+    warn: console.warn.bind(console, 'Warning:'),
     /*
     warn: function(){
       Doh._log(arguments, 'Doh Warning:', 'warn');
@@ -551,7 +551,7 @@ OnLoad('/doh_js/core', function($){
      *  @details
      *  Doh.error('error message', object1, 'some string', objectN, ...);
      */
-    error: console.error.bind(console, 'Doh ERROR:'),
+    error: console.error.bind(console, 'ERROR:'),
     /*
     error: function(){
       Doh._log(arguments, 'Doh ERROR:', 'error');
@@ -567,7 +567,7 @@ OnLoad('/doh_js/core', function($){
      *  
      *  Doh.debug('error message', object1, 'some string', objectN, ...);
      */
-    debug: (Doh.DebugMode?function(){throw console.error('Doh ERROR:', ...arguments);}:console.error.bind(console, 'Doh DEBUG:')),
+    debug: (Doh.DebugMode?function(){throw console.error('ERROR:', ...arguments);}:console.error.bind(console, 'DEBUG:')),
     /*
     debug: function(){
       if(Doh.DebugMode) throw Doh._log(arguments, 'Doh DEBUG:', 'error');
@@ -584,7 +584,7 @@ OnLoad('/doh_js/core', function($){
      *  Doh.throw('error message', object1, 'some string', objectN, ...);
      */
     throw: function(){
-      throw Doh._log(arguments, 'Doh THROW:', 'error');
+      throw Doh._log(arguments, 'THROW:', 'error');
     },
 
     /**
@@ -727,7 +727,7 @@ OnLoad('/doh_js/core', function($){
      *           melds based on current .inherited
      *           object[method_name].meld_stack is the actual meld_stack array that can be manipulated to affect the next run of method
      */
-    meld_method: function(object, method_stack){
+    meld_method: function(object, method_stack = []){
       // if the stack is a string, then we are trying to meld a method from object.inherited
       let method_name = false;
       if(typeof method_stack === 'string'){
@@ -737,8 +737,8 @@ OnLoad('/doh_js/core', function($){
       let melded_method = function(){
         // this melder always does the same thing:
         //  walk the method stack and apply each method to the bound object
-        let len = method_stack.length;
-        for(let i=0;i<len;i++){
+        let i, len = method_stack.length;
+        for(i=0;i<len;i++){
           method_stack[i].apply(object, arguments);
         }
         return object;
@@ -886,7 +886,7 @@ OnLoad('/doh_js/core', function($){
             destination[prop_name] = idea_prop;
             continue;
           }
-          if(melded_type === 'object' || (typeof idea_prop === 'object' && !Array.isArray(idea_prop) && SeeIf.IsEmptyObject(idea_prop))){
+          if(melded_type === 'object' || (typeof idea_prop === 'object' && !Array.isArray(idea_prop) && SeeIf.IsEmptyObject(idea_prop) && SeeIf.NotNull(idea_prop))){
             // it's a melded object or an empty default
             if(deep_melded || go_deep) {
               destination[prop_name] = destination[prop_name] || {};
@@ -902,7 +902,7 @@ OnLoad('/doh_js/core', function($){
             continue;
           }
           // stack the ifs for speed
-          if(idea_prop.pattern)if(!idea_prop.machine)if(!idea_prop.skip_being_built){
+          if(SeeIf.NotNull(idea_prop))if(idea_prop.pattern)if(!idea_prop.machine)if(!idea_prop.skip_being_built){
             // it's an auto-build property, auto-meld it below
             //destination.melded[prop_name] = 
             melded[prop_name] = 'idea';
@@ -1767,14 +1767,14 @@ OnLoad('/doh_js/core', function($){
                 case 'warn':
                 case 'error':
                 case 'throw':
-                  if(!Doh.SeenKeys[pattern_prop][idea.pattern]) Doh[command]('WatchedKeys:',pattern_prop,'wants to',command,':',command_value,idea);
+                  if(!Doh.SeenKeys[pattern_prop][idea.pattern]) Doh[command]('WatchedKeys:',pattern_prop,'wants to',command,':',command_value,(idea.idealize?idea.idealize():idea));
                   break;
                 case 'run':
                   //if(!Doh.SeenKeys[pattern_prop][idea.pattern]) Doh[logger_method]('WatchedKeys:',pattern_prop,'will run a custom command');
                   command_value(idea);
                   break;
                 case 'rename':
-                  if(!Doh.SeenKeys[pattern_prop][idea.pattern]) Doh[logger_method]('WatchedKeys:',pattern_prop,'has been renamed:',command_value,idea);
+                  if(!Doh.SeenKeys[pattern_prop][idea.pattern]) Doh[logger_method]('WatchedKeys:',pattern_prop,'has been renamed:',command_value,(idea.idealize?idea.idealize():idea));
                   if(idea.melded?.[pattern_prop]){
                     idea.melded[command_value] = idea.melded[pattern_prop];
                     //idea.melded[pattern_prop] = null;
@@ -1784,7 +1784,7 @@ OnLoad('/doh_js/core', function($){
                   idea[command_value] = idea[pattern_prop];
                   break;
                 case 'remove':
-                  if(!Doh.SeenKeys[pattern_prop][idea.pattern]) Doh[logger_method]('WatchedKeys:',pattern_prop,'will be removed.',idea);
+                  if(!Doh.SeenKeys[pattern_prop][idea.pattern]) Doh[logger_method]('WatchedKeys:',pattern_prop,'will be removed.',(idea.idealize?idea.idealize():idea));
                   if(idea.melded?.[pattern_prop]){
                     //idea.melded[pattern_prop] = null;
                     delete idea.melded[pattern_prop];
