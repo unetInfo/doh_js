@@ -281,7 +281,7 @@ OnLoad('/doh_js/core', function($){
         }
         else rtn_false[seeif_name] = result;
       }
-      //Doh.log(value,'is the following types:\n',rtn);
+      //console.log(value,'is the following types:\n',rtn);
       return {is:rtn_true, not:rtn_false};
     },
 
@@ -330,7 +330,7 @@ OnLoad('/doh_js/core', function($){
      *  @return nothing
      *  
      *  @details Creates a collapsed stack trace for each log entry
-     *  Doh.log('error message', object1, 'some string', objectN, ...);
+     *  console.log('error message', object1, 'some string', objectN, ...);
      */
     log: function(){
       Doh._log(arguments, 'Doh:', 'trace');
@@ -933,9 +933,9 @@ OnLoad('/doh_js/core', function($){
         
         if(!Patterns[pattern_name]) Doh.debug('Doh.extend_inherits() did not find pattern:', pattern_name, 'in inherits list:', inherits); // CHRIS:  Andy added this error msg, is there a better way?
         if(skip_core){
-          //Doh.log(Doh.PatternModule[pattern_name],'spawns',pattern_name,'from',inherits);
+          //console.log(Doh.PatternModule[pattern_name],'spawns',pattern_name,'from',inherits);
           if(pattern_name !== 'idea')if(Doh.PatternModule[pattern_name].indexOf('/doh_js/') == 0){
-            //Doh.log('Doh.extend_inherits() is skipping core and found a core pattern:', pattern_name, 'from module:', Doh.PatternModule[pattern_name]);
+            //console.log('Doh.extend_inherits() is skipping core and found a core pattern:', pattern_name, 'from module:', Doh.PatternModule[pattern_name]);
             // this is a core module because the string starts with /doh_js/
             inherits[pattern_name] = null;
             delete inherits[pattern_name]
@@ -1149,10 +1149,10 @@ OnLoad('/doh_js/core', function($){
          * thing.watch( 'a_property', 'set', SeeIf.IsNumber, function(target,prop,value){}, false )
          *
          * call the callback provided if a_property is being set to exactly 37
-         * thing.watch( 'a_property', 'set', 37,             function(target,prop,value){Doh.log('hey,',prop,'on',target,'set to:',value,';')} )
+         * thing.watch( 'a_property', 'set', 37,             function(target,prop,value){console.log('hey,',prop,'on',target,'set to:',value,';')} )
          *
          * call the callback provided if a_property is exactly 37 when retrieved
-         * thing.watch( 'a_property', 'get', 37,             function(target,prop,receiver){Doh.log('hey, got',prop,'=',target[prop],'; on',target)} )
+         * thing.watch( 'a_property', 'get', 37,             function(target,prop,receiver){console.log('hey, got',prop,'=',target[prop],'; on',target)} )
          *
          */
         /**
@@ -1849,7 +1849,7 @@ OnLoad('/doh_js/core', function($){
     perspective: function(patterns, methods = false){
       let prop, new_idea = {}, which_idea, pattern_object, original_patterns = patterns;
       
-      Doh.log('Doh.perspective() was sent patterns:',patterns,'and methods:',methods);
+      console.log('Doh.perspective() was sent patterns:',patterns,'and methods:',methods);
       // default to finding the original idea
       patterns = patterns || 'idea';
       if(patterns === 'idea'){
@@ -1861,10 +1861,10 @@ OnLoad('/doh_js/core', function($){
          */
          patterns = Doh.meld_into_objectobject(patterns, pattern_object.inherits, pattern_object.pattern);
       }
-      Doh.log('Doh.perspective() is using',patterns,'to extend inherits.');
+      console.log('Doh.perspective() is using',patterns,'to extend inherits.');
       // default to expanding the pattern, but skip core patterns, cause we never need those
       patterns = Object.keys(Doh.extend_inherits(patterns, true));
-      Doh.log('Doh.perspective() found:',patterns);
+      console.log('Doh.perspective() found:',patterns);
       // for each filter idea
       for(let i=0; i<patterns.length; i++){
         which_idea = patterns[i];

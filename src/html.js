@@ -181,18 +181,18 @@ OnLoad('/doh_js/html', function($){
             // ok, so something set our title, is it at least not empty string on the actual DDM object?
             if(SeeIf.IsEmptyString(DUC.e.attr('title'))){
               // so we wanted it to be set but it's empty on the DOM object, fix that:
-              Doh.log('Tooltip title was set BUT it was deleted. Restored to the value originally set.', DUC.id, 'Pattern:', DUC.pattern, '.control:', DUC.control);
+              console.log('Tooltip title was set BUT it was deleted. Restored to the value originally set.', DUC.id, 'Pattern:', DUC.pattern, '.control:', DUC.control);
               DUC.e.attr('title', DUC.attrs.title);
             }
           } else {
             // so we didn't set a title, but did a title get set by someone else?
             if(!DUC.e.attr('title')){
               // no title was set and it was never updated up to this point
-              Doh.log('Tooltip title was not set AND it was never updated. Set to .control', DUC.id, 'Pattern:', DUC.pattern, '.control:', DUC.control);
+              console.log('Tooltip title was not set AND it was never updated. Set to .control', DUC.id, 'Pattern:', DUC.pattern, '.control:', DUC.control);
               DUC.e.attr('title', DUC.control);
             } else {
               // a title was not defined by us, but someone updated us to have one, which somehow seems fine for now
-              Doh.log('Tooltip title was not set BUT it was updated later. Abort.', DUC.id, 'Pattern:', DUC.pattern, '.control:', DUC.control);
+              console.log('Tooltip title was not set BUT it was updated later. Abort.', DUC.id, 'Pattern:', DUC.pattern, '.control:', DUC.control);
             }
           }
         }
@@ -763,7 +763,7 @@ OnLoad('/doh_js/html', function($){
     },
     set_src: function(src_path) {
       this.src_path =  src_path;
-      Doh.log('set_src',this.src_path);
+      console.log('set_src',this.src_path);
       this.e[0].setAttribute('src',this.src_path);
     }
   });
@@ -835,7 +835,7 @@ OnLoad('/doh_js/html', function($){
             var that = this;
             //var tab_labels_inner = tab_labels, tab_content_inner = tab_content;
             this.e.click(function(){
-              //Doh.log(that);
+              //console.log(that);
               var cur_button, cur_content;
               for(var k in tab_content){
                 cur_button = $('#tab_' + k + '_button');
@@ -927,10 +927,10 @@ OnLoad('/doh_js/html', function($){
     drag_start:function(event, ui){
       this._original_z_index = this.e.css("z-index");
       this.e.css({'z-index':110});
-      //Doh.log('drag start');
+      //console.log('drag start');
     },
     drag_drag:function(event, ui) {
-      //Doh.log('drag drag');
+      //console.log('drag drag');
     },
     drag_stop:function(e,f) {
       this.e.css({'z-index':this.css['z-index']});

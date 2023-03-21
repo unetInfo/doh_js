@@ -789,7 +789,7 @@ window.OnCoreLoaded = window.OnCoreLoaded || function(condition, callback){
   if(condition){
     // determine if we should just run, or be queued
     if(Doh.IsLoaded) {
-      // Doh.log('OnCoreLoaded was called after Doh.IsLoaded but before modules have finished:',callback);
+      // console.log('OnCoreLoaded was called after Doh.IsLoaded but before modules have finished:',callback);
       callback();
     }
     else {

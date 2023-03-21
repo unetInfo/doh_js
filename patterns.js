@@ -472,7 +472,7 @@ OnLoad('/doh_js/core', function($){
         }
         else rtn_false[seeif_name] = result;
       }
-      //Doh.log(value,'is the following types:\n',rtn);
+      //console.log(value,'is the following types:\n',rtn);
       return {is:rtn_true, not:rtn_false};
     },
 
@@ -521,7 +521,7 @@ OnLoad('/doh_js/core', function($){
      *  @return nothing
      *  
      *  @details Creates a collapsed stack trace for each log entry
-     *  Doh.log('error message', object1, 'some string', objectN, ...);
+     *  console.log('error message', object1, 'some string', objectN, ...);
      */
     log: console.log.bind(console, ''),
     /*
@@ -1144,9 +1144,9 @@ OnLoad('/doh_js/core', function($){
         
         if(!Patterns[pattern_name]) Doh.debug('Doh.extend_inherits() did not find pattern:', pattern_name, 'in inherits list:', inherits); // CHRIS:  Andy added this error msg, is there a better way?
         if(skip_core){
-          //Doh.log(Doh.PatternModule[pattern_name],'spawns',pattern_name,'from',inherits);
+          //console.log(Doh.PatternModule[pattern_name],'spawns',pattern_name,'from',inherits);
           if(pattern_name !== 'idea')if(Doh.PatternModule[pattern_name].indexOf('/doh_js/') == 0){
-            //Doh.log('Doh.extend_inherits() is skipping core and found a core pattern:', pattern_name, 'from module:', Doh.PatternModule[pattern_name]);
+            //console.log('Doh.extend_inherits() is skipping core and found a core pattern:', pattern_name, 'from module:', Doh.PatternModule[pattern_name]);
             // this is a core module because the string starts with /doh_js/
             //inherits[pattern_name] = null;
             delete inherits[pattern_name]
@@ -1367,10 +1367,10 @@ OnLoad('/doh_js/core', function($){
          * thing.watch( 'a_property', 'set', SeeIf.IsNumber, function(target,prop,value){}, false )
          *
          * call the callback provided if a_property is being set to exactly 37
-         * thing.watch( 'a_property', 'set', 37,             function(target,prop,value){Doh.log('hey,',prop,'on',target,'set to:',value,';')} )
+         * thing.watch( 'a_property', 'set', 37,             function(target,prop,value){console.log('hey,',prop,'on',target,'set to:',value,';')} )
          *
          * call the callback provided if a_property is exactly 37 when retrieved
-         * thing.watch( 'a_property', 'get', 37,             function(target,prop,receiver){Doh.log('hey, got',prop,'=',target[prop],'; on',target)} )
+         * thing.watch( 'a_property', 'get', 37,             function(target,prop,receiver){console.log('hey, got',prop,'=',target[prop],'; on',target)} )
          *
          */
         /**
@@ -2112,7 +2112,7 @@ OnLoad('/doh_js/core', function($){
     perspective: function(patterns, methods = false){
       let prop, new_idea = {}, which_idea, pattern_object, original_patterns = patterns;
       
-      Doh.log('Doh.perspective() was sent patterns:',patterns,'and methods:',methods);
+      console.log('Doh.perspective() was sent patterns:',patterns,'and methods:',methods);
       // default to finding the original idea
       patterns = patterns || 'idea';
       if(patterns === 'idea'){
@@ -2124,10 +2124,10 @@ OnLoad('/doh_js/core', function($){
          */
          patterns = Doh.meld_into_objectobject(patterns, pattern_object.inherits, pattern_object.pattern);
       }
-      Doh.log('Doh.perspective() is using',patterns,'to extend inherits.');
+      console.log('Doh.perspective() is using',patterns,'to extend inherits.');
       // default to expanding the pattern, but skip core patterns, cause we never need those
       patterns = Object.keys(Doh.extend_inherits(patterns, true));
-      Doh.log('Doh.perspective() found:',patterns);
+      console.log('Doh.perspective() found:',patterns);
       // for each filter idea
       for(let i=0; i<patterns.length; i++){
         which_idea = patterns[i];
@@ -2315,8 +2315,8 @@ OnCoreLoaded(Doh.ApplyFixes, function(){
   rename_wrapper('meld_method_order', 'Doh.get_melded_method_order', Doh.get_melded_method_order);
   rename_wrapper('phases_method_order', 'Doh.get_phase_method_order', Doh.get_phase_method_order);
   rename_wrapper('meld_methods_order', 'Doh.get_all_melded_method_order', Doh.get_all_melded_method_order);
-  rename_wrapper('log_melded_method', 'Doh.log_melded_method_string', Doh.log_melded_method_string);
-  rename_wrapper('link_melded_method', 'Doh.log_melded_method_source', Doh.log_melded_method_source);
+  rename_wrapper('log_melded_method', 'console.log_melded_method_string', console.log_melded_method_string);
+  rename_wrapper('link_melded_method', 'console.log_melded_method_source', console.log_melded_method_source);
   
   /* these renames may still plague old code, but usually are not needed
   for(var test in SeeIf){
@@ -2483,7 +2483,7 @@ OnLoad('/doh_js/utils', function($){
     log_melded_method_string: function(object, method){
       var method_array = Doh.get_melded_method_order(object, method);
       for (i in method_array){
-        Doh.log(method_array[i],object.inherited[method_array[i].split('.')[0]][method].toString());
+        console.log(method_array[i],object.inherited[method_array[i].split('.')[0]][method].toString());
       }
     },
     /**
@@ -2498,7 +2498,7 @@ OnLoad('/doh_js/utils', function($){
     log_melded_method_source: function(object, method){
       var method_array = Doh.get_melded_method_order(object, method);
       for (i in method_array){
-        Doh.log(method_array[i],object.inherited[method_array[i].split('.')[0]][method]);
+        console.log(method_array[i],object.inherited[method_array[i].split('.')[0]][method]);
       }
     },
     
@@ -3394,18 +3394,18 @@ OnLoad('/doh_js/html', function($){
             // ok, so something set our title, is it at least not empty string on the actual DDM object?
             if(SeeIf.IsEmptyString(DUC.e.attr('title'))){
               // so we wanted it to be set but it's empty on the DOM object, fix that:
-              Doh.log('Tooltip title was set BUT it was deleted. Restored to the value originally set.', DUC.id, 'Pattern:', DUC.pattern, '.control:', DUC.control);
+              console.log('Tooltip title was set BUT it was deleted. Restored to the value originally set.', DUC.id, 'Pattern:', DUC.pattern, '.control:', DUC.control);
               DUC.e.attr('title', DUC.attr.title);
             }
           } else {
             // so we didn't set a title, but did a title get set by someone else?
             if(!DUC.e.attr('title')){
               // no title was set and it was never updated up to this point
-              Doh.log('Tooltip title was not set AND it was never updated. Set to .control', DUC.id, 'Pattern:', DUC.pattern, '.control:', DUC.control);
+              console.log('Tooltip title was not set AND it was never updated. Set to .control', DUC.id, 'Pattern:', DUC.pattern, '.control:', DUC.control);
               DUC.e.attr('title', DUC.control);
             } else {
               // a title was not defined by us, but someone updated us to have one, which somehow seems fine for now
-              Doh.log('Tooltip title was not set BUT it was updated later. Abort.', DUC.id, 'Pattern:', DUC.pattern, '.control:', DUC.control);
+              console.log('Tooltip title was not set BUT it was updated later. Abort.', DUC.id, 'Pattern:', DUC.pattern, '.control:', DUC.control);
             }
           }
         }
@@ -4587,7 +4587,7 @@ OnLoad('/doh_js/html', function($){
     },
     set_src: function(src_path) {
       this.src_path =  src_path;
-      Doh.log('set_src',this.src_path);
+      console.log('set_src',this.src_path);
       this.domobj.setAttribute('src',this.src_path);
     }
   });
@@ -4659,7 +4659,7 @@ OnLoad('/doh_js/html', function($){
             var that = this;
             //var tab_labels_inner = tab_labels, tab_content_inner = tab_content;
             this.e.click(function(){
-              //Doh.log(that);
+              //console.log(that);
               var cur_button, cur_content;
               for(var k in tab_content){
                 cur_button = $('#tab_' + k + '_button');
@@ -4751,10 +4751,10 @@ OnLoad('/doh_js/html', function($){
     drag_start:function(event, ui){
       this._original_z_index = this.e.css("z-index");
       this.e.css({'z-index':110});
-      //Doh.log('drag start');
+      //console.log('drag start');
     },
     drag_drag:function(event, ui) {
-      //Doh.log('drag drag');
+      //console.log('drag drag');
     },
     drag_stop:function(e,f) {
       this.e.css({'z-index':this.css['z-index']});
