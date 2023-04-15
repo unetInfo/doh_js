@@ -234,14 +234,30 @@ OnLoad('/doh_js/setter', function($){
         // observe requires a function for callback or the observation isn't seen
         if(typeof prop === 'string')if(typeof on_change_callback === 'function'){
           // check for a setter already there
+          let old_setter, new_setter;
           prop_desc = Object.getOwnPropertyDescriptor(object, prop);
-          if(typeof prop_desc.set !== 'function'){
+          if(!prop_desc) {
+            let proto = Object.getPrototypeOf(object);
+            prop_desc = Object.getOwnPropertyDescriptor(proto, prop);
+            //console.warn('getOwnPropertyDescriptor fail for',object,prop);
+          }
+          let has_setter = typeof prop_desc.set == 'function'
+          if(!has_setter || (has_setter && !prop_desc.set.meld_stack)) {
+
+            if(has_setter && !prop_desc.set.meld_stack){
+              old_setter = prop_desc.set;
+              new_setter = function(obj,prop,val){
+                old_setter.apply(obj,[val]);
+              }
+            }
             // bind the original value to a new local variable
-            // IMPORANT: this 'let val ...' statement creates a closure around 'val' and essentially
+            // IMPORTANT: this 'let val ...' statement creates a closure around 'val' and essentially
             //           turns it into the actual value storage for this property. The getter gets this
             //           internal val, and the setter sets it. This allows the property to both store it's own value
             //           as well as have both getter and setter for access and retrieval.
             let val = object[prop],
+
+
             // create a local closure for the method stack as well
             method_stack = [],
             // and the melded method that we will assign to the setter
@@ -275,7 +291,8 @@ OnLoad('/doh_js/setter', function($){
             melded_method.remove_melded = function(method){
               method_stack.splice(method_stack.indexOf(method), 1);
             };
-            
+
+
             Object.defineProperty(object, prop, {
               // if we have a setter, then we must have a getter
               // our fancy getter retrieves the original value storage, which
@@ -290,6 +307,14 @@ OnLoad('/doh_js/setter', function($){
           }
           // we have to get (or re-get) the prop_desc here in case the melded setter already exists or we just made one
           prop_desc = Object.getOwnPropertyDescriptor(object, prop);
+
+          if(!prop_desc) {
+            let proto = Object.getPrototypeOf(object);
+            prop_desc = Object.getOwnPropertyDescriptor(proto, prop);
+          }
+          if(new_setter){
+            prop_desc.set.meld_stack.push(new_setter);
+          }
           if(!prop_desc.set.meld_stack){
             console.warn('Setter.observe found a different kind of setter for:',prop,'on object:',object,'with callback:',on_change_callback);
             return function(){};
